@@ -1,0 +1,88 @@
+name: catsos-ci
+
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "0"
+
+  backend-test:
+    build:
+      context: ./backend
+      target: test
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SECRET_KEY: ci-backend-secret
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend-test
+
+  backend-openapi:
+    build:
+      context: ./backend
+      target: test
+    command: python manage.py spectacular --file openapi-schema.yml --validate
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SECRET_KEY: ci-openapi-secret
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend-openapi
+    volumes:
+      - ./backend:/app
+
+  backend-api:
+    build:
+      context: ./backend
+      target: development
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      DJANGO_DEBUG: "true"
+      DJANGO_SECRET_KEY: ci-api-secret
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend-api
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=2)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend-quality:
+    build:
+      context: ./frontend
+      target: test
+    environment:
+      VITE_API_BASE_URL: http://backend-api:8000
+    volumes:
+      - ./frontend/coverage:/app/coverage
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      VITE_API_BASE_URL: http://backend-api:8000
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5173').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend-e2e:
+    build:
+      context: ./frontend
+      target: cypress
+    command: yarn e2e --config baseUrl=http://frontend-dev:5173
+    depends_on:
+      frontend-dev:
+        condition: service_healthy
+
+  frontend-runtime:
+    build:
+      context: ./frontend
+      target: runtime
+
+volumes:
+  jenkins-home:
