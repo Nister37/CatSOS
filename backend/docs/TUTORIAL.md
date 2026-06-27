@@ -6,6 +6,7 @@ This file explains what the backend stack is for and how interns should extend i
 
 - Django owns the backend project, settings, URL routing, migrations, and admin.
 - Django REST Framework owns JSON API views and API test helpers.
+- SimpleJWT owns API access and refresh tokens.
 - drf-spectacular generates OpenAPI schema and Swagger UI.
 - django-cors-headers allows the Vite dev server to call the API locally.
 - Docker supplies repeatable app and CI builder containers.
@@ -26,6 +27,7 @@ flowchart LR
 
 ```text
 backend/
+  accounts/         Custom user model, registration, login, JWT issuance
   api/              Shared API endpoints until domain apps are introduced
   config/           Django settings, ASGI/WSGI, root URLs
   docs/             Backend setup and tutorial

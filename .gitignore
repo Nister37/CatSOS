@@ -22,3 +22,5 @@ coverage/
 cypress/screenshots/
 cypress/videos/
 backend/openapi-schema.yml
+/AGENTS.md
+/INSIGHTS.md

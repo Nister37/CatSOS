@@ -32,6 +32,8 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+This project uses a custom email-based user model. If your ignored local `backend\db.sqlite3` was created before the `accounts` app existed, recreate that local database before running migrations again.
+
 ## Backend Checks
 
 Run Django checks and unit tests:
