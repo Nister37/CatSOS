@@ -1,13 +1,19 @@
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .services import (
+    AccountNotVerifiedError,
     authenticate_account,
+    change_unverified_email,
     create_token_pair,
     email_exists,
     register_account,
+    resend_verification_code,
+    VerificationCodeCooldownError,
+    verify_email_code,
 )
 
 
@@ -20,6 +26,13 @@ class AuthResponseSerializer(serializers.Serializer):
     access = serializers.CharField(read_only=True)
     refresh = serializers.CharField(read_only=True)
     token_type = serializers.CharField(read_only=True)
+    user = AccountSerializer(read_only=True)
+
+
+class VerificationPendingResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+    email_verification_required = serializers.BooleanField(read_only=True)
+    resend_available_in_seconds = serializers.IntegerField(read_only=True)
     user = AccountSerializer(read_only=True)
 
 
@@ -62,11 +75,17 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate(self, attrs):
-        user = authenticate_account(
-            request=self.context.get('request'),
-            email=attrs['email'],
-            password=attrs['password'],
-        )
+        try:
+            user = authenticate_account(
+                request=self.context.get('request'),
+                email=attrs['email'],
+                password=attrs['password'],
+            )
+        except AccountNotVerifiedError:
+            raise serializers.ValidationError(
+                {'email': ['Verify your email before logging in.']}
+            )
+
         if user is None:
             raise serializers.ValidationError(
                 {'non_field_errors': ['Unable to log in with provided credentials.']}
@@ -74,6 +93,86 @@ class LoginSerializer(serializers.Serializer):
 
         attrs['user'] = user
         return attrs
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.RegexField(
+        regex=r'^\d{8}$',
+        error_messages={'invalid': 'Enter the 8-digit verification code.'},
+    )
+
+    def validate(self, attrs):
+        user = verify_email_code(email=attrs['email'], code=attrs['code'])
+        if user is None:
+            raise serializers.ValidationError(
+                {'code': ['The verification code is invalid.']}
+            )
+
+        attrs['user'] = user
+        return attrs
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        try:
+            user = resend_verification_code(email=self.validated_data['email'])
+        except VerificationCodeCooldownError as exc:
+            raise serializers.ValidationError(
+                {
+                    'resend_available_in_seconds': [exc.seconds_remaining],
+                    'detail': ['Wait before requesting another verification code.'],
+                }
+            )
+
+        if user is None:
+            raise serializers.ValidationError(
+                {'email': ['No unverified account exists for this email.']}
+            )
+        return user
+
+
+class ChangeVerificationEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_email = serializers.EmailField()
+
+    def validate_new_email(self, value):
+        if value.strip().lower() == self.initial_data.get('email', '').strip().lower():
+            raise serializers.ValidationError('Enter a different email address.')
+        if email_exists(value):
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
+
+    def save(self, **kwargs):
+        try:
+            user = change_unverified_email(
+                email=self.validated_data['email'],
+                password=self.validated_data['password'],
+                new_email=self.validated_data['new_email'],
+            )
+        except ValueError:
+            raise serializers.ValidationError(
+                {'new_email': ['An account with this email already exists.']}
+            )
+
+        if user is None:
+            raise serializers.ValidationError(
+                {'non_field_errors': ['Unable to change email with provided credentials.']}
+            )
+
+        return user
+
+
+def build_verification_pending_response(user):
+    return {
+        'detail': 'Verification code sent. Verify your email to finish registration.',
+        'email_verification_required': True,
+        'resend_available_in_seconds': settings.ACCOUNT_VERIFICATION_RESEND_SECONDS,
+        'user': AccountSerializer(user).data,
+    }
 
 
 def build_auth_response(user):

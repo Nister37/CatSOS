@@ -17,7 +17,10 @@ Authorization: Bearer <access>
 | Method | Path | Auth | Status | Purpose |
 | --- | --- | --- | --- | --- |
 | `GET` | `/api/health/` | Public | `200` | Backend health check. |
-| `POST` | `/api/auth/register/` | Public | `201` | Create an account and return JWT tokens. |
+| `POST` | `/api/auth/register/` | Public | `201` | Create an unverified account and send an 8-digit email code. |
+| `POST` | `/api/auth/verify-email/` | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
+| `POST` | `/api/auth/verification/resend/` | Public | `200` | Resend the verification code after the 120-second cooldown. |
+| `POST` | `/api/auth/verification/change-email/` | Public | `200` | Change the email for an unverified account and send a new code. |
 | `POST` | `/api/auth/login/` | Public | `200` | Login alias that returns JWT tokens. |
 | `POST` | `/api/auth/token/` | Public | `200` | Login endpoint that returns JWT tokens. |
 | `POST` | `/api/auth/token/refresh/` | Public | `200` | Exchange a refresh token for a new access token. |
@@ -26,7 +29,7 @@ Authorization: Bearer <access>
 
 ## Auth Payloads
 
-### Register
+### Register: Start Verification
 
 `POST /api/auth/register/`
 
@@ -44,9 +47,9 @@ Success response:
 
 ```json
 {
-  "access": "<jwt-access-token>",
-  "refresh": "<jwt-refresh-token>",
-  "token_type": "Bearer",
+  "detail": "Verification code sent. Verify your email to finish registration.",
+  "email_verification_required": true,
+  "resend_available_in_seconds": 120,
   "user": {
     "id": 1,
     "email": "visitor@example.com"
@@ -60,6 +63,104 @@ Validation errors are field-based:
 {
   "password": ["This password is too short."],
   "password_confirm": ["Password confirmation does not match."]
+}
+```
+
+### Verify Email
+
+`POST /api/auth/verify-email/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com",
+  "code": "12345678"
+}
+```
+
+Success response:
+
+```json
+{
+  "access": "<jwt-access-token>",
+  "refresh": "<jwt-refresh-token>",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "email": "visitor@example.com"
+  }
+}
+```
+
+Invalid code:
+
+```json
+{
+  "code": ["The verification code is invalid."]
+}
+```
+
+### Resend Verification Code
+
+`POST /api/auth/verification/resend/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Verification code sent. Verify your email to finish registration.",
+  "email_verification_required": true,
+  "resend_available_in_seconds": 120,
+  "user": {
+    "id": 1,
+    "email": "visitor@example.com"
+  }
+}
+```
+
+Cooldown error:
+
+```json
+{
+  "resend_available_in_seconds": [98],
+  "detail": ["Wait before requesting another verification code."]
+}
+```
+
+### Change Pending Verification Email
+
+`POST /api/auth/verification/change-email/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com",
+  "password": "StrongPass123!",
+  "new_email": "changed@example.com"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Verification code sent. Verify your email to finish registration.",
+  "email_verification_required": true,
+  "resend_available_in_seconds": 120,
+  "user": {
+    "id": 1,
+    "email": "changed@example.com"
+  }
 }
 ```
 
@@ -97,6 +198,14 @@ Invalid credentials:
 ```json
 {
   "non_field_errors": ["Unable to log in with provided credentials."]
+}
+```
+
+Unverified account:
+
+```json
+{
+  "email": ["Verify your email before logging in."]
 }
 ```
 
@@ -152,6 +261,55 @@ $session = Invoke-RestMethod `
   -Body $registerBody
 
 $session
+```
+
+Get the code from the backend console output. The local backend uses Django's console email backend by default.
+
+Verify email:
+
+```powershell
+$verifyBody = @{
+  email = "visitor@example.com"
+  code = "12345678"
+} | ConvertTo-Json
+
+$session = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/verify-email/" `
+  -ContentType "application/json" `
+  -Body $verifyBody
+
+$session
+```
+
+Resend code after the cooldown:
+
+```powershell
+$resendBody = @{
+  email = "visitor@example.com"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/verification/resend/" `
+  -ContentType "application/json" `
+  -Body $resendBody
+```
+
+Change the pending verification email:
+
+```powershell
+$changeEmailBody = @{
+  email = "visitor@example.com"
+  password = "StrongPass123!"
+  new_email = "changed@example.com"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/verification/change-email/" `
+  -ContentType "application/json" `
+  -Body $changeEmailBody
 ```
 
 Login:

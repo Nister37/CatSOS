@@ -16,6 +16,7 @@ class UserManager(BaseUserManager):
         email = self._normalize_email(email)
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
+        extra_fields.setdefault('is_email_verified', False)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -24,6 +25,7 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_email_verified', True)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
@@ -36,6 +38,10 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     username = None
     email = models.EmailField(_('email address'), unique=True)
+    is_email_verified = models.BooleanField(default=False)
+    email_verification_code_hash = models.CharField(max_length=128, blank=True)
+    email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    email_verified_at = models.DateTimeField(blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

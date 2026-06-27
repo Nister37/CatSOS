@@ -27,6 +27,13 @@ def env_list(name, default=None):
         return default or []
     return [item.strip() for item in value.split(',') if item.strip()]
 
+
+def env_int(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return int(value)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -123,6 +130,13 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+ACCOUNT_VERIFICATION_RESEND_SECONDS = env_int('DJANGO_ACCOUNT_VERIFICATION_RESEND_SECONDS', 120)
+EMAIL_BACKEND = os.getenv(
+    'DJANGO_EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+DEFAULT_FROM_EMAIL = os.getenv('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@catsos.local')
 
 
 # Internationalization
