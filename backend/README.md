@@ -27,3 +27,5 @@ Django backend for the CatSOS API.
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
 
 SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs with `GOOGLE_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_ID`; GitHub uses the provider access token to fetch the authenticated user's verified primary email.
+
+Auth endpoints return `Cache-Control: no-store` and are protected by scoped DRF throttles. Verification-code resend cooldowns return `429 Too Many Requests` with `Retry-After`.

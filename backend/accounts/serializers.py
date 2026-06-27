@@ -17,7 +17,6 @@ from .services import (
     resend_verification_code,
     SSOAccountConflictError,
     SSOAccountInactiveError,
-    VerificationCodeCooldownError,
     verify_email_code,
 )
 from .sso import SSOProviderError
@@ -133,16 +132,7 @@ class ResendVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def save(self, **kwargs):
-        try:
-            user = resend_verification_code(email=self.validated_data['email'])
-        except VerificationCodeCooldownError as exc:
-            raise serializers.ValidationError(
-                {
-                    'resend_available_in_seconds': [exc.seconds_remaining],
-                    'detail': ['Wait before requesting another verification code.'],
-                }
-            )
-
+        user = resend_verification_code(email=self.validated_data['email'])
         if user is None:
             raise serializers.ValidationError(
                 {'email': ['No unverified account exists for this email.']}

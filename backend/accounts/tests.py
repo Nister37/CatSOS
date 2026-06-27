@@ -4,12 +4,14 @@ from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core import mail
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework.throttling import ScopedRateThrottle
 
 from .models import SocialAccount
 from .services import create_token_pair
@@ -19,6 +21,23 @@ from .sso import SSOIdentity
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     ACCOUNT_VERIFICATION_RESEND_SECONDS=120,
+    REST_FRAMEWORK={
+        'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+        'DEFAULT_AUTHENTICATION_CLASSES': [
+            'rest_framework_simplejwt.authentication.JWTAuthentication',
+            'rest_framework.authentication.SessionAuthentication',
+        ],
+        'DEFAULT_THROTTLE_RATES': {
+            'auth_register': '1000/minute',
+            'auth_verify': '1000/minute',
+            'auth_resend': '1000/minute',
+            'auth_change_email': '1000/minute',
+            'auth_login': '1000/minute',
+            'auth_token_refresh': '1000/minute',
+            'auth_sso_login': '1000/minute',
+            'auth_sso_link': '1000/minute',
+        },
+    },
 )
 class AccountAuthApiTests(APITestCase):
     def _register(self, email='visitor@example.com'):
@@ -113,6 +132,8 @@ class AccountAuthApiTests(APITestCase):
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
         self.assertEqual(response.data['user']['email'], 'visitor@example.com')
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
 
     def test_login_rejects_unverified_user(self):
         self._register()
@@ -183,8 +204,10 @@ class AccountAuthApiTests(APITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertIn('resend_available_in_seconds', response.data)
+        self.assertIn('Retry-After', response)
+        self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(len(mail.outbox), 1)
 
     def test_resend_verification_sends_new_code_after_cooldown(self):
@@ -259,6 +282,8 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
 
     @patch('accounts.services.verify_sso_token')
     def test_sso_login_creates_verified_user_and_social_account(self, verify_sso_token):
@@ -279,6 +304,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
         self.assertEqual(response.data['user']['email'], 'sso@example.com')
+        self.assertEqual(response['Cache-Control'], 'no-store')
 
         user = get_user_model().objects.get(email='sso@example.com')
         self.assertTrue(user.is_email_verified)
@@ -373,6 +399,7 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['social_account']['provider'], 'github')
+        self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertTrue(
             SocialAccount.objects.filter(
                 user=user,
@@ -439,3 +466,43 @@ class AccountAuthApiTests(APITestCase):
         user.refresh_from_db()
         self.assertTrue(user.is_email_verified)
         self.assertIsNotNone(user.email_verified_at)
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+)
+class AccountThrottleTests(APITestCase):
+    def setUp(self):
+        self.original_throttle_rates = ScopedRateThrottle.THROTTLE_RATES
+        ScopedRateThrottle.THROTTLE_RATES = {
+            **self.original_throttle_rates,
+            'auth_register': '1/minute',
+        }
+        cache.clear()
+
+    def tearDown(self):
+        ScopedRateThrottle.THROTTLE_RATES = self.original_throttle_rates
+        cache.clear()
+
+    def test_register_endpoint_is_throttled(self):
+        first_response = self.client.post(
+            reverse('account-register'),
+            {
+                'email': 'first@example.com',
+                'password': 'StrongPass123!',
+                'password_confirm': 'StrongPass123!',
+            },
+            format='json',
+        )
+        second_response = self.client.post(
+            reverse('account-register'),
+            {
+                'email': 'second@example.com',
+                'password': 'StrongPass123!',
+                'password_confirm': 'StrongPass123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

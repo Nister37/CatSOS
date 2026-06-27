@@ -1,9 +1,8 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
-
 from .views import (
     ChangeVerificationEmailView,
     LoginView,
+    NoStoreTokenRefreshView,
     RegisterView,
     ResendVerificationView,
     SSOLinkView,
@@ -22,7 +21,7 @@ urlpatterns = [
     ),
     path('login/', LoginView.as_view(), name='account-login'),
     path('token/', LoginView.as_view(), name='account-token'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='account-token-refresh'),
+    path('token/refresh/', NoStoreTokenRefreshView.as_view(), name='account-token-refresh'),
     path('sso/login/', SSOLoginView.as_view(), name='account-sso-login'),
     path('sso/link/', SSOLinkView.as_view(), name='account-sso-link'),
 ]

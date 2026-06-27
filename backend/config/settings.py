@@ -177,6 +177,16 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_register': os.getenv('DJANGO_AUTH_REGISTER_RATE', '20/hour'),
+        'auth_verify': os.getenv('DJANGO_AUTH_VERIFY_RATE', '30/minute'),
+        'auth_resend': os.getenv('DJANGO_AUTH_RESEND_RATE', '10/hour'),
+        'auth_change_email': os.getenv('DJANGO_AUTH_CHANGE_EMAIL_RATE', '10/hour'),
+        'auth_login': os.getenv('DJANGO_AUTH_LOGIN_RATE', '20/minute'),
+        'auth_token_refresh': os.getenv('DJANGO_AUTH_TOKEN_REFRESH_RATE', '60/minute'),
+        'auth_sso_login': os.getenv('DJANGO_AUTH_SSO_LOGIN_RATE', '20/minute'),
+        'auth_sso_link': os.getenv('DJANGO_AUTH_SSO_LINK_RATE', '20/minute'),
+    },
 }
 
 SPECTACULAR_SETTINGS = {

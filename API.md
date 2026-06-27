@@ -12,6 +12,32 @@ Authenticated requests use JWT access tokens:
 Authorization: Bearer <access>
 ```
 
+JSON requests should send:
+
+```text
+Content-Type: application/json
+Accept: application/json
+```
+
+Auth responses that include account/session state send:
+
+```text
+Cache-Control: no-store
+Pragma: no-cache
+```
+
+This prevents JWT-bearing responses from being cached by browsers or proxies.
+
+Django's default security settings also currently add baseline browser protection headers:
+
+```text
+X-Content-Type-Options: nosniff
+Referrer-Policy: same-origin
+X-Frame-Options: DENY
+```
+
+These are framework defaults in this project, not custom endpoint behavior.
+
 ## Current Endpoints
 
 | Method | Path | Auth | Status | Purpose |
@@ -136,6 +162,13 @@ Cooldown error:
   "resend_available_in_seconds": [98],
   "detail": ["Wait before requesting another verification code."]
 }
+```
+
+Cooldown status and header:
+
+```text
+HTTP 429 Too Many Requests
+Retry-After: 98
 ```
 
 ### Change Pending Verification Email
@@ -533,6 +566,42 @@ Optional settings:
 ```text
 MICROSOFT_JWKS_URL=https://login.microsoftonline.com/common/discovery/v2.0/keys
 DJANGO_SSO_HTTP_TIMEOUT_SECONDS=5
+```
+
+## Throttling
+
+Auth-sensitive endpoints use scoped DRF throttling.
+
+Default local rates:
+
+| Scope | Default |
+| --- | --- |
+| Register | `20/hour` |
+| Verify email | `30/minute` |
+| Resend verification | `10/hour` |
+| Change verification email | `10/hour` |
+| Login | `20/minute` |
+| Token refresh | `60/minute` |
+| SSO login | `20/minute` |
+| SSO link | `20/minute` |
+
+Environment overrides:
+
+```text
+DJANGO_AUTH_REGISTER_RATE=20/hour
+DJANGO_AUTH_VERIFY_RATE=30/minute
+DJANGO_AUTH_RESEND_RATE=10/hour
+DJANGO_AUTH_CHANGE_EMAIL_RATE=10/hour
+DJANGO_AUTH_LOGIN_RATE=20/minute
+DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
+DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
+DJANGO_AUTH_SSO_LINK_RATE=20/minute
+```
+
+When a throttle limit is exceeded, DRF returns:
+
+```text
+HTTP 429 Too Many Requests
 ```
 
 ## Automated Backend Checks
