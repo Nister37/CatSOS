@@ -4,17 +4,23 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from .models import SocialAccount
 from .services import (
     AccountNotVerifiedError,
     authenticate_account,
     change_unverified_email,
     create_token_pair,
     email_exists,
+    link_sso_account,
+    login_or_create_sso_account,
     register_account,
     resend_verification_code,
+    SSOAccountConflictError,
+    SSOAccountInactiveError,
     VerificationCodeCooldownError,
     verify_email_code,
 )
+from .sso import SSOProviderError
 
 
 class AccountSerializer(serializers.Serializer):
@@ -34,6 +40,16 @@ class VerificationPendingResponseSerializer(serializers.Serializer):
     email_verification_required = serializers.BooleanField(read_only=True)
     resend_available_in_seconds = serializers.IntegerField(read_only=True)
     user = AccountSerializer(read_only=True)
+
+
+class SocialAccountSerializer(serializers.Serializer):
+    provider = serializers.ChoiceField(choices=SocialAccount.Provider.choices, read_only=True)
+    email = serializers.EmailField(read_only=True)
+
+
+class SSOLinkResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+    social_account = SocialAccountSerializer(read_only=True)
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -166,12 +182,54 @@ class ChangeVerificationEmailSerializer(serializers.Serializer):
         return user
 
 
+class SSOLoginSerializer(serializers.Serializer):
+    provider = serializers.ChoiceField(choices=SocialAccount.Provider.choices)
+    token = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def save(self, **kwargs):
+        try:
+            return login_or_create_sso_account(
+                provider=self.validated_data['provider'],
+                token=self.validated_data['token'],
+            )
+        except SSOAccountInactiveError as exc:
+            raise serializers.ValidationError({'non_field_errors': [str(exc)]})
+        except SSOAccountConflictError as exc:
+            raise serializers.ValidationError({'email': [str(exc)]})
+        except SSOProviderError as exc:
+            raise serializers.ValidationError({'token': [str(exc)]})
+
+
+class SSOLinkSerializer(serializers.Serializer):
+    provider = serializers.ChoiceField(choices=SocialAccount.Provider.choices)
+    token = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def save(self, **kwargs):
+        try:
+            return link_sso_account(
+                user=self.context['request'].user,
+                provider=self.validated_data['provider'],
+                token=self.validated_data['token'],
+            )
+        except SSOAccountConflictError as exc:
+            raise serializers.ValidationError({'provider': [str(exc)]})
+        except SSOProviderError as exc:
+            raise serializers.ValidationError({'token': [str(exc)]})
+
+
 def build_verification_pending_response(user):
     return {
         'detail': 'Verification code sent. Verify your email to finish registration.',
         'email_verification_required': True,
         'resend_available_in_seconds': settings.ACCOUNT_VERIFICATION_RESEND_SECONDS,
         'user': AccountSerializer(user).data,
+    }
+
+
+def build_sso_link_response(social_account):
+    return {
+        'detail': 'SSO provider linked.',
+        'social_account': SocialAccountSerializer(social_account).data,
     }
 
 

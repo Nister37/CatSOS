@@ -1,6 +1,6 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,9 +10,13 @@ from .serializers import (
     LoginSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
+    SSOLinkResponseSerializer,
+    SSOLinkSerializer,
+    SSOLoginSerializer,
     VerificationPendingResponseSerializer,
     VerifyEmailSerializer,
     build_auth_response,
+    build_sso_link_response,
     build_verification_pending_response,
 )
 
@@ -108,3 +112,41 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         return Response(build_auth_response(serializer.validated_data['user']))
+
+
+class SSOLoginView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=SSOLoginSerializer,
+        responses={
+            200: AuthResponseSerializer,
+            400: OpenApiResponse(description='Invalid provider token or account conflict'),
+        },
+    )
+    def post(self, request):
+        serializer = SSOLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        return Response(build_auth_response(user))
+
+
+class SSOLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=SSOLinkSerializer,
+        responses={
+            200: SSOLinkResponseSerializer,
+            400: OpenApiResponse(description='Invalid provider token or account conflict'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = SSOLinkSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        social_account = serializer.save()
+
+        return Response(build_sso_link_response(social_account))

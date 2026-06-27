@@ -4,11 +4,23 @@ from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .models import SocialAccount
+from .sso import verify_sso_token
+
 
 class AccountNotVerifiedError(Exception):
+    pass
+
+
+class SSOAccountConflictError(Exception):
+    pass
+
+
+class SSOAccountInactiveError(Exception):
     pass
 
 
@@ -150,3 +162,82 @@ def change_unverified_email(*, email, password, new_email):
     user.email = normalized_new_email
     user.save(update_fields=['email'])
     return send_verification_code(user)
+
+
+@transaction.atomic
+def login_or_create_sso_account(*, provider, token):
+    identity = verify_sso_token(provider=provider, token=token)
+    existing_social_account = SocialAccount.objects.select_related('user').filter(
+        provider=identity.provider,
+        provider_user_id=identity.provider_user_id,
+    ).first()
+
+    if existing_social_account is not None:
+        if not existing_social_account.user.is_active:
+            raise SSOAccountInactiveError('This account is inactive.')
+        if existing_social_account.email != identity.email:
+            existing_social_account.email = identity.email
+            existing_social_account.save(update_fields=['email', 'updated_at'])
+        return existing_social_account.user
+
+    User = get_user_model()
+    if User.objects.filter(email__iexact=identity.email).exists():
+        raise SSOAccountConflictError(
+            'An account with this email already exists. Sign in and link this SSO provider.'
+        )
+
+    user = User.objects.create_user(
+        email=identity.email,
+        password=None,
+        is_email_verified=True,
+        email_verified_at=timezone.now(),
+    )
+    SocialAccount.objects.create(
+        user=user,
+        provider=identity.provider,
+        provider_user_id=identity.provider_user_id,
+        email=identity.email,
+    )
+    return user
+
+
+@transaction.atomic
+def link_sso_account(*, user, provider, token):
+    identity = verify_sso_token(provider=provider, token=token)
+    existing_social_account = SocialAccount.objects.select_related('user').filter(
+        provider=identity.provider,
+        provider_user_id=identity.provider_user_id,
+    ).first()
+
+    if existing_social_account is not None:
+        if existing_social_account.user_id == user.id:
+            if existing_social_account.email != identity.email:
+                existing_social_account.email = identity.email
+                existing_social_account.save(update_fields=['email', 'updated_at'])
+            return existing_social_account
+        raise SSOAccountConflictError('This SSO provider account is already linked to another user.')
+
+    User = get_user_model()
+    if User.objects.filter(email__iexact=identity.email).exclude(pk=user.pk).exists():
+        raise SSOAccountConflictError('This SSO email belongs to another CatSOS account.')
+
+    social_account = SocialAccount.objects.create(
+        user=user,
+        provider=identity.provider,
+        provider_user_id=identity.provider_user_id,
+        email=identity.email,
+    )
+
+    if not user.is_email_verified and normalize_email(user.email) == identity.email:
+        user.is_email_verified = True
+        user.email_verified_at = timezone.now()
+        user.email_verification_code_hash = ''
+        user.save(
+            update_fields=[
+                'is_email_verified',
+                'email_verified_at',
+                'email_verification_code_hash',
+            ]
+        )
+
+    return social_account

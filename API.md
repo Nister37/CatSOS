@@ -24,6 +24,8 @@ Authorization: Bearer <access>
 | `POST` | `/api/auth/login/` | Public | `200` | Login alias that returns JWT tokens. |
 | `POST` | `/api/auth/token/` | Public | `200` | Login endpoint that returns JWT tokens. |
 | `POST` | `/api/auth/token/refresh/` | Public | `200` | Exchange a refresh token for a new access token. |
+| `POST` | `/api/auth/sso/login/` | Public | `200` | Login or create an account with Google, GitHub, or Microsoft SSO. |
+| `POST` | `/api/auth/sso/link/` | JWT | `200` | Link Google, GitHub, or Microsoft SSO to the authenticated account. |
 | `GET` | `/api/schema/` | Public | `200` | OpenAPI schema. |
 | `GET` | `/api/docs/` | Public | `200` | Swagger UI. |
 
@@ -229,6 +231,100 @@ Success response:
 }
 ```
 
+### SSO Login Or Signup
+
+`POST /api/auth/sso/login/`
+
+Request:
+
+```json
+{
+  "provider": "google",
+  "token": "<provider-token>"
+}
+```
+
+Supported `provider` values:
+
+```text
+google
+github
+microsoft
+```
+
+Provider token expectations:
+
+```text
+google     -> Google ID token
+github     -> GitHub OAuth access token with access to /user/emails
+microsoft  -> Microsoft identity platform ID token
+```
+
+Success response:
+
+```json
+{
+  "access": "<jwt-access-token>",
+  "refresh": "<jwt-refresh-token>",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "email": "sso@example.com"
+  }
+}
+```
+
+If the provider account is new and the email is not already used in CatSOS, CatSOS creates a verified account with that email as the main email.
+
+If a CatSOS account already exists with the same email but no provider link exists yet, the endpoint rejects the request. Sign in normally first, then use the SSO link endpoint.
+
+Conflict response:
+
+```json
+{
+  "email": ["An account with this email already exists. Sign in and link this SSO provider."]
+}
+```
+
+### Link SSO Provider
+
+`POST /api/auth/sso/link/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "provider": "github",
+  "token": "<provider-token>"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "SSO provider linked.",
+  "social_account": {
+    "provider": "github",
+    "email": "visitor@example.com"
+  }
+}
+```
+
+If the provider account is already linked to another CatSOS user:
+
+```json
+{
+  "provider": ["This SSO provider account is already linked to another user."]
+}
+```
+
 ## Manual Testing With PowerShell
 
 Start the backend first:
@@ -384,6 +480,59 @@ try {
 } catch {
   $_.ErrorDetails.Message
 }
+```
+
+SSO login/signup:
+
+```powershell
+$ssoBody = @{
+  provider = "google"
+  token = "<google-id-token>"
+} | ConvertTo-Json
+
+$session = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/sso/login/" `
+  -ContentType "application/json" `
+  -Body $ssoBody
+
+$session
+```
+
+Link SSO to the current account:
+
+```powershell
+$headers = @{
+  Authorization = "Bearer $($session.access)"
+}
+
+$linkBody = @{
+  provider = "github"
+  token = "<github-access-token>"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/sso/link/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $linkBody
+```
+
+## SSO Configuration
+
+Google and Microsoft ID tokens must be issued for your configured client IDs:
+
+```text
+GOOGLE_OAUTH_CLIENT_ID=<google-web-client-id>
+MICROSOFT_OAUTH_CLIENT_ID=<microsoft-application-client-id>
+```
+
+Optional settings:
+
+```text
+MICROSOFT_JWKS_URL=https://login.microsoftonline.com/common/discovery/v2.0/keys
+DJANGO_SSO_HTTP_TIMEOUT_SECONDS=5
 ```
 
 ## Automated Backend Checks

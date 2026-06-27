@@ -6,6 +6,8 @@ from .views import (
     LoginView,
     RegisterView,
     ResendVerificationView,
+    SSOLinkView,
+    SSOLoginView,
     VerifyEmailView,
 )
 
@@ -21,4 +23,6 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='account-login'),
     path('token/', LoginView.as_view(), name='account-token'),
     path('token/refresh/', TokenRefreshView.as_view(), name='account-token-refresh'),
+    path('sso/login/', SSOLoginView.as_view(), name='account-sso-login'),
+    path('sso/link/', SSOLinkView.as_view(), name='account-sso-link'),
 ]

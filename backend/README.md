@@ -19,7 +19,11 @@ Django backend for the CatSOS API.
 - Account login: `http://127.0.0.1:8000/api/auth/login/`
 - JWT token login: `http://127.0.0.1:8000/api/auth/token/`
 - JWT token refresh: `http://127.0.0.1:8000/api/auth/token/refresh/`
+- SSO login/signup: `http://127.0.0.1:8000/api/auth/sso/login/`
+- Link SSO provider: `http://127.0.0.1:8000/api/auth/sso/link/`
 - OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
 - Swagger UI: `http://127.0.0.1:8000/api/docs/`
 
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
+
+SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs with `GOOGLE_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_ID`; GitHub uses the provider access token to fetch the authenticated user's verified primary email.

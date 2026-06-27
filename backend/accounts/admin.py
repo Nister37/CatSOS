@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import User
+from .models import SocialAccount, User
 
 
 @admin.register(User)
@@ -20,6 +20,13 @@ class AccountUserAdmin(UserAdmin):
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
+
+
+@admin.register(SocialAccount)
+class SocialAccountAdmin(admin.ModelAdmin):
+    list_display = ('provider', 'email', 'user', 'created_at')
+    list_filter = ('provider',)
+    search_fields = ('email', 'provider_user_id', 'user__email')
     add_fieldsets = (
         (
             None,

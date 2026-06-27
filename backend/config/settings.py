@@ -137,6 +137,13 @@ EMAIL_BACKEND = os.getenv(
     'django.core.mail.backends.console.EmailBackend',
 )
 DEFAULT_FROM_EMAIL = os.getenv('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@catsos.local')
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+MICROSOFT_OAUTH_CLIENT_ID = os.getenv('MICROSOFT_OAUTH_CLIENT_ID', '')
+MICROSOFT_JWKS_URL = os.getenv(
+    'MICROSOFT_JWKS_URL',
+    'https://login.microsoftonline.com/common/discovery/v2.0/keys',
+)
+SSO_HTTP_TIMEOUT_SECONDS = env_int('DJANGO_SSO_HTTP_TIMEOUT_SECONDS', 5)
 
 
 # Internationalization

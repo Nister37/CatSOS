@@ -1,5 +1,6 @@
 import re
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import get_user_model
@@ -9,6 +10,10 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from .models import SocialAccount
+from .services import create_token_pair
+from .sso import SSOIdentity
 
 
 @override_settings(
@@ -32,6 +37,10 @@ class AccountAuthApiTests(APITestCase):
         match = re.search(r'\b(\d{8})\b', mail.outbox[-1].body)
         self.assertIsNotNone(match)
         return match.group(1)
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
 
     def test_register_creates_unverified_account_and_sends_code(self):
         response = self._register()
@@ -250,3 +259,183 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_login_creates_verified_user_and_social_account(self, verify_sso_token):
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id='google-123',
+            email='sso@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-login'),
+            {'provider': 'google', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['token_type'], 'Bearer')
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+        self.assertEqual(response.data['user']['email'], 'sso@example.com')
+
+        user = get_user_model().objects.get(email='sso@example.com')
+        self.assertTrue(user.is_email_verified)
+        self.assertFalse(user.has_usable_password())
+        self.assertTrue(
+            SocialAccount.objects.filter(
+                user=user,
+                provider=SocialAccount.Provider.GOOGLE,
+                provider_user_id='google-123',
+            ).exists()
+        )
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_login_existing_social_account_returns_existing_user_token(self, verify_sso_token):
+        user = get_user_model().objects.create_user(
+            email='sso@example.com',
+            password=None,
+            is_email_verified=True,
+        )
+        SocialAccount.objects.create(
+            user=user,
+            provider=SocialAccount.Provider.GITHUB,
+            provider_user_id='github-123',
+            email='sso@example.com',
+        )
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.GITHUB,
+            provider_user_id='github-123',
+            email='sso@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-login'),
+            {'provider': 'github', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user']['email'], 'sso@example.com')
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_login_existing_email_requires_authenticated_link(self, verify_sso_token):
+        get_user_model().objects.create_user(
+            email='visitor@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.MICROSOFT,
+            provider_user_id='microsoft-123',
+            email='visitor@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-login'),
+            {'provider': 'microsoft', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        self.assertFalse(SocialAccount.objects.exists())
+
+    def test_sso_link_requires_authentication(self):
+        response = self.client.post(
+            reverse('account-sso-link'),
+            {'provider': 'google', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_link_adds_provider_to_existing_user(self, verify_sso_token):
+        user = get_user_model().objects.create_user(
+            email='visitor@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        self._authenticate(user)
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.GITHUB,
+            provider_user_id='github-456',
+            email='visitor@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-link'),
+            {'provider': 'github', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['social_account']['provider'], 'github')
+        self.assertTrue(
+            SocialAccount.objects.filter(
+                user=user,
+                provider=SocialAccount.Provider.GITHUB,
+                provider_user_id='github-456',
+            ).exists()
+        )
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_link_rejects_provider_account_linked_to_another_user(self, verify_sso_token):
+        current_user = get_user_model().objects.create_user(
+            email='current@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        other_user = get_user_model().objects.create_user(
+            email='other@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        SocialAccount.objects.create(
+            user=other_user,
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id='google-999',
+            email='other@example.com',
+        )
+        self._authenticate(current_user)
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id='google-999',
+            email='other@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-link'),
+            {'provider': 'google', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('provider', response.data)
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_link_marks_matching_unverified_email_as_verified(self, verify_sso_token):
+        user = get_user_model().objects.create_user(
+            email='visitor@example.com',
+            password='StrongPass123!',
+            is_email_verified=False,
+        )
+        self._authenticate(user)
+        verify_sso_token.return_value = SSOIdentity(
+            provider=SocialAccount.Provider.MICROSOFT,
+            provider_user_id='microsoft-789',
+            email='visitor@example.com',
+        )
+
+        response = self.client.post(
+            reverse('account-sso-link'),
+            {'provider': 'microsoft', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_email_verified)
+        self.assertIsNotNone(user.email_verified_at)
