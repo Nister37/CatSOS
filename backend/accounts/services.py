@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 
 from django.conf import settings
@@ -5,6 +6,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils.encoding import force_str
@@ -21,6 +23,7 @@ PASSWORD_RESET_REQUEST_DETAIL = (
 )
 PASSWORD_RESET_SUCCESS_DETAIL = 'Password has been reset successfully.'
 PASSWORD_RESET_INVALID_DETAIL = 'Invalid or expired reset link.'
+PASSWORD_RESET_RATE_LIMIT_DETAIL = 'Too many password reset requests. Try again later.'
 PASSWORD_CHANGE_SUCCESS_DETAIL = 'Password has been changed successfully.'
 
 
@@ -43,6 +46,10 @@ class VerificationCodeCooldownError(Exception):
 
 
 class PasswordResetInvalidTokenError(Exception):
+    pass
+
+
+class PasswordResetRateLimitError(Exception):
     pass
 
 
@@ -82,7 +89,54 @@ def create_token_pair(user):
     }
 
 
+def _password_reset_rate_limit_key(*, kind, value):
+    digest = hashlib.sha256(value.encode('utf-8')).hexdigest()
+    return f'accounts:password-reset:{kind}:{digest}'
+
+
+def _increment_cache_counter(key, timeout):
+    if cache.add(key, 1, timeout=timeout):
+        return 1
+
+    try:
+        return cache.incr(key)
+    except (ValueError, NotImplementedError):
+        current = cache.get(key, 0) + 1
+        cache.set(key, current, timeout=timeout)
+        return current
+
+
+def check_password_reset_rate_limit(*, email, request_ip=None):
+    window_seconds = 60 * 60
+    checks = [
+        (
+            _password_reset_rate_limit_key(kind='email', value=normalize_email(email)),
+            settings.PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR,
+        ),
+    ]
+
+    if request_ip:
+        checks.append(
+            (
+                _password_reset_rate_limit_key(kind='ip', value=request_ip),
+                settings.PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR,
+            )
+        )
+
+    is_limited = False
+    for key, limit in checks:
+        if limit <= 0:
+            continue
+        count = _increment_cache_counter(key, timeout=window_seconds)
+        if count > limit:
+            is_limited = True
+
+    if is_limited:
+        raise PasswordResetRateLimitError
+
+
 def request_password_reset(*, email, request_ip=None):
+    check_password_reset_rate_limit(email=email, request_ip=request_ip)
     normalized_email = normalize_email(email)
     User = get_user_model()
     return User.objects.filter(

@@ -30,9 +30,11 @@ from .services import VerificationCodeCooldownError
 from .services import (
     PASSWORD_CHANGE_SUCCESS_DETAIL,
     PASSWORD_RESET_INVALID_DETAIL,
+    PASSWORD_RESET_RATE_LIMIT_DETAIL,
     PASSWORD_RESET_REQUEST_DETAIL,
     PASSWORD_RESET_SUCCESS_DETAIL,
     PasswordResetInvalidTokenError,
+    PasswordResetRateLimitError,
     request_password_reset,
     reset_password_with_token,
 )
@@ -47,6 +49,13 @@ def set_no_store_headers(response):
 def no_store_response(data, *, status_code=status.HTTP_200_OK, headers=None):
     response = Response(data, status=status_code, headers=headers)
     return set_no_store_headers(response)
+
+
+def get_client_ip(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
 
 
 class RegisterView(APIView):
@@ -231,7 +240,17 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        request_password_reset(email=serializer.validated_data['email'])
+        try:
+            request_password_reset(
+                email=serializer.validated_data['email'],
+                request_ip=get_client_ip(request),
+            )
+        except PasswordResetRateLimitError:
+            return no_store_response(
+                {'detail': PASSWORD_RESET_RATE_LIMIT_DETAIL},
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={'Retry-After': str(60 * 60)},
+            )
 
         return no_store_response({'detail': PASSWORD_RESET_REQUEST_DETAIL})
 
