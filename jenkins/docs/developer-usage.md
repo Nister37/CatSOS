@@ -59,8 +59,8 @@ The pipeline should run these stages:
 1. CI image rebuild
 2. Backend Django checks and tests
 3. OpenAPI generation and validation
-4. Frontend lint, Jest, a11y, and build
-5. Frontend runtime image build
+4. Frontend lint, Jest, a11y, and TypeScript checks
+5. Frontend runtime image build, including the production Vite build
 6. Cypress e2e checks
 
 All stages must pass before merging.
@@ -117,3 +117,19 @@ docker compose -f docker-compose.ci.yml down -v --remove-orphans
 Run the cleanup command even after failures.
 
 The CI cleanup command is safe because Jenkins runs from `docker-compose.jenkins.yml`, while build/test containers run from `docker-compose.ci.yml`.
+
+## If Jenkins Fails With Exit Code 137
+
+Exit code `137` usually means Linux killed the process, most often because the Jenkins host ran out of memory.
+
+This can happen on a small homelab server if multiple Docker builds or old CI containers run at the same time. It is usually an infrastructure/resource issue, not proof that the code is broken.
+
+First, rerun the build once. If it fails again with `137`, check the Jenkins host:
+
+```bash
+docker compose -p catsos-ci -f docker-compose.ci.yml down -v --remove-orphans
+docker ps
+free -h
+```
+
+For the shared homelab Jenkins server, keep the built-in node executor count at `1`. That prevents two branch builds from competing for memory.

@@ -12,15 +12,7 @@ EXPOSE 5173
 CMD ["yarn", "dev:docker"]
 
 FROM development AS test
-CMD ["sh", "-c", "yarn lint && yarn test:ci && yarn build"]
-
-FROM development AS builder
-RUN yarn build
-
-FROM nginx:1.27-alpine AS runtime
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 80
+CMD ["sh", "-c", "yarn lint && yarn test:ci && yarn tsc --noEmit"]
 
 FROM cypress/included:15.18.0 AS cypress
 WORKDIR /app
@@ -30,3 +22,11 @@ RUN yarn install --frozen-lockfile
 COPY . .
 ENTRYPOINT []
 CMD ["yarn", "e2e"]
+
+FROM development AS builder
+RUN yarn build
+
+FROM nginx:1.27-alpine AS runtime
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
