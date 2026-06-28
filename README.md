@@ -7,14 +7,15 @@ CatSOS is a training-oriented full-stack workspace for a Django REST API and a R
 ```text
 backend/   Django, Django REST Framework, OpenAPI
 frontend/  React SPA, Vite, Yarn, Jest, Cypress, accessibility tooling
-jenkins/   Local Jenkins image used by the CI Compose stack
+jenkins/   Jenkins image and setup docs for the shared CI server
 ```
 
 ## Start Here
 
 - Backend entry point: [backend/README.md](backend/README.md)
 - Frontend entry point: [frontend/README.md](frontend/README.md)
-- Local Jenkins: [jenkins/README.md](jenkins/README.md)
+- Git and pull request workflow: [GIT.md](GIT.md)
+- Jenkins setup and usage: [jenkins/README.md](jenkins/README.md)
 
 ## Docker Entry Points
 
@@ -47,7 +48,7 @@ CI containers and tools:
 backend-test      Python 3.14, Django checks, Django tests
 backend-openapi   Python 3.14, Django, drf-spectacular
 backend-api       Python 3.14, Django development server
-frontend-quality  Node 26, Yarn 1, ESLint, Jest, TypeScript, Vite
+frontend-quality  Node 26, Yarn 1, ESLint, Jest, TypeScript
 frontend-dev      Node 26, Yarn 1, Vite development server
 frontend-e2e      Cypress, Node, Yarn, Testing Library Cypress, Cypress Axe
 frontend-runtime  Node/Yarn/TypeScript/Vite build, nginx runtime

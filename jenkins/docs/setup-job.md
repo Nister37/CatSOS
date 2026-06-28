@@ -187,18 +187,42 @@ In GitHub:
 
 1. Open the repository.
 2. Open **Settings**.
-3. Open **Branches**.
-4. Add or edit the branch protection rule for:
+3. Open **Rules**.
+4. Open **Rulesets**.
+5. Create or edit the ruleset that targets:
 
    ```text
    main
    ```
 
-5. Enable **Require a pull request before merging**.
-6. Enable **Require status checks to pass before merging**.
-7. After Jenkins has reported at least one build result, select the Jenkins status check as required.
-8. Enable **Require branches to be up to date before merging** if available.
-9. Disable force pushes and branch deletion.
+6. Set **Enforcement status** to **Active**.
+7. Enable **Require a pull request before merging**.
+8. Set **Required approvals** to:
+
+   ```text
+   0
+   ```
+
+   This lets either developer merge when Jenkins is green, even if the other developer is absent.
+
+9. Enable **Require status checks to pass**.
+10. After Jenkins has reported at least one build result, select this Jenkins status check as required:
+
+    ```text
+    continuous-integration/jenkins/branch
+    ```
+
+11. Enable **Require branches to be up to date before merging** if available.
+12. Enable **Block force pushes**.
+13. Enable **Restrict deletions**.
+
+If GitHub shows the older branch protection UI instead of Rulesets, use:
+
+```text
+Repository -> Settings -> Branches -> Branch protection rules
+```
+
+and configure the same requirements there.
 
 Result:
 
