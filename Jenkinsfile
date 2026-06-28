@@ -10,6 +10,12 @@ pipeline {
   }
 
   stages {
+    stage('Build CI Images') {
+      steps {
+        sh 'docker compose -f $CI_COMPOSE build backend-test backend-openapi frontend-quality frontend-runtime frontend-dev frontend-e2e'
+      }
+    }
+
     stage('Backend Tests') {
       steps {
         sh 'docker compose -f $CI_COMPOSE run --rm backend-test'

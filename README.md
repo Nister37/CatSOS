@@ -39,6 +39,8 @@ Start local Jenkins for the same CI pipeline:
 docker compose -f docker-compose.ci.yml up --build jenkins
 ```
 
+Run the full Jenkins pipeline before merging any backend or frontend branch into `main`. See [jenkins/README.md](jenkins/README.md) for the Jenkins UI flow and the equivalent local Docker Compose commands.
+
 CI containers and tools:
 
 ```text

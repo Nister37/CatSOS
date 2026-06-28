@@ -5,13 +5,12 @@ services:
     build:
       context: ./jenkins
     ports:
-      - "8080:8080"
-      - "50000:50000"
+      - "127.0.0.1:8080:8080"
     volumes:
       - jenkins-home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
     group_add:
-      - "0"
+      - "989"
 
   backend-test:
     build:
