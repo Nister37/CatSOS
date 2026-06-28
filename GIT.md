@@ -163,6 +163,26 @@ git reset --hard origin/main
 
 Do not run `git reset --hard` if you have local changes you want to keep.
 
+## If You Committed On Main By Mistake
+
+Do not force push `main`. GitHub should reject it anyway because `main` is protected.
+
+Create a branch from your local commit and push that branch instead:
+
+```bash
+git checkout -b docs/CAT-000-my-change
+git push -u origin docs/CAT-000-my-change
+```
+
+Then open a Pull Request from that branch into `main`.
+
+After the Pull Request is merged, update local `main`:
+
+```bash
+git checkout main
+git pull
+```
+
 ## Force Push Rule
 
 Do not force push to `main`.
