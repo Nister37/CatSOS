@@ -3,6 +3,8 @@ from .views import (
     ChangeVerificationEmailView,
     LoginView,
     NoStoreTokenRefreshView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     RegisterView,
     ResendVerificationView,
     SSOLinkView,
@@ -22,6 +24,12 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='account-login'),
     path('token/', LoginView.as_view(), name='account-token'),
     path('token/refresh/', NoStoreTokenRefreshView.as_view(), name='account-token-refresh'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='account-password-reset'),
+    path(
+        'password-reset/confirm/',
+        PasswordResetConfirmView.as_view(),
+        name='account-password-reset-confirm',
+    ),
     path('sso/login/', SSOLoginView.as_view(), name='account-sso-login'),
     path('sso/link/', SSOLinkView.as_view(), name='account-sso-link'),
 ]

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -9,7 +10,10 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import (
     AuthResponseSerializer,
     ChangeVerificationEmailSerializer,
+    DetailResponseSerializer,
     LoginSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
     SSOLinkResponseSerializer,
@@ -22,6 +26,14 @@ from .serializers import (
     build_verification_pending_response,
 )
 from .services import VerificationCodeCooldownError
+from .services import (
+    PASSWORD_RESET_INVALID_DETAIL,
+    PASSWORD_RESET_REQUEST_DETAIL,
+    PASSWORD_RESET_SUCCESS_DETAIL,
+    PasswordResetInvalidTokenError,
+    request_password_reset,
+    reset_password_with_token,
+)
 
 
 def set_no_store_headers(response):
@@ -201,3 +213,57 @@ class NoStoreTokenRefreshView(TokenRefreshView):
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         return set_no_store_headers(response)
+
+
+class PasswordResetRequestView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+        },
+    )
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request_password_reset(email=serializer.validated_data['email'])
+
+        return no_store_response({'detail': PASSWORD_RESET_REQUEST_DETAIL})
+
+
+class PasswordResetConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=PasswordResetConfirmSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Invalid reset link or validation errors'),
+        },
+    )
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            reset_password_with_token(
+                uid=serializer.validated_data['uid'],
+                token=serializer.validated_data['token'],
+                new_password=serializer.validated_data['new_password'],
+            )
+        except PasswordResetInvalidTokenError:
+            return no_store_response(
+                {'detail': PASSWORD_RESET_INVALID_DETAIL},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as exc:
+            return no_store_response(
+                {'new_password': list(exc.messages)},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return no_store_response({'detail': PASSWORD_RESET_SUCCESS_DETAIL})

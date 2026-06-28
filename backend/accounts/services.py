@@ -3,13 +3,24 @@ import secrets
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db import transaction
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import SocialAccount
 from .sso import verify_sso_token
+
+
+PASSWORD_RESET_REQUEST_DETAIL = (
+    'If an account exists for this email, password reset instructions were sent.'
+)
+PASSWORD_RESET_SUCCESS_DETAIL = 'Password has been reset successfully.'
+PASSWORD_RESET_INVALID_DETAIL = 'Invalid or expired reset link.'
 
 
 class AccountNotVerifiedError(Exception):
@@ -28,6 +39,10 @@ class VerificationCodeCooldownError(Exception):
     def __init__(self, seconds_remaining):
         self.seconds_remaining = seconds_remaining
         super().__init__('Verification code resend is still on cooldown.')
+
+
+class PasswordResetInvalidTokenError(Exception):
+    pass
 
 
 def normalize_email(email):
@@ -64,6 +79,43 @@ def create_token_pair(user):
         'access': str(refresh.access_token),
         'refresh': str(refresh),
     }
+
+
+def request_password_reset(*, email, request_ip=None):
+    normalized_email = normalize_email(email)
+    User = get_user_model()
+    return User.objects.filter(
+        email__iexact=normalized_email,
+        is_active=True,
+    ).first()
+
+
+def get_password_reset_user(*, uid, token):
+    User = get_user_model()
+    try:
+        user_id = force_str(urlsafe_base64_decode(uid))
+        user = User.objects.get(pk=user_id, is_active=True)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return None
+
+    if not user.has_usable_password():
+        return None
+
+    if not default_token_generator.check_token(user, token):
+        return None
+
+    return user
+
+
+def reset_password_with_token(*, uid, token, new_password):
+    user = get_password_reset_user(uid=uid, token=token)
+    if user is None:
+        raise PasswordResetInvalidTokenError
+
+    validate_password(new_password, user=user)
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    return user
 
 
 def generate_verification_code():
