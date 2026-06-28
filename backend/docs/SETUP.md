@@ -24,6 +24,19 @@ Copy environment defaults when you need local overrides:
 Copy-Item backend\.env.example backend\.env
 ```
 
+Password recovery uses email reset links. Local development can use Django's console email backend:
+
+```text
+DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_DEFAULT_FROM_EMAIL=no-reply@catsos.local
+DJANGO_PASSWORD_RESET_TIMEOUT=3600
+DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
+DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
+```
+
+SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links and logged-in password change with current-password verification.
+
 Run migrations and start Django:
 
 ```powershell

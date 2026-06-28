@@ -50,6 +50,9 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `POST` | `/api/auth/login/` | Public | `200` | Login alias that returns JWT tokens. |
 | `POST` | `/api/auth/token/` | Public | `200` | Login endpoint that returns JWT tokens. |
 | `POST` | `/api/auth/token/refresh/` | Public | `200` | Exchange a refresh token for a new access token. |
+| `POST` | `/api/auth/password-reset/` | Public | `200` | Request an email password reset link without revealing account existence. |
+| `POST` | `/api/auth/password-reset/confirm/` | Public | `200` | Reset a password with a valid `uid` and Django reset token. |
+| `POST` | `/api/auth/password-change/` | JWT | `200` | Change the authenticated user's password after current-password verification. |
 | `POST` | `/api/auth/sso/login/` | Public | `200` | Login or create an account with Google, GitHub, or Microsoft SSO. |
 | `POST` | `/api/auth/sso/link/` | JWT | `200` | Link Google, GitHub, or Microsoft SSO to the authenticated account. |
 | `GET` | `/api/schema/` | Public | `200` | OpenAPI schema. |
@@ -264,6 +267,116 @@ Success response:
 }
 ```
 
+### Request Password Reset
+
+`POST /api/auth/password-reset/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com"
+}
+```
+
+Success response for existing and non-existing accounts:
+
+```json
+{
+  "detail": "If an account exists for this email, password reset instructions were sent."
+}
+```
+
+The response intentionally does not reveal whether the email belongs to an account. If an active account with a usable password exists, the backend sends a reset link to that email. Reset tokens are never returned in JSON responses.
+
+Rate limit response:
+
+```json
+{
+  "detail": "Too many password reset requests. Try again later."
+}
+```
+
+Rate limit status and header:
+
+```text
+HTTP 429 Too Many Requests
+Retry-After: 3600
+```
+
+### Confirm Password Reset
+
+`POST /api/auth/password-reset/confirm/`
+
+Request:
+
+```json
+{
+  "uid": "<uid-from-email-link>",
+  "token": "<token-from-email-link>",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Password has been reset successfully."
+}
+```
+
+Invalid or expired link:
+
+```json
+{
+  "detail": "Invalid or expired reset link."
+}
+```
+
+Password reset does not auto-login the user and does not return JWT tokens. The new password must pass Django password validators.
+
+### Change Password
+
+`POST /api/auth/password-change/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Password has been changed successfully."
+}
+```
+
+Wrong current password:
+
+```json
+{
+  "current_password": ["Current password is incorrect."]
+}
+```
+
+The new password must pass Django password validators. The backend sends a confirmation email after successful password reset and after successful logged-in password change.
+
+SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links and logged-in password change with current-password verification.
+
 ### SSO Login Or Signup
 
 `POST /api/auth/sso/login/`
@@ -472,6 +585,37 @@ Invoke-RestMethod `
   -Body $refreshBody
 ```
 
+Request a password reset email:
+
+```powershell
+$resetRequestBody = @{
+  email = "visitor@example.com"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/password-reset/" `
+  -ContentType "application/json" `
+  -Body $resetRequestBody
+```
+
+Confirm password reset with the `uid` and `token` from the email link:
+
+```powershell
+$resetConfirmBody = @{
+  uid = "<uid-from-email-link>"
+  token = "<token-from-email-link>"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/password-reset/confirm/" `
+  -ContentType "application/json" `
+  -Body $resetConfirmBody
+```
+
 Send an authenticated request:
 
 ```powershell
@@ -483,6 +627,23 @@ Invoke-RestMethod `
   -Method Get `
   -Uri "http://127.0.0.1:8000/api/health/" `
   -Headers $headers
+```
+
+Change the current user's password:
+
+```powershell
+$passwordChangeBody = @{
+  current_password = "StrongPass123!"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/password-change/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $passwordChangeBody
 ```
 
 Test validation errors:
@@ -568,6 +729,19 @@ MICROSOFT_JWKS_URL=https://login.microsoftonline.com/common/discovery/v2.0/keys
 DJANGO_SSO_HTTP_TIMEOUT_SECONDS=5
 ```
 
+## Password Recovery Configuration
+
+Password reset links use the configured frontend origin:
+
+```text
+DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_PASSWORD_RESET_TIMEOUT=3600
+DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_DEFAULT_FROM_EMAIL=no-reply@catsos.local
+```
+
+`DJANGO_PASSWORD_RESET_TIMEOUT` is in seconds. Django's local console email backend is enough for development.
+
 ## Throttling
 
 Auth-sensitive endpoints use scoped DRF throttling.
@@ -584,6 +758,8 @@ Default local rates:
 | Token refresh | `60/minute` |
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
+| Password reset per email | `5/hour` |
+| Password reset per IP | `10/hour` |
 
 Environment overrides:
 
@@ -596,6 +772,8 @@ DJANGO_AUTH_LOGIN_RATE=20/minute
 DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
+DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
+DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```
 
 When a throttle limit is exceeded, DRF returns:
