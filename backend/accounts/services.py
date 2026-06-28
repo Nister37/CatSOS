@@ -21,6 +21,7 @@ PASSWORD_RESET_REQUEST_DETAIL = (
 )
 PASSWORD_RESET_SUCCESS_DETAIL = 'Password has been reset successfully.'
 PASSWORD_RESET_INVALID_DETAIL = 'Invalid or expired reset link.'
+PASSWORD_CHANGE_SUCCESS_DETAIL = 'Password has been changed successfully.'
 
 
 class AccountNotVerifiedError(Exception):
@@ -113,6 +114,12 @@ def reset_password_with_token(*, uid, token, new_password):
         raise PasswordResetInvalidTokenError
 
     validate_password(new_password, user=user)
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    return user
+
+
+def change_user_password(*, user, new_password):
     user.set_password(new_password)
     user.save(update_fields=['password'])
     return user

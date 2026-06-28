@@ -12,6 +12,7 @@ from .serializers import (
     ChangeVerificationEmailSerializer,
     DetailResponseSerializer,
     LoginSerializer,
+    PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
@@ -27,6 +28,7 @@ from .serializers import (
 )
 from .services import VerificationCodeCooldownError
 from .services import (
+    PASSWORD_CHANGE_SUCCESS_DETAIL,
     PASSWORD_RESET_INVALID_DETAIL,
     PASSWORD_RESET_REQUEST_DETAIL,
     PASSWORD_RESET_SUCCESS_DETAIL,
@@ -267,3 +269,22 @@ class PasswordResetConfirmView(APIView):
             )
 
         return no_store_response({'detail': PASSWORD_RESET_SUCCESS_DETAIL})
+
+
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=PasswordChangeSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return no_store_response({'detail': PASSWORD_CHANGE_SUCCESS_DETAIL})

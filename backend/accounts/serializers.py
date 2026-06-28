@@ -9,6 +9,7 @@ from .services import (
     AccountNotVerifiedError,
     authenticate_account,
     change_unverified_email,
+    change_user_password,
     create_token_pair,
     email_exists,
     link_sso_account,
@@ -192,6 +193,38 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 {'new_password_confirm': ['Password confirmation does not match.']}
             )
         return attrs
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        errors = {}
+
+        if not user.check_password(attrs['current_password']):
+            errors['current_password'] = ['Current password is incorrect.']
+
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            errors['new_password_confirm'] = ['Password confirmation does not match.']
+
+        try:
+            validate_password(attrs['new_password'], user=user)
+        except DjangoValidationError as exc:
+            errors['new_password'] = list(exc.messages)
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
+    def save(self, **kwargs):
+        return change_user_password(
+            user=self.context['request'].user,
+            new_password=self.validated_data['new_password'],
+        )
 
 
 class SSOLoginSerializer(serializers.Serializer):
