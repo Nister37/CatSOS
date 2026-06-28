@@ -7,7 +7,7 @@ Use this document when you need to start Jenkins for the first time, recover acc
 From the repository root:
 
 ```powershell
-docker compose -f docker-compose.ci.yml up --build jenkins
+docker compose -f docker-compose.jenkins.yml up --build jenkins
 ```
 
 Open:
@@ -21,7 +21,7 @@ The Jenkins port is bound to `127.0.0.1` only. This keeps Jenkins off the public
 Read the initial Jenkins password:
 
 ```powershell
-docker compose -f docker-compose.ci.yml exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+docker compose -f docker-compose.jenkins.yml exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
 ## First-Time GUI Setup
@@ -45,7 +45,7 @@ Password: the initial Jenkins password
 Read the password again with:
 
 ```powershell
-docker compose -f docker-compose.ci.yml exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+docker compose -f docker-compose.jenkins.yml exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
 If you created your own admin user instead, use the username and password you created during setup.
@@ -63,10 +63,13 @@ Jenkins URL: https://debian.boston-spica.ts.net/
 Recommended setup:
 
 - Run Jenkins with Docker Compose on the `debian` host.
+- Use `docker-compose.jenkins.yml` for the Jenkins server.
+- Use `docker-compose.ci.yml` only for CI build/test containers.
 - Install Tailscale on the host machine, not inside the Jenkins container.
 - Expose local Jenkins with Tailscale Serve.
 - Expose only the Jenkins web UI port, `8080`; this project does not use Jenkins inbound agent port `50000`.
 - Do not expose Jenkins directly to the public internet.
+- The Jenkins data volume keeps the existing name `catsos-ci_jenkins-home` so moving Jenkins out of the CI compose file does not reset jobs, plugins, users, or credentials.
 
 Run the following commands on the `debian` host, not on each developer laptop.
 
@@ -96,7 +99,14 @@ cd CatSOS
 Start Jenkins:
 
 ```bash
-docker compose -f docker-compose.ci.yml up --build -d jenkins
+export DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
+docker compose -f docker-compose.jenkins.yml up --build -d jenkins
+```
+
+The `DOCKER_SOCKET_GID` value lets the Jenkins container use the host Docker socket. Verify it works:
+
+```bash
+docker compose -f docker-compose.jenkins.yml exec jenkins docker ps
 ```
 
 Check that Jenkins works locally on the host:
@@ -176,6 +186,14 @@ Stop sharing Jenkins through Tailscale:
 ```bash
 tailscale serve --https=443 off
 ```
+
+Stop Jenkins without deleting Jenkins data:
+
+```bash
+docker compose -f docker-compose.jenkins.yml down
+```
+
+Do not use `docker compose -f docker-compose.jenkins.yml down -v` unless you intentionally want to delete Jenkins jobs, users, plugins, and credentials.
 
 Useful Tailscale docs:
 

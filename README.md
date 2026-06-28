@@ -18,7 +18,7 @@ jenkins/   Local Jenkins image used by the CI Compose stack
 
 ## Docker Entry Points
 
-There are two Compose files on purpose: `docker-compose.yml` is the small local development stack, while `docker-compose.ci.yml` builds the CI/Jenkins test stack.
+There are three Compose files on purpose: `docker-compose.yml` is the small local development stack, `docker-compose.ci.yml` builds the CI test stack, and `docker-compose.jenkins.yml` runs the Jenkins server.
 
 Run the app stack:
 
@@ -36,7 +36,7 @@ docker compose -f docker-compose.ci.yml run --rm frontend-quality
 Start local Jenkins for the same CI pipeline:
 
 ```powershell
-docker compose -f docker-compose.ci.yml up --build jenkins
+docker compose -f docker-compose.jenkins.yml up --build jenkins
 ```
 
 Run the full Jenkins pipeline before merging any backend or frontend branch into `main`. See [jenkins/README.md](jenkins/README.md) for the Jenkins UI flow and the equivalent local Docker Compose commands.
@@ -51,6 +51,11 @@ frontend-quality  Node 26, Yarn 1, ESLint, Jest, TypeScript, Vite
 frontend-dev      Node 26, Yarn 1, Vite development server
 frontend-e2e      Cypress, Node, Yarn, Testing Library Cypress, Cypress Axe
 frontend-runtime  Node/Yarn/TypeScript/Vite build, nginx runtime
+```
+
+Jenkins server:
+
+```text
 jenkins           Jenkins LTS, JDK 21, Docker CLI, Docker Compose plugin
 ```
 

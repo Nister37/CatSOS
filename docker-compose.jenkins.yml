@@ -1,0 +1,18 @@
+name: catsos-jenkins
+
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_SOCKET_GID:-989}"
+
+volumes:
+  jenkins-home:
+    name: catsos-ci_jenkins-home

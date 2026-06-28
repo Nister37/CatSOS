@@ -76,6 +76,12 @@ Check these in order:
 5. Is GitHub credential access still valid?
 6. Is the Jenkins container running on `debian`?
 
+Check the Jenkins server with:
+
+```bash
+docker compose -f docker-compose.jenkins.yml ps jenkins
+```
+
 ## If GitHub Does Not Block Merge
 
 Jenkins running is not enough. GitHub must protect `main`.
@@ -109,3 +115,5 @@ docker compose -f docker-compose.ci.yml down -v --remove-orphans
 ```
 
 Run the cleanup command even after failures.
+
+The CI cleanup command is safe because Jenkins runs from `docker-compose.jenkins.yml`, while build/test containers run from `docker-compose.ci.yml`.
