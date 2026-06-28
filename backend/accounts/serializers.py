@@ -41,6 +41,10 @@ class VerificationPendingResponseSerializer(serializers.Serializer):
     user = AccountSerializer(read_only=True)
 
 
+class DetailResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+
+
 class SocialAccountSerializer(serializers.Serializer):
     provider = serializers.ChoiceField(choices=SocialAccount.Provider.choices, read_only=True)
     email = serializers.EmailField(read_only=True)
@@ -170,6 +174,24 @@ class ChangeVerificationEmailSerializer(serializers.Serializer):
             )
 
         return user
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError(
+                {'new_password_confirm': ['Password confirmation does not match.']}
+            )
+        return attrs
 
 
 class SSOLoginSerializer(serializers.Serializer):
