@@ -14,6 +14,7 @@ jenkins/   Local Jenkins image used by the CI Compose stack
 
 - Backend entry point: [backend/README.md](backend/README.md)
 - Frontend entry point: [frontend/README.md](frontend/README.md)
+- Git and pull request workflow: [GIT.md](GIT.md)
 - Local Jenkins: [jenkins/README.md](jenkins/README.md)
 
 ## Docker Entry Points

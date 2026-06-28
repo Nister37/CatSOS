@@ -25,6 +25,17 @@ continuous-integration/jenkins/branch
 
 If this check is pending or failed, GitHub should block the merge button.
 
+This is one shared Jenkins setup for the team. Developers do not need to create their own Jenkins jobs or credentials on their machines. Each developer only needs normal GitHub repository access and Tailscale access if they want to open the Jenkins UI.
+
+The current repository rule is designed for a two-person team:
+
+- both developers can create branches
+- both developers can open Pull Requests
+- both developers can merge a Pull Request after Jenkins succeeds
+- no human approval is required because `Required approvals` is `0`
+- Jenkins is the mandatory gate into `main`
+- direct pushes to `main` should be rejected by GitHub
+
 ## Normal Development Flow
 
 Start from an up-to-date `main`:
@@ -123,7 +134,8 @@ After the PR is merged:
 ```bash
 git checkout main
 git pull
-git branch -d feature/CAT-123-short-description
+git branch -d feature/*part*/CAT-123
+( for instance: feature/backend/CAT-010)
 ```
 
 You can also delete the remote branch from the GitHub PR page.
@@ -168,11 +180,11 @@ git push --force-with-lease
 Use short, issue-based names:
 
 ```text
-feature/CAT-123-report-api
-fix/CAT-124-login-validation
-docs/CAT-125-jenkins-guide
-ci/CAT-126-pipeline-fix
-test/CAT-127-auth-tests
+feature/*part*/CAT-123-report-api
+fix/*part*/CAT-124-login-validation
+docs/*part*/CAT-125-jenkins-guide
+ci/*part*/CAT-126-pipeline-fix
+test/*part*/CAT-127-auth-tests
 ```
 
 Avoid long-running branches like:

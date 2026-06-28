@@ -89,29 +89,41 @@ Jenkins running is not enough. GitHub must protect `main`.
 Check GitHub:
 
 ```text
-Repository -> Settings -> Branches -> branch protection for main
+Repository -> Settings -> Rules -> Rulesets -> Protect main
 ```
 
 Required:
 
-- **Require a pull request before merging**
-- **Require status checks to pass before merging**
-- Jenkins status check selected as required
+- **Require a pull request before merging** is enabled
+- **Required approvals** is set to `0`
+- **Require status checks to pass** is enabled
+- `continuous-integration/jenkins/branch` is selected as a required status check
+- force pushes are blocked
+- branch deletion is restricted
 
 GitHub can only list a Jenkins status check after Jenkins has reported at least one result.
+
+If this repository uses the older branch protection UI instead of Rulesets, use:
+
+```text
+Repository -> Settings -> Branches -> Branch protection rules
+```
+
+and configure the same requirements there.
 
 ## Run the Pipeline Manually Without Jenkins
 
 Use this only as a local fallback:
 
 ```powershell
-docker compose -f docker-compose.ci.yml build backend-test backend-openapi frontend-quality frontend-runtime frontend-dev frontend-e2e
-docker compose -f docker-compose.ci.yml run --rm backend-test
-docker compose -f docker-compose.ci.yml run --rm backend-openapi
-docker compose -f docker-compose.ci.yml run --rm frontend-quality
-docker compose -f docker-compose.ci.yml build frontend-runtime
-docker compose -f docker-compose.ci.yml up --abort-on-container-exit --exit-code-from frontend-e2e frontend-e2e
-docker compose -f docker-compose.ci.yml down -v --remove-orphans
+$env:COMPOSE_PARALLEL_LIMIT = "1"
+docker compose -p catsos-ci-local -f docker-compose.ci.yml build backend-test backend-openapi frontend-quality frontend-runtime frontend-dev frontend-e2e
+docker compose -p catsos-ci-local -f docker-compose.ci.yml run --rm backend-test
+docker compose -p catsos-ci-local -f docker-compose.ci.yml run --rm backend-openapi
+docker compose -p catsos-ci-local -f docker-compose.ci.yml run --rm frontend-quality
+docker compose -p catsos-ci-local -f docker-compose.ci.yml build frontend-runtime
+docker compose -p catsos-ci-local -f docker-compose.ci.yml up --abort-on-container-exit --exit-code-from frontend-e2e frontend-e2e
+docker compose -p catsos-ci-local -f docker-compose.ci.yml down -v --remove-orphans
 ```
 
 Run the cleanup command even after failures.
