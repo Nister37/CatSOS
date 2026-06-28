@@ -367,6 +367,50 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_password_reset_email_is_not_sent_for_inactive_user(self):
+        self._create_verified_user()
+        user = get_user_model().objects.get(email='visitor@example.com')
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+
+        response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'visitor@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_REQUEST_DETAIL})
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_email_is_not_sent_for_sso_only_user(self):
+        get_user_model().objects.create_user(
+            email='sso@example.com',
+            password=None,
+            is_email_verified=True,
+        )
+
+        response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'sso@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_REQUEST_DETAIL})
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_request_validation_error_has_no_store_headers(self):
+        response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'not-an-email'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
+
     def test_password_reset_token_is_never_returned_in_json_response(self):
         self._create_verified_user()
 
@@ -459,6 +503,8 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('new_password_confirm', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
 
     def test_password_reset_confirm_rejects_weak_password(self):
         self._create_verified_user()
@@ -482,6 +528,8 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('new_password', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
 
     def test_password_change_requires_authentication(self):
         response = self.client.post(
@@ -495,6 +543,8 @@ class AccountAuthApiTests(APITestCase):
         )
 
         self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
 
     def test_password_change_rejects_wrong_current_password(self):
         user = self._create_verified_user()
@@ -512,6 +562,8 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'current_password': ['Current password is incorrect.']})
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
         user.refresh_from_db()
         self.assertTrue(user.check_password('StrongPass123!'))
 
@@ -752,6 +804,37 @@ class AccountPasswordResetRateLimitTests(APITestCase):
         self.assertEqual(second_response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(second_response.data, {'detail': PASSWORD_RESET_RATE_LIMIT_DETAIL})
         self.assertIn('Retry-After', second_response)
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=1000,
+    PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=1,
+)
+class AccountPasswordResetIpRateLimitTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_password_reset_ip_rate_limit_does_not_trust_forwarded_for_header(self):
+        first_response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'first@example.com'},
+            format='json',
+            HTTP_X_FORWARDED_FOR='203.0.113.10',
+        )
+        second_response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'second@example.com'},
+            format='json',
+            HTTP_X_FORWARDED_FOR='203.0.113.11',
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(second_response.data, {'detail': PASSWORD_RESET_RATE_LIMIT_DETAIL})
 
 
 @override_settings(

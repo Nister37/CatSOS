@@ -52,13 +52,16 @@ def no_store_response(data, *, status_code=status.HTTP_200_OK, headers=None):
 
 
 def get_client_ip(request):
-    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if forwarded_for:
-        return forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR', '')
 
 
-class RegisterView(APIView):
+class NoStoreAPIView(APIView):
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        return set_no_store_headers(response)
+
+
+class RegisterView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -82,7 +85,7 @@ class RegisterView(APIView):
         )
 
 
-class VerifyEmailView(APIView):
+class VerifyEmailView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -102,7 +105,7 @@ class VerifyEmailView(APIView):
         return no_store_response(build_auth_response(serializer.validated_data['user']))
 
 
-class ResendVerificationView(APIView):
+class ResendVerificationView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -134,7 +137,7 @@ class ResendVerificationView(APIView):
         return no_store_response(build_verification_pending_response(user))
 
 
-class ChangeVerificationEmailView(APIView):
+class ChangeVerificationEmailView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -155,7 +158,7 @@ class ChangeVerificationEmailView(APIView):
         return no_store_response(build_verification_pending_response(user))
 
 
-class LoginView(APIView):
+class LoginView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -175,7 +178,7 @@ class LoginView(APIView):
         return no_store_response(build_auth_response(serializer.validated_data['user']))
 
 
-class SSOLoginView(APIView):
+class SSOLoginView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -196,7 +199,7 @@ class SSOLoginView(APIView):
         return no_store_response(build_auth_response(user))
 
 
-class SSOLinkView(APIView):
+class SSOLinkView(NoStoreAPIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'auth_sso_link'
@@ -226,7 +229,7 @@ class NoStoreTokenRefreshView(TokenRefreshView):
         return set_no_store_headers(response)
 
 
-class PasswordResetRequestView(APIView):
+class PasswordResetRequestView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -235,6 +238,7 @@ class PasswordResetRequestView(APIView):
         responses={
             200: DetailResponseSerializer,
             400: OpenApiResponse(description='Validation errors'),
+            429: OpenApiResponse(description='Password reset request rate limit exceeded'),
         },
     )
     def post(self, request):
@@ -255,7 +259,7 @@ class PasswordResetRequestView(APIView):
         return no_store_response({'detail': PASSWORD_RESET_REQUEST_DETAIL})
 
 
-class PasswordResetConfirmView(APIView):
+class PasswordResetConfirmView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -290,7 +294,7 @@ class PasswordResetConfirmView(APIView):
         return no_store_response({'detail': PASSWORD_RESET_SUCCESS_DETAIL})
 
 
-class PasswordChangeView(APIView):
+class PasswordChangeView(NoStoreAPIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
