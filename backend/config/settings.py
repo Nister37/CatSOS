@@ -134,9 +134,20 @@ AUTH_PASSWORD_VALIDATORS = [
 ACCOUNT_VERIFICATION_RESEND_SECONDS = env_int('DJANGO_ACCOUNT_VERIFICATION_RESEND_SECONDS', 120)
 EMAIL_BACKEND = os.getenv(
     'DJANGO_EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend',
+    os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'),
 )
-DEFAULT_FROM_EMAIL = os.getenv('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@catsos.local')
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DJANGO_DEFAULT_FROM_EMAIL',
+    os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@catsos.local'),
+)
+FRONTEND_URL = os.getenv(
+    'DJANGO_FRONTEND_URL',
+    os.getenv('FRONTEND_URL', 'http://localhost:5173'),
+).rstrip('/')
+PASSWORD_RESET_TIMEOUT = env_int(
+    'DJANGO_PASSWORD_RESET_TIMEOUT',
+    env_int('PASSWORD_RESET_TIMEOUT', 3600),
+)
 PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR = env_int(
     'DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR',
     5,
