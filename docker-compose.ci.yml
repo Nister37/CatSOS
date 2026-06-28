@@ -19,8 +19,6 @@ services:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: ci-openapi-secret
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend-openapi
-    volumes:
-      - ./backend:/app
 
   backend-api:
     build:
@@ -43,8 +41,6 @@ services:
       target: test
     environment:
       VITE_API_BASE_URL: http://backend-api:8000
-    volumes:
-      - ./frontend/coverage:/app/coverage
 
   frontend-dev:
     build:
