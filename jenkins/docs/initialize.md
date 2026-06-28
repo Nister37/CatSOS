@@ -50,6 +50,26 @@ docker compose -f docker-compose.jenkins.yml exec jenkins cat /var/jenkins_home/
 
 If you created your own admin user instead, use the username and password you created during setup.
 
+## Limit Homelab Executors
+
+For the shared homelab Jenkins server, keep the built-in node executor count at `1`.
+
+This prevents two branch or pull request builds from running at the same time and competing for RAM. On a small server, parallel Docker builds can fail with exit code `137`, which usually means the operating system killed a process because memory was exhausted.
+
+In Jenkins:
+
+1. Open **Manage Jenkins**.
+2. Open **Nodes**.
+3. Open **Built-In Node**.
+4. Click **Configure**.
+5. Set **Number of executors** to:
+
+   ```text
+   1
+   ```
+
+6. Save.
+
 ## Shared Jenkins Through Tailscale
 
 CatSOS shared Jenkins target:
