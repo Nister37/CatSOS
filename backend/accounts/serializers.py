@@ -10,14 +10,21 @@ from .services import (
     authenticate_account,
     change_unverified_email,
     change_user_password,
+    confirm_totp_setup,
     create_token_pair,
+    disable_totp,
     email_exists,
+    InvalidTOTPCodeError,
     link_sso_account,
     login_or_create_sso_account,
     register_account,
     resend_verification_code,
     SSOAccountConflictError,
     SSOAccountInactiveError,
+    start_totp_setup,
+    TOTPAlreadyEnabledError,
+    TOTPSetupRequiredError,
+    verify_user_totp_code,
     verify_email_code,
 )
 from .sso import SSOProviderError
@@ -54,6 +61,13 @@ class SocialAccountSerializer(serializers.Serializer):
 class SSOLinkResponseSerializer(serializers.Serializer):
     detail = serializers.CharField(read_only=True)
     social_account = SocialAccountSerializer(read_only=True)
+
+
+def validate_totp_code_value(value):
+    code = value.strip()
+    if not code.isdigit() or len(code) != settings.TOTP_DIGITS:
+        raise serializers.ValidationError(f'Enter the {settings.TOTP_DIGITS}-digit TOTP code.')
+    return code
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -93,6 +107,7 @@ class RegisterSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
+    totp_code = serializers.CharField(required=False, write_only=True, trim_whitespace=True)
 
     def validate(self, attrs):
         try:
@@ -110,6 +125,21 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {'non_field_errors': ['Unable to log in with provided credentials.']}
             )
+
+        if user.is_totp_enabled:
+            totp_code = attrs.get('totp_code')
+            if not totp_code:
+                raise serializers.ValidationError(
+                    {'totp_code': ['TOTP code is required for this account.']}
+                )
+
+            try:
+                totp_code = validate_totp_code_value(totp_code)
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({'totp_code': exc.detail})
+
+            if not verify_user_totp_code(user=user, code=totp_code):
+                raise serializers.ValidationError({'totp_code': ['Enter a valid TOTP code.']})
 
         attrs['user'] = user
         return attrs
@@ -195,10 +225,32 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 
+class PasswordResetTOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    totp_code = serializers.CharField(write_only=True, trim_whitespace=True)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_totp_code(self, value):
+        return validate_totp_code_value(value)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError(
+                {'new_password_confirm': ['Password confirmation does not match.']}
+            )
+        return attrs
+
+
 class PasswordChangeSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, trim_whitespace=False)
     new_password = serializers.CharField(write_only=True, trim_whitespace=False)
     new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+    totp_code = serializers.CharField(
+        required=False,
+        write_only=True,
+        trim_whitespace=True,
+    )
 
     def validate(self, attrs):
         user = self.context['request'].user
@@ -209,6 +261,19 @@ class PasswordChangeSerializer(serializers.Serializer):
 
         if attrs['new_password'] != attrs['new_password_confirm']:
             errors['new_password_confirm'] = ['Password confirmation does not match.']
+
+        if user.is_totp_enabled:
+            totp_code = attrs.get('totp_code')
+            if not totp_code:
+                errors['totp_code'] = ['TOTP code is required.']
+            else:
+                try:
+                    totp_code = validate_totp_code_value(totp_code)
+                except serializers.ValidationError as exc:
+                    errors['totp_code'] = exc.detail
+                else:
+                    if not verify_user_totp_code(user=user, code=totp_code):
+                        errors['totp_code'] = ['Enter a valid TOTP code.']
 
         try:
             validate_password(attrs['new_password'], user=user)
@@ -225,6 +290,79 @@ class PasswordChangeSerializer(serializers.Serializer):
             user=self.context['request'].user,
             new_password=self.validated_data['new_password'],
         )
+
+
+class TOTPSetupResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+    secret = serializers.CharField(read_only=True)
+    otpauth_url = serializers.CharField(read_only=True)
+
+
+class TOTPSetupSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.has_usable_password() or not user.check_password(value):
+            raise serializers.ValidationError('Current password is incorrect.')
+        return value
+
+    def save(self, **kwargs):
+        try:
+            return start_totp_setup(self.context['request'].user)
+        except TOTPAlreadyEnabledError:
+            raise serializers.ValidationError(
+                {'non_field_errors': ['TOTP is already enabled for this account.']}
+            )
+
+
+class TOTPConfirmSerializer(serializers.Serializer):
+    totp_code = serializers.CharField(write_only=True, trim_whitespace=True)
+
+    def validate_totp_code(self, value):
+        return validate_totp_code_value(value)
+
+    def save(self, **kwargs):
+        try:
+            return confirm_totp_setup(
+                user=self.context['request'].user,
+                code=self.validated_data['totp_code'],
+            )
+        except TOTPSetupRequiredError:
+            raise serializers.ValidationError(
+                {'non_field_errors': ['Start TOTP setup before confirming a code.']}
+            )
+        except InvalidTOTPCodeError:
+            raise serializers.ValidationError({'totp_code': ['Enter a valid TOTP code.']})
+
+
+class TOTPDisableSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    totp_code = serializers.CharField(write_only=True, trim_whitespace=True)
+
+    def validate_totp_code(self, value):
+        return validate_totp_code_value(value)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        errors = {}
+
+        if not user.is_totp_enabled:
+            errors['non_field_errors'] = ['TOTP is not enabled for this account.']
+
+        if not user.has_usable_password() or not user.check_password(attrs['current_password']):
+            errors['current_password'] = ['Current password is incorrect.']
+
+        if user.is_totp_enabled and not verify_user_totp_code(user=user, code=attrs['totp_code']):
+            errors['totp_code'] = ['Enter a valid TOTP code.']
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
+    def save(self, **kwargs):
+        return disable_totp(user=self.context['request'].user)
 
 
 class SSOLoginSerializer(serializers.Serializer):
@@ -248,6 +386,24 @@ class SSOLoginSerializer(serializers.Serializer):
 class SSOLinkSerializer(serializers.Serializer):
     provider = serializers.ChoiceField(choices=SocialAccount.Provider.choices)
     token = serializers.CharField(write_only=True, trim_whitespace=False)
+    totp_code = serializers.CharField(required=False, write_only=True, trim_whitespace=True)
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        if user.is_totp_enabled:
+            totp_code = attrs.get('totp_code')
+            if not totp_code:
+                raise serializers.ValidationError({'totp_code': ['TOTP code is required.']})
+
+            try:
+                totp_code = validate_totp_code_value(totp_code)
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({'totp_code': exc.detail})
+
+            if not verify_user_totp_code(user=user, code=totp_code):
+                raise serializers.ValidationError({'totp_code': ['Enter a valid TOTP code.']})
+
+        return attrs
 
     def save(self, **kwargs):
         try:

@@ -52,9 +52,13 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `POST` | `/api/auth/token/refresh/` | Public | `200` | Exchange a refresh token for a new access token. |
 | `POST` | `/api/auth/password-reset/` | Public | `200` | Request an email password reset link without revealing account existence. |
 | `POST` | `/api/auth/password-reset/confirm/` | Public | `200` | Reset a password with a valid `uid` and Django reset token. |
+| `POST` | `/api/auth/password-reset/totp/` | Public | `200` | Reset a password with email plus a valid enrolled TOTP code. |
 | `POST` | `/api/auth/password-change/` | JWT | `200` | Change the authenticated user's password after current-password verification. |
 | `POST` | `/api/auth/sso/login/` | Public | `200` | Login or create an account with Google, GitHub, or Microsoft SSO. |
 | `POST` | `/api/auth/sso/link/` | JWT | `200` | Link Google, GitHub, or Microsoft SSO to the authenticated account. |
+| `POST` | `/api/auth/totp/setup/` | JWT | `200` | Start authenticator-app setup and return the secret plus otpauth URI. |
+| `POST` | `/api/auth/totp/confirm/` | JWT | `200` | Confirm a valid authenticator code and enable TOTP. |
+| `POST` | `/api/auth/totp/disable/` | JWT | `200` | Disable TOTP after current-password and TOTP verification. |
 | `GET` | `/api/schema/` | Public | `200` | OpenAPI schema. |
 | `GET` | `/api/docs/` | Public | `200` | Swagger UI. |
 
@@ -213,9 +217,12 @@ Request:
 ```json
 {
   "email": "visitor@example.com",
-  "password": "StrongPass123!"
+  "password": "StrongPass123!",
+  "totp_code": "123456"
 }
 ```
+
+`totp_code` is required only when authenticator-app verification is enabled for the account.
 
 Success response:
 
@@ -244,6 +251,14 @@ Unverified account:
 ```json
 {
   "email": ["Verify your email before logging in."]
+}
+```
+
+TOTP-enabled account without a code:
+
+```json
+{
+  "totp_code": ["TOTP code is required for this account."]
 }
 ```
 
@@ -337,6 +352,39 @@ Invalid or expired link:
 
 Password reset does not auto-login the user and does not return JWT tokens. The new password must pass Django password validators.
 
+### Reset Password With TOTP
+
+`POST /api/auth/password-reset/totp/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com",
+  "totp_code": "123456",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Password has been reset successfully."
+}
+```
+
+Invalid email, disabled TOTP, inactive account, or invalid TOTP code:
+
+```json
+{
+  "detail": "Invalid email or TOTP code."
+}
+```
+
+This path is available only for accounts that already enrolled authenticator-app verification. It uses the same password reset rate limits as email reset requests, does not auto-login the user, and does not return JWT tokens.
+
 ### Change Password
 
 `POST /api/auth/password-change/`
@@ -353,9 +401,12 @@ Request:
 {
   "current_password": "StrongPass123!",
   "new_password": "NewPassword123!",
-  "new_password_confirm": "NewPassword123!"
+  "new_password_confirm": "NewPassword123!",
+  "totp_code": "123456"
 }
 ```
+
+`totp_code` is required when authenticator-app verification is enabled for the account.
 
 Success response:
 
@@ -375,7 +426,92 @@ Wrong current password:
 
 The new password must pass Django password validators. The backend sends a confirmation email after successful password reset and after successful logged-in password change.
 
-SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links and logged-in password change with current-password verification.
+SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, enrolled authenticator-app TOTP recovery, and logged-in password change with current-password verification.
+
+### TOTP Setup
+
+`POST /api/auth/totp/setup/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Scan this secret with an authenticator app, then confirm a code.",
+  "secret": "<base32-secret>",
+  "otpauth_url": "otpauth://totp/..."
+}
+```
+
+The `secret` and `otpauth_url` are returned only during setup and must not be logged by clients. The account is not TOTP-enabled until confirmation succeeds.
+
+### TOTP Confirm
+
+`POST /api/auth/totp/confirm/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "totp_code": "123456"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Authenticator app verification has been enabled."
+}
+```
+
+### TOTP Disable
+
+`POST /api/auth/totp/disable/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!",
+  "totp_code": "123456"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Authenticator app verification has been disabled."
+}
+```
+
+When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
 
 ### SSO Login Or Signup
 
@@ -447,9 +583,12 @@ Request:
 ```json
 {
   "provider": "github",
-  "token": "<provider-token>"
+  "token": "<provider-token>",
+  "totp_code": "123456"
 }
 ```
+
+`totp_code` is required when authenticator-app verification is enabled for the account.
 
 Success response:
 
@@ -646,6 +785,55 @@ Invoke-RestMethod `
   -Body $passwordChangeBody
 ```
 
+Start TOTP setup:
+
+```powershell
+$totpSetupBody = @{
+  current_password = "StrongPass123!"
+} | ConvertTo-Json
+
+$totpSetup = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/totp/setup/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $totpSetupBody
+
+$totpSetup
+```
+
+Confirm TOTP after scanning the returned `otpauth_url`:
+
+```powershell
+$totpConfirmBody = @{
+  totp_code = "123456"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/totp/confirm/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $totpConfirmBody
+```
+
+Reset password with enrolled TOTP:
+
+```powershell
+$totpResetBody = @{
+  email = "visitor@example.com"
+  totp_code = "123456"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/auth/password-reset/totp/" `
+  -ContentType "application/json" `
+  -Body $totpResetBody
+```
+
 Test validation errors:
 
 ```powershell
@@ -738,9 +926,14 @@ DJANGO_FRONTEND_URL=http://localhost:5173
 DJANGO_PASSWORD_RESET_TIMEOUT=3600
 DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 DJANGO_DEFAULT_FROM_EMAIL=no-reply@catsos.local
+DJANGO_TOTP_ISSUER_NAME=CatSOS
+DJANGO_TOTP_STEP_SECONDS=30
+DJANGO_TOTP_DIGITS=6
+DJANGO_TOTP_WINDOW=1
 ```
 
 `DJANGO_PASSWORD_RESET_TIMEOUT` is in seconds. Django's local console email backend is enough for development.
+`DJANGO_TOTP_WINDOW=1` accepts one 30-second step before or after the current authenticator-app code to tolerate small clock drift.
 
 ## Throttling
 

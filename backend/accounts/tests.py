@@ -1,8 +1,10 @@
 import re
+import time
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -21,6 +23,10 @@ from .services import (
     PASSWORD_RESET_RATE_LIMIT_DETAIL,
     PASSWORD_RESET_REQUEST_DETAIL,
     PASSWORD_RESET_SUCCESS_DETAIL,
+    PASSWORD_RESET_TOTP_INVALID_DETAIL,
+    TOTP_DISABLED_DETAIL,
+    TOTP_ENABLED_DETAIL,
+    _hotp,
     create_token_pair,
 )
 from .sso import SSOIdentity
@@ -33,6 +39,10 @@ from .sso import SSOIdentity
     PASSWORD_RESET_TIMEOUT=3600,
     PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=1000,
     PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=1000,
+    TOTP_ISSUER_NAME='CatSOS Test',
+    TOTP_STEP_SECONDS=30,
+    TOTP_DIGITS=6,
+    TOTP_WINDOW=1,
     REST_FRAMEWORK={
         'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
         'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -92,6 +102,29 @@ class AccountAuthApiTests(APITestCase):
     def _authenticate(self, user):
         tokens = create_token_pair(user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _totp_code(self, user):
+        user.refresh_from_db()
+        counter = int(time.time()) // settings.TOTP_STEP_SECONDS
+        return _hotp(user.totp_secret, counter)
+
+    def _enable_totp(self, user):
+        self._authenticate(user)
+        setup_response = self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'StrongPass123!'},
+            format='json',
+        )
+        self.assertEqual(setup_response.status_code, status.HTTP_200_OK)
+
+        confirm_response = self.client.post(
+            reverse('account-totp-confirm'),
+            {'totp_code': self._totp_code(user)},
+            format='json',
+        )
+        self.assertEqual(confirm_response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_totp_enabled)
 
     def test_register_creates_unverified_account_and_sends_code(self):
         response = self._register()
@@ -316,6 +349,228 @@ class AccountAuthApiTests(APITestCase):
         self.assertIn('access', response.data)
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
+
+    def test_totp_setup_requires_authentication(self):
+        response = self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_totp_setup_returns_secret_and_otpauth_url(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('secret', response.data)
+        self.assertIn('otpauth_url', response.data)
+        self.assertIn('otpauth://totp/', response.data['otpauth_url'])
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        user.refresh_from_db()
+        self.assertFalse(user.is_totp_enabled)
+        self.assertEqual(user.totp_secret, response.data['secret'])
+
+    def test_totp_setup_rejects_wrong_current_password(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'wrong-password'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('current_password', response.data)
+        user.refresh_from_db()
+        self.assertFalse(user.totp_secret)
+
+    def test_totp_confirm_rejects_invalid_code(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+        self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'StrongPass123!'},
+            format='json',
+        )
+
+        response = self.client.post(
+            reverse('account-totp-confirm'),
+            {'totp_code': '000000'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('totp_code', response.data)
+        user.refresh_from_db()
+        self.assertFalse(user.is_totp_enabled)
+
+    def test_totp_confirm_enables_totp(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+        self.client.post(
+            reverse('account-totp-setup'),
+            {'current_password': 'StrongPass123!'},
+            format='json',
+        )
+
+        response = self.client.post(
+            reverse('account-totp-confirm'),
+            {'totp_code': self._totp_code(user)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': TOTP_ENABLED_DETAIL})
+        user.refresh_from_db()
+        self.assertTrue(user.is_totp_enabled)
+        self.assertIsNotNone(user.totp_enabled_at)
+
+    def test_login_requires_totp_code_when_enabled(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        self.client.credentials()
+
+        response = self.client.post(
+            reverse('account-token'),
+            {'email': 'visitor@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'totp_code': ['TOTP code is required for this account.']})
+        self.assertNotIn('access', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_login_rejects_invalid_totp_code(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        self.client.credentials()
+
+        response = self.client.post(
+            reverse('account-token'),
+            {
+                'email': 'visitor@example.com',
+                'password': 'StrongPass123!',
+                'totp_code': '000000',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'totp_code': ['Enter a valid TOTP code.']})
+        self.assertNotIn('access', response.data)
+
+    def test_login_returns_tokens_with_valid_totp_code(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        self.client.credentials()
+
+        response = self.client.post(
+            reverse('account-token'),
+            {
+                'email': 'visitor@example.com',
+                'password': 'StrongPass123!',
+                'totp_code': self._totp_code(user),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+
+    def test_totp_password_reset_changes_password_with_valid_code(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        self.client.credentials()
+        mail.outbox.clear()
+
+        response = self.client.post(
+            reverse('account-password-reset-totp'),
+            {
+                'email': 'visitor@example.com',
+                'totp_code': self._totp_code(user),
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_SUCCESS_DETAIL})
+        self.assertNotIn('access', response.data)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NewPassword123!'))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_totp_password_reset_rejects_invalid_code(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        self.client.credentials()
+
+        response = self.client.post(
+            reverse('account-password-reset-totp'),
+            {
+                'email': 'visitor@example.com',
+                'totp_code': '000000',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('StrongPass123!'))
+
+    def test_totp_password_reset_rejects_account_without_totp(self):
+        user = self._create_verified_user()
+
+        response = self.client.post(
+            reverse('account-password-reset-totp'),
+            {
+                'email': 'visitor@example.com',
+                'totp_code': '123456',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('StrongPass123!'))
+
+    def test_totp_disable_requires_current_password_and_code(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+
+        response = self.client.post(
+            reverse('account-totp-disable'),
+            {
+                'current_password': 'StrongPass123!',
+                'totp_code': self._totp_code(user),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': TOTP_DISABLED_DETAIL})
+        user.refresh_from_db()
+        self.assertFalse(user.is_totp_enabled)
+        self.assertEqual(user.totp_secret, '')
 
     def test_password_reset_request_returns_generic_response_for_existing_email(self):
         self._create_verified_user()
@@ -567,6 +822,67 @@ class AccountAuthApiTests(APITestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password('StrongPass123!'))
 
+    def test_password_change_requires_totp_when_enabled(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+
+        response = self.client.post(
+            reverse('account-password-change'),
+            {
+                'current_password': 'StrongPass123!',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'totp_code': ['TOTP code is required.']})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('StrongPass123!'))
+
+    def test_password_change_rejects_invalid_totp_when_enabled(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+
+        response = self.client.post(
+            reverse('account-password-change'),
+            {
+                'current_password': 'StrongPass123!',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+                'totp_code': '000000',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'totp_code': ['Enter a valid TOTP code.']})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('StrongPass123!'))
+
+    def test_password_change_with_valid_totp_changes_password(self):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+        mail.outbox.clear()
+
+        response = self.client.post(
+            reverse('account-password-change'),
+            {
+                'current_password': 'StrongPass123!',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+                'totp_code': self._totp_code(user),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': PASSWORD_CHANGE_SUCCESS_DETAIL})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NewPassword123!'))
+        self.assertEqual(len(mail.outbox), 1)
+
     def test_password_change_with_correct_current_password_changes_password(self):
         user = self._create_verified_user()
         self._authenticate(user)
@@ -679,6 +995,21 @@ class AccountAuthApiTests(APITestCase):
         )
 
         self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+
+    @patch('accounts.services.verify_sso_token')
+    def test_sso_link_requires_totp_when_enabled(self, verify_sso_token):
+        user = self._create_verified_user()
+        self._enable_totp(user)
+
+        response = self.client.post(
+            reverse('account-sso-link'),
+            {'provider': 'google', 'token': 'provider-token'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'totp_code': ['TOTP code is required.']})
+        verify_sso_token.assert_not_called()
 
     @patch('accounts.services.verify_sso_token')
     def test_sso_link_adds_provider_to_existing_user(self, verify_sso_token):

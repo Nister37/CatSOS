@@ -33,9 +33,13 @@ DJANGO_DEFAULT_FROM_EMAIL=no-reply@catsos.local
 DJANGO_PASSWORD_RESET_TIMEOUT=3600
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
+DJANGO_TOTP_ISSUER_NAME=CatSOS
+DJANGO_TOTP_STEP_SECONDS=30
+DJANGO_TOTP_DIGITS=6
+DJANGO_TOTP_WINDOW=1
 ```
 
-SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links and logged-in password change with current-password verification.
+SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, enrolled authenticator-app TOTP recovery, and logged-in password change with current-password verification.
 
 Run migrations and start Django:
 

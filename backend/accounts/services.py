@@ -1,5 +1,10 @@
+import base64
 import hashlib
+import hmac
 import secrets
+import struct
+import time
+from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -23,8 +28,11 @@ PASSWORD_RESET_REQUEST_DETAIL = (
 )
 PASSWORD_RESET_SUCCESS_DETAIL = 'Password has been reset successfully.'
 PASSWORD_RESET_INVALID_DETAIL = 'Invalid or expired reset link.'
+PASSWORD_RESET_TOTP_INVALID_DETAIL = 'Invalid email or TOTP code.'
 PASSWORD_RESET_RATE_LIMIT_DETAIL = 'Too many password reset requests. Try again later.'
 PASSWORD_CHANGE_SUCCESS_DETAIL = 'Password has been changed successfully.'
+TOTP_ENABLED_DETAIL = 'Authenticator app verification has been enabled.'
+TOTP_DISABLED_DETAIL = 'Authenticator app verification has been disabled.'
 
 
 class AccountNotVerifiedError(Exception):
@@ -50,6 +58,18 @@ class PasswordResetInvalidTokenError(Exception):
 
 
 class PasswordResetRateLimitError(Exception):
+    pass
+
+
+class InvalidTOTPCodeError(Exception):
+    pass
+
+
+class TOTPAlreadyEnabledError(Exception):
+    pass
+
+
+class TOTPSetupRequiredError(Exception):
     pass
 
 
@@ -133,6 +153,95 @@ def check_password_reset_rate_limit(*, email, request_ip=None):
 
     if is_limited:
         raise PasswordResetRateLimitError
+
+
+def generate_totp_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode('ascii').rstrip('=')
+
+
+def _decode_totp_secret(secret):
+    normalized_secret = ''.join(secret.split()).upper()
+    padding = '=' * ((8 - len(normalized_secret) % 8) % 8)
+    return base64.b32decode(f'{normalized_secret}{padding}', casefold=True)
+
+
+def _hotp(secret, counter):
+    key = _decode_totp_secret(secret)
+    counter_bytes = struct.pack('>Q', counter)
+    digest = hmac.new(key, counter_bytes, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code_int = struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return f'{code_int % (10 ** settings.TOTP_DIGITS):0{settings.TOTP_DIGITS}d}'
+
+
+def verify_totp_code(*, secret, code, at_time=None):
+    if not secret or not code:
+        return False
+
+    current_time = int(at_time or time.time())
+    counter = current_time // settings.TOTP_STEP_SECONDS
+    normalized_code = str(code).strip()
+
+    for offset in range(-settings.TOTP_WINDOW, settings.TOTP_WINDOW + 1):
+        expected_code = _hotp(secret, counter + offset)
+        if hmac.compare_digest(expected_code, normalized_code):
+            return True
+
+    return False
+
+
+def verify_user_totp_code(*, user, code):
+    if not user.is_totp_enabled or not user.totp_secret:
+        return False
+    return verify_totp_code(secret=user.totp_secret, code=code)
+
+
+def build_totp_otpauth_url(user):
+    label = quote(f'{settings.TOTP_ISSUER_NAME}:{user.email}')
+    query = urlencode(
+        {
+            'secret': user.totp_secret,
+            'issuer': settings.TOTP_ISSUER_NAME,
+            'algorithm': 'SHA1',
+            'digits': settings.TOTP_DIGITS,
+            'period': settings.TOTP_STEP_SECONDS,
+        }
+    )
+    return f'otpauth://totp/{label}?{query}'
+
+
+def start_totp_setup(user):
+    if user.is_totp_enabled:
+        raise TOTPAlreadyEnabledError
+
+    user.totp_secret = generate_totp_secret()
+    user.totp_enabled_at = None
+    user.save(update_fields=['totp_secret', 'totp_enabled_at'])
+    return {
+        'secret': user.totp_secret,
+        'otpauth_url': build_totp_otpauth_url(user),
+    }
+
+
+def confirm_totp_setup(*, user, code):
+    if not user.totp_secret or user.is_totp_enabled:
+        raise TOTPSetupRequiredError
+
+    if not verify_totp_code(secret=user.totp_secret, code=code):
+        raise InvalidTOTPCodeError
+
+    user.is_totp_enabled = True
+    user.totp_enabled_at = timezone.now()
+    user.save(update_fields=['is_totp_enabled', 'totp_enabled_at'])
+    return user
+
+
+def disable_totp(*, user):
+    user.totp_secret = ''
+    user.is_totp_enabled = False
+    user.totp_enabled_at = None
+    user.save(update_fields=['totp_secret', 'is_totp_enabled', 'totp_enabled_at'])
+    return user
 
 
 def request_password_reset(*, email, request_ip=None):
@@ -219,6 +328,26 @@ def reset_password_with_token(*, uid, token, new_password):
     user = get_password_reset_user(uid=uid, token=token)
     if user is None:
         raise PasswordResetInvalidTokenError
+
+    validate_password(new_password, user=user)
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    send_password_reset_confirmation(user)
+    return user
+
+
+def reset_password_with_totp(*, email, code, new_password, request_ip=None):
+    check_password_reset_rate_limit(email=email, request_ip=request_ip)
+    normalized_email = normalize_email(email)
+    User = get_user_model()
+    user = User.objects.filter(
+        email__iexact=normalized_email,
+        is_active=True,
+        is_totp_enabled=True,
+    ).first()
+
+    if user is None or not user.has_usable_password() or not verify_user_totp_code(user=user, code=code):
+        raise InvalidTOTPCodeError
 
     validate_password(new_password, user=user)
     user.set_password(new_password)

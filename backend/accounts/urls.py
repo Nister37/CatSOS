@@ -6,10 +6,14 @@ from .views import (
     PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    PasswordResetTOTPView,
     RegisterView,
     ResendVerificationView,
     SSOLinkView,
     SSOLoginView,
+    TOTPConfirmView,
+    TOTPDisableView,
+    TOTPSetupView,
     VerifyEmailView,
 )
 
@@ -32,6 +36,14 @@ urlpatterns = [
         PasswordResetConfirmView.as_view(),
         name='account-password-reset-confirm',
     ),
+    path(
+        'password-reset/totp/',
+        PasswordResetTOTPView.as_view(),
+        name='account-password-reset-totp',
+    ),
     path('sso/login/', SSOLoginView.as_view(), name='account-sso-login'),
     path('sso/link/', SSOLinkView.as_view(), name='account-sso-link'),
+    path('totp/setup/', TOTPSetupView.as_view(), name='account-totp-setup'),
+    path('totp/confirm/', TOTPConfirmView.as_view(), name='account-totp-confirm'),
+    path('totp/disable/', TOTPDisableView.as_view(), name='account-totp-disable'),
 ]

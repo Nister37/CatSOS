@@ -15,11 +15,16 @@ from .serializers import (
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    PasswordResetTOTPSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
     SSOLinkResponseSerializer,
     SSOLinkSerializer,
     SSOLoginSerializer,
+    TOTPConfirmSerializer,
+    TOTPDisableSerializer,
+    TOTPSetupResponseSerializer,
+    TOTPSetupSerializer,
     VerificationPendingResponseSerializer,
     VerifyEmailSerializer,
     build_auth_response,
@@ -33,9 +38,14 @@ from .services import (
     PASSWORD_RESET_RATE_LIMIT_DETAIL,
     PASSWORD_RESET_REQUEST_DETAIL,
     PASSWORD_RESET_SUCCESS_DETAIL,
+    PASSWORD_RESET_TOTP_INVALID_DETAIL,
+    TOTP_DISABLED_DETAIL,
+    TOTP_ENABLED_DETAIL,
+    InvalidTOTPCodeError,
     PasswordResetInvalidTokenError,
     PasswordResetRateLimitError,
     request_password_reset,
+    reset_password_with_totp,
     reset_password_with_token,
 )
 
@@ -294,6 +304,49 @@ class PasswordResetConfirmView(NoStoreAPIView):
         return no_store_response({'detail': PASSWORD_RESET_SUCCESS_DETAIL})
 
 
+class PasswordResetTOTPView(NoStoreAPIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=PasswordResetTOTPSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Invalid TOTP code or validation errors'),
+            429: OpenApiResponse(description='Password reset request rate limit exceeded'),
+        },
+    )
+    def post(self, request):
+        serializer = PasswordResetTOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            reset_password_with_totp(
+                email=serializer.validated_data['email'],
+                code=serializer.validated_data['totp_code'],
+                new_password=serializer.validated_data['new_password'],
+                request_ip=get_client_ip(request),
+            )
+        except PasswordResetRateLimitError:
+            return no_store_response(
+                {'detail': PASSWORD_RESET_RATE_LIMIT_DETAIL},
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={'Retry-After': str(60 * 60)},
+            )
+        except InvalidTOTPCodeError:
+            return no_store_response(
+                {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as exc:
+            return no_store_response(
+                {'new_password': list(exc.messages)},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return no_store_response({'detail': PASSWORD_RESET_SUCCESS_DETAIL})
+
+
 class PasswordChangeView(NoStoreAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -311,3 +364,65 @@ class PasswordChangeView(NoStoreAPIView):
         serializer.save()
 
         return no_store_response({'detail': PASSWORD_CHANGE_SUCCESS_DETAIL})
+
+
+class TOTPSetupView(NoStoreAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TOTPSetupSerializer,
+        responses={
+            200: TOTPSetupResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = TOTPSetupSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        setup_data = serializer.save()
+
+        return no_store_response(
+            {
+                'detail': 'Scan this secret with an authenticator app, then confirm a code.',
+                **setup_data,
+            }
+        )
+
+
+class TOTPConfirmView(NoStoreAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TOTPConfirmSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = TOTPConfirmSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return no_store_response({'detail': TOTP_ENABLED_DETAIL})
+
+
+class TOTPDisableView(NoStoreAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=TOTPDisableSerializer,
+        responses={
+            200: DetailResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = TOTPDisableSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return no_store_response({'detail': TOTP_DISABLED_DETAIL})

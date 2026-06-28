@@ -62,4 +62,4 @@ jenkins           Jenkins LTS, JDK 21, Docker CLI, Docker Compose plugin
 
 Detailed setup lives in each layer's `docs/SETUP.md`; development conventions live in each `docs/TUTORIAL.md`.
 
-Backend password recovery is email-only for the MVP. Configure the reset-link origin and email backend in `backend/.env`; SMS password recovery is intentionally not implemented because it adds cost and weaker security.
+Backend password recovery uses email reset links and enrolled authenticator-app TOTP. Configure the reset-link origin, email backend, and TOTP defaults in `backend/.env`; SMS password recovery is intentionally not implemented because it adds cost and weaker security.
