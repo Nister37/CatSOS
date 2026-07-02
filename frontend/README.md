@@ -1,4 +1,4 @@
-# CatSOS Frontend
+﻿# CatSOS Frontend
 
 React single-page application for CatSOS.
 
@@ -12,4 +12,4 @@ React single-page application for CatSOS.
 
 ## Local URL
 
-Vite serves the app at `http://127.0.0.1:5173/`.
+Vite serves the app at `http://localhost:5173/`.

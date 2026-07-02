@@ -11,25 +11,25 @@ Django backend for the CatSOS API.
 
 ## Local URLs
 
-- API health: `http://127.0.0.1:8000/api/health/`
-- Account registration: `http://127.0.0.1:8000/api/auth/register/`
-- Account email verification: `http://127.0.0.1:8000/api/auth/verify-email/`
-- Resend verification code: `http://127.0.0.1:8000/api/auth/verification/resend/`
-- Change pending verification email: `http://127.0.0.1:8000/api/auth/verification/change-email/`
-- Account login: `http://127.0.0.1:8000/api/auth/login/`
-- JWT token login: `http://127.0.0.1:8000/api/auth/token/`
-- JWT token refresh: `http://127.0.0.1:8000/api/auth/token/refresh/`
-- Password reset request: `http://127.0.0.1:8000/api/auth/password-reset/`
-- Password reset confirm: `http://127.0.0.1:8000/api/auth/password-reset/confirm/`
-- Password reset with TOTP: `http://127.0.0.1:8000/api/auth/password-reset/totp/`
-- Logged-in password change: `http://127.0.0.1:8000/api/auth/password-change/`
-- SSO login/signup: `http://127.0.0.1:8000/api/auth/sso/login/`
-- Link SSO provider: `http://127.0.0.1:8000/api/auth/sso/link/`
-- TOTP setup: `http://127.0.0.1:8000/api/auth/totp/setup/`
-- TOTP confirm: `http://127.0.0.1:8000/api/auth/totp/confirm/`
-- TOTP disable: `http://127.0.0.1:8000/api/auth/totp/disable/`
-- OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
-- Swagger UI: `http://127.0.0.1:8000/api/docs/`
+- API health: `http://localhost:8000/api/health/`
+- Account registration: `http://localhost:8000/api/auth/register/`
+- Account email verification: `http://localhost:8000/api/auth/verify-email/`
+- Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
+- Change pending verification email: `http://localhost:8000/api/auth/verification/change-email/`
+- Account login: `http://localhost:8000/api/auth/login/`
+- JWT token login: `http://localhost:8000/api/auth/token/`
+- JWT token refresh: `http://localhost:8000/api/auth/token/refresh/`
+- Password reset request: `http://localhost:8000/api/auth/password-reset/`
+- Password reset confirm: `http://localhost:8000/api/auth/password-reset/confirm/`
+- Password reset with TOTP: `http://localhost:8000/api/auth/password-reset/totp/`
+- Logged-in password change: `http://localhost:8000/api/auth/password-change/`
+- SSO login/signup: `http://localhost:8000/api/auth/sso/login/`
+- Link SSO provider: `http://localhost:8000/api/auth/sso/link/`
+- TOTP setup: `http://localhost:8000/api/auth/totp/setup/`
+- TOTP confirm: `http://localhost:8000/api/auth/totp/confirm/`
+- TOTP disable: `http://localhost:8000/api/auth/totp/disable/`
+- OpenAPI schema: `http://localhost:8000/api/schema/`
+- Swagger UI: `http://localhost:8000/api/docs/`
 
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
 

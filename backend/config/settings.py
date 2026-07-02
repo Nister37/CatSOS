@@ -34,8 +34,29 @@ def env_int(name, default):
         return default
     return int(value)
 
+
+def load_local_env(env_path):
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+
+        name, value = line.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+
+        os.environ.setdefault(name, value)
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_local_env(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -50,7 +71,7 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['localhost', '127.0.0.1'])
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['localhost'])
 
 
 # Application definition
@@ -140,6 +161,16 @@ DEFAULT_FROM_EMAIL = os.getenv(
     'DJANGO_DEFAULT_FROM_EMAIL',
     os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@catsos.local'),
 )
+EMAIL_HOST = os.getenv('DJANGO_EMAIL_HOST', os.getenv('EMAIL_HOST', 'localhost'))
+EMAIL_PORT = env_int('DJANGO_EMAIL_PORT', env_int('EMAIL_PORT', 25))
+EMAIL_HOST_USER = os.getenv('DJANGO_EMAIL_HOST_USER', os.getenv('EMAIL_HOST_USER', ''))
+EMAIL_HOST_PASSWORD = os.getenv(
+    'DJANGO_EMAIL_HOST_PASSWORD',
+    os.getenv('EMAIL_HOST_PASSWORD', ''),
+)
+EMAIL_USE_TLS = env_bool('DJANGO_EMAIL_USE_TLS', env_bool('EMAIL_USE_TLS', False))
+EMAIL_USE_SSL = env_bool('DJANGO_EMAIL_USE_SSL', env_bool('EMAIL_USE_SSL', False))
+EMAIL_TIMEOUT = env_int('DJANGO_EMAIL_TIMEOUT', env_int('EMAIL_TIMEOUT', 10))
 FRONTEND_URL = os.getenv(
     'DJANGO_FRONTEND_URL',
     os.getenv('FRONTEND_URL', 'http://localhost:5173'),
@@ -189,7 +220,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 CORS_ALLOWED_ORIGINS = env_list(
     'DJANGO_CORS_ALLOWED_ORIGINS',
-    ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    ['http://localhost:5173'],
 )
 
 CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', CORS_ALLOWED_ORIGINS)

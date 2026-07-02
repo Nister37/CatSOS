@@ -13,10 +13,10 @@ docker compose -f docker-compose.jenkins.yml up --build jenkins
 Open:
 
 ```text
-http://127.0.0.1:8080/
+http://localhost:8080/
 ```
 
-The Jenkins port is bound to `127.0.0.1` only. This keeps Jenkins off the public LAN by default.
+The Jenkins port is bound to the local loopback interface only. Open it with `localhost`; it is kept off the public LAN by default.
 
 Read the initial Jenkins password:
 
@@ -31,7 +31,7 @@ After logging in with the initial admin password:
 1. If Jenkins shows **Customize Jenkins**, choose **Install suggested plugins**.
 2. Wait until plugin installation finishes.
 3. If Jenkins asks to create the first admin user, either create one or choose **Skip and continue as admin** for local-only usage.
-4. On **Instance Configuration**, keep `http://127.0.0.1:8080/`.
+4. On **Instance Configuration**, keep `http://localhost:8080/`.
 5. Click **Save and Finish**.
 6. Click **Start using Jenkins**.
 
@@ -132,7 +132,7 @@ docker compose -f docker-compose.jenkins.yml exec jenkins docker ps
 Check that Jenkins works locally on the host:
 
 ```text
-http://127.0.0.1:8080/
+http://localhost:8080/
 ```
 
 Install and log in to Tailscale on the host. For a normal desktop install, use the Tailscale app and sign in. For a headless server, use a Tailscale auth key and run:
@@ -144,7 +144,7 @@ tailscale up --auth-key=<tskey-...>
 Expose Jenkins to the tailnet:
 
 ```bash
-tailscale serve --bg --https=443 http://127.0.0.1:8080
+tailscale serve --bg --https=443 http://localhost:8080
 ```
 
 Check the published tailnet URL:
@@ -172,7 +172,7 @@ Do not use these URLs for normal shared access:
 ```text
 http://debian.boston-spica.ts.net/
 http://100.90.55.44:8080/
-http://127.0.0.1:8080/
+http://localhost:8080/
 ```
 
 The raw `http://...` URLs can show **Not secure** in the browser because they do not use browser-level HTTPS. Tailscale still encrypts traffic between tailnet devices, but Jenkins should be used through the HTTPS URL when shared with the team.
@@ -190,13 +190,13 @@ If `https://debian.boston-spica.ts.net/` still shows a browser certificate warni
 
    ```text
    https://debian.boston-spica.ts.net/
-   |-- / proxy http://127.0.0.1:8080
+   |-- / proxy http://localhost:8080
    ```
 
 4. If it does not, re-run:
 
    ```bash
-   tailscale serve --bg --https=443 http://127.0.0.1:8080
+   tailscale serve --bg --https=443 http://localhost:8080
    ```
 
 5. In Jenkins, set the public Jenkins URL to `https://debian.boston-spica.ts.net/` under **Manage Jenkins** -> **System** -> **Jenkins URL**.
