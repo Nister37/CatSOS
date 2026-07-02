@@ -24,3 +24,12 @@ cypress/videos/
 backend/openapi-schema.yml
 /AGENTS.md
 /INSIGHTS.md
+
+# Postman desktop workspace artifacts. Commit the canonical JSON exports and docs instead.
+.postman/
+postman/collections/
+postman/environments/
+postman/flows/
+postman/globals/
+postman/mocks/
+postman/specs/
