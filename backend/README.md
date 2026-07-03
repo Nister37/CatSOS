@@ -11,21 +11,30 @@ Django backend for the CatSOS API.
 
 ## Local URLs
 
-- API health: `http://127.0.0.1:8000/api/health/`
-- Account registration: `http://127.0.0.1:8000/api/auth/register/`
-- Account email verification: `http://127.0.0.1:8000/api/auth/verify-email/`
-- Resend verification code: `http://127.0.0.1:8000/api/auth/verification/resend/`
-- Change pending verification email: `http://127.0.0.1:8000/api/auth/verification/change-email/`
-- Account login: `http://127.0.0.1:8000/api/auth/login/`
-- JWT token login: `http://127.0.0.1:8000/api/auth/token/`
-- JWT token refresh: `http://127.0.0.1:8000/api/auth/token/refresh/`
-- SSO login/signup: `http://127.0.0.1:8000/api/auth/sso/login/`
-- Link SSO provider: `http://127.0.0.1:8000/api/auth/sso/link/`
-- OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
-- Swagger UI: `http://127.0.0.1:8000/api/docs/`
+- API health: `http://localhost:8000/api/health/`
+- Account registration: `http://localhost:8000/api/auth/register/`
+- Account email verification: `http://localhost:8000/api/auth/verify-email/`
+- Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
+- Change pending verification email: `http://localhost:8000/api/auth/verification/change-email/`
+- Account login: `http://localhost:8000/api/auth/login/`
+- JWT token login: `http://localhost:8000/api/auth/token/`
+- JWT token refresh: `http://localhost:8000/api/auth/token/refresh/`
+- Password reset request: `http://localhost:8000/api/auth/password-reset/`
+- Password reset confirm: `http://localhost:8000/api/auth/password-reset/confirm/`
+- Password reset with TOTP: `http://localhost:8000/api/auth/password-reset/totp/`
+- Logged-in password change: `http://localhost:8000/api/auth/password-change/`
+- SSO login/signup: `http://localhost:8000/api/auth/sso/login/`
+- Link SSO provider: `http://localhost:8000/api/auth/sso/link/`
+- TOTP setup: `http://localhost:8000/api/auth/totp/setup/`
+- TOTP confirm: `http://localhost:8000/api/auth/totp/confirm/`
+- TOTP disable: `http://localhost:8000/api/auth/totp/disable/`
+- OpenAPI schema: `http://localhost:8000/api/schema/`
+- Swagger UI: `http://localhost:8000/api/docs/`
 
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
 
+Password recovery uses email reset links built from `DJANGO_FRONTEND_URL`, Django's default token generator, and enrolled authenticator-app TOTP codes as the second recovery option. Reset requests never return reset tokens in JSON. Successful password reset and logged-in password change send confirmation emails. SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, TOTP recovery, and logged-in password change with current-password verification. When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
+
 SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs with `GOOGLE_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_ID`; GitHub uses the provider access token to fetch the authenticated user's verified primary email.
 
-Auth endpoints return `Cache-Control: no-store` and are protected by scoped DRF throttles. Verification-code resend cooldowns return `429 Too Many Requests` with `Retry-After`.
+Auth endpoints return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.

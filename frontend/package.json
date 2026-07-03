@@ -5,10 +5,10 @@
   "packageManager": "yarn@1.22.22",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --host localhost",
     "dev:docker": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "vite preview --host localhost",
     "lint": "eslint .",
     "test": "jest --coverage",
     "test:ci": "jest --coverage --runInBand",
@@ -16,7 +16,7 @@
     "a11y": "jest --runTestsByPath src/App.a11y.test.tsx",
     "e2e": "cypress run",
     "e2e:open": "cypress open",
-    "e2e:ci": "start-server-and-test dev http://127.0.0.1:5173 e2e"
+    "e2e:ci": "start-server-and-test dev http://localhost:5173 e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -43,6 +43,9 @@ class User(AbstractUser):
     email_verification_code_hash = models.CharField(max_length=128, blank=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     email_verified_at = models.DateTimeField(blank=True, null=True)
+    totp_secret = models.CharField(max_length=64, blank=True)
+    is_totp_enabled = models.BooleanField(default=False)
+    totp_enabled_at = models.DateTimeField(blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

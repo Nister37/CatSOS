@@ -3,7 +3,7 @@
 Base URL for local development:
 
 ```text
-http://127.0.0.1:8000
+http://localhost:8000
 ```
 
 Authenticated requests use JWT access tokens:
@@ -42,21 +42,45 @@ These are framework defaults in this project, not custom endpoint behavior.
 
 | Method | Path | Auth | Status | Purpose |
 | --- | --- | --- | --- | --- |
-| `GET` | `/api/health/` | Public | `200` | Backend health check. |
-| `POST` | `/api/auth/register/` | Public | `201` | Create an unverified account and send an 8-digit email code. |
-| `POST` | `/api/auth/verify-email/` | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
-| `POST` | `/api/auth/verification/resend/` | Public | `200` | Resend the verification code after the 120-second cooldown. |
-| `POST` | `/api/auth/verification/change-email/` | Public | `200` | Change the email for an unverified account and send a new code. |
-| `POST` | `/api/auth/login/` | Public | `200` | Login alias that returns JWT tokens. |
-| `POST` | `/api/auth/token/` | Public | `200` | Login endpoint that returns JWT tokens. |
-| `POST` | `/api/auth/token/refresh/` | Public | `200` | Exchange a refresh token for a new access token. |
-| `POST` | `/api/auth/sso/login/` | Public | `200` | Login or create an account with Google, GitHub, or Microsoft SSO. |
-| `POST` | `/api/auth/sso/link/` | JWT | `200` | Link Google, GitHub, or Microsoft SSO to the authenticated account. |
-| `GET` | `/api/schema/` | Public | `200` | OpenAPI schema. |
-| `GET` | `/api/docs/` | Public | `200` | Swagger UI. |
+| `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
+| `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
+| `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
+| `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
+| `POST` | [`/api/auth/verification/change-email/`](#post-apiauthverificationchange-email) | Public | `200` | Change the email for an unverified account and send a new code. |
+| `POST` | [`/api/auth/login/`](#post-apiauthlogin) | Public | `200` | Login alias that returns JWT tokens. |
+| `POST` | [`/api/auth/token/`](#post-apiauthtoken) | Public | `200` | Login endpoint that returns JWT tokens. |
+| `POST` | [`/api/auth/token/refresh/`](#post-apiauthtokenrefresh) | Public | `200` | Exchange a refresh token for a new access token. |
+| `POST` | [`/api/auth/password-reset/`](#post-apiauthpassword-reset) | Public | `200` | Request an email password reset link without revealing account existence. |
+| `POST` | [`/api/auth/password-reset/confirm/`](#post-apiauthpassword-resetconfirm) | Public | `200` | Reset a password with a valid `uid` and Django reset token. |
+| `POST` | [`/api/auth/password-reset/totp/`](#post-apiauthpassword-resettotp) | Public | `200` | Reset a password with email plus a valid enrolled TOTP code. |
+| `POST` | [`/api/auth/password-change/`](#post-apiauthpassword-change) | JWT | `200` | Change the authenticated user's password after current-password verification. |
+| `POST` | [`/api/auth/sso/login/`](#post-apiauthssologin) | Public | `200` | Login or create an account with Google, GitHub, or Microsoft SSO. |
+| `POST` | [`/api/auth/sso/link/`](#post-apiauthssolink) | JWT | `200` | Link Google, GitHub, or Microsoft SSO to the authenticated account. |
+| `POST` | [`/api/auth/totp/setup/`](#post-apiauthtotpsetup) | JWT | `200` | Start authenticator-app setup and return the secret plus otpauth URI. |
+| `POST` | [`/api/auth/totp/confirm/`](#post-apiauthtotpconfirm) | JWT | `200` | Confirm a valid authenticator code and enable TOTP. |
+| `POST` | [`/api/auth/totp/disable/`](#post-apiauthtotpdisable) | JWT | `200` | Disable TOTP after current-password and TOTP verification. |
+| `GET` | [`/api/schema/`](#get-apischema) | Public | `200` | OpenAPI schema. |
+| `GET` | [`/api/docs/`](#get-apidocs) | Public | `200` | Swagger UI. |
+
+## Endpoint Details
+
+<a id="get-apihealth"></a>
+### Health Check
+
+`GET /api/health/`
+
+Success response:
+
+```json
+{
+  "status": "ok",
+  "service": "catsos-backend"
+}
+```
 
 ## Auth Payloads
 
+<a id="post-apiauthregister"></a>
 ### Register: Start Verification
 
 `POST /api/auth/register/`
@@ -94,6 +118,7 @@ Validation errors are field-based:
 }
 ```
 
+<a id="post-apiauthverify-email"></a>
 ### Verify Email
 
 `POST /api/auth/verify-email/`
@@ -129,6 +154,7 @@ Invalid code:
 }
 ```
 
+<a id="post-apiauthverificationresend"></a>
 ### Resend Verification Code
 
 `POST /api/auth/verification/resend/`
@@ -171,6 +197,7 @@ HTTP 429 Too Many Requests
 Retry-After: 98
 ```
 
+<a id="post-apiauthverificationchange-email"></a>
 ### Change Pending Verification Email
 
 `POST /api/auth/verification/change-email/`
@@ -199,6 +226,8 @@ Success response:
 }
 ```
 
+<a id="post-apiauthlogin"></a>
+<a id="post-apiauthtoken"></a>
 ### Login
 
 `POST /api/auth/token/`
@@ -210,9 +239,12 @@ Request:
 ```json
 {
   "email": "visitor@example.com",
-  "password": "StrongPass123!"
+  "password": "StrongPass123!",
+  "totp_code": "123456"
 }
 ```
+
+`totp_code` is required only when authenticator-app verification is enabled for the account.
 
 Success response:
 
@@ -244,6 +276,15 @@ Unverified account:
 }
 ```
 
+TOTP-enabled account without a code:
+
+```json
+{
+  "totp_code": ["TOTP code is required for this account."]
+}
+```
+
+<a id="post-apiauthtokenrefresh"></a>
 ### Refresh Token
 
 `POST /api/auth/token/refresh/`
@@ -264,6 +305,245 @@ Success response:
 }
 ```
 
+<a id="post-apiauthpassword-reset"></a>
+### Request Password Reset
+
+`POST /api/auth/password-reset/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com"
+}
+```
+
+Success response for existing and non-existing accounts:
+
+```json
+{
+  "detail": "If an account exists for this email, password reset instructions were sent."
+}
+```
+
+The response intentionally does not reveal whether the email belongs to an account. If an active account with a usable password exists, the backend sends a reset link to that email. Reset tokens are never returned in JSON responses.
+
+Rate limit response:
+
+```json
+{
+  "detail": "Too many password reset requests. Try again later."
+}
+```
+
+Rate limit status and header:
+
+```text
+HTTP 429 Too Many Requests
+Retry-After: 3600
+```
+
+<a id="post-apiauthpassword-resetconfirm"></a>
+### Confirm Password Reset
+
+`POST /api/auth/password-reset/confirm/`
+
+Request:
+
+```json
+{
+  "uid": "<uid-from-email-link>",
+  "token": "<token-from-email-link>",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Password has been reset successfully."
+}
+```
+
+Invalid or expired link:
+
+```json
+{
+  "detail": "Invalid or expired reset link."
+}
+```
+
+Password reset does not auto-login the user and does not return JWT tokens. The new password must pass Django password validators.
+
+<a id="post-apiauthpassword-resettotp"></a>
+### Reset Password With TOTP
+
+`POST /api/auth/password-reset/totp/`
+
+Request:
+
+```json
+{
+  "email": "visitor@example.com",
+  "totp_code": "123456",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Password has been reset successfully."
+}
+```
+
+Invalid email, disabled TOTP, inactive account, or invalid TOTP code:
+
+```json
+{
+  "detail": "Invalid email or TOTP code."
+}
+```
+
+This path is available only for accounts that already enrolled authenticator-app verification. It uses the same password reset rate limits as email reset requests, does not auto-login the user, and does not return JWT tokens.
+
+<a id="post-apiauthpassword-change"></a>
+### Change Password
+
+`POST /api/auth/password-change/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!",
+  "new_password": "NewPassword123!",
+  "new_password_confirm": "NewPassword123!",
+  "totp_code": "123456"
+}
+```
+
+`totp_code` is required when authenticator-app verification is enabled for the account.
+
+Success response:
+
+```json
+{
+  "detail": "Password has been changed successfully."
+}
+```
+
+Wrong current password:
+
+```json
+{
+  "current_password": ["Current password is incorrect."]
+}
+```
+
+The new password must pass Django password validators. The backend sends a confirmation email after successful password reset and after successful logged-in password change.
+
+SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, enrolled authenticator-app TOTP recovery, and logged-in password change with current-password verification.
+
+<a id="post-apiauthtotpsetup"></a>
+### TOTP Setup
+
+`POST /api/auth/totp/setup/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Scan this secret with an authenticator app, then confirm a code.",
+  "secret": "<base32-secret>",
+  "otpauth_url": "otpauth://totp/..."
+}
+```
+
+The `secret` and `otpauth_url` are returned only during setup and must not be logged by clients. The account is not TOTP-enabled until confirmation succeeds.
+
+<a id="post-apiauthtotpconfirm"></a>
+### TOTP Confirm
+
+`POST /api/auth/totp/confirm/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "totp_code": "123456"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Authenticator app verification has been enabled."
+}
+```
+
+<a id="post-apiauthtotpdisable"></a>
+### TOTP Disable
+
+`POST /api/auth/totp/disable/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Request:
+
+```json
+{
+  "current_password": "StrongPass123!",
+  "totp_code": "123456"
+}
+```
+
+Success response:
+
+```json
+{
+  "detail": "Authenticator app verification has been disabled."
+}
+```
+
+When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
+
+<a id="post-apiauthssologin"></a>
 ### SSO Login Or Signup
 
 `POST /api/auth/sso/login/`
@@ -319,6 +599,7 @@ Conflict response:
 }
 ```
 
+<a id="post-apiauthssolink"></a>
 ### Link SSO Provider
 
 `POST /api/auth/sso/link/`
@@ -334,9 +615,12 @@ Request:
 ```json
 {
   "provider": "github",
-  "token": "<provider-token>"
+  "token": "<provider-token>",
+  "totp_code": "123456"
 }
 ```
+
+`totp_code` is required when authenticator-app verification is enabled for the account.
 
 Success response:
 
@@ -358,6 +642,22 @@ If the provider account is already linked to another CatSOS user:
 }
 ```
 
+## Schema And Docs
+
+<a id="get-apischema"></a>
+### OpenAPI Schema
+
+`GET /api/schema/`
+
+Returns the generated OpenAPI schema from drf-spectacular.
+
+<a id="get-apidocs"></a>
+### Swagger UI
+
+`GET /api/docs/`
+
+Opens Swagger UI for browsing and trying the API in a browser.
+
 ## Manual Testing With PowerShell
 
 Start the backend first:
@@ -371,7 +671,7 @@ cd backend
 Health check:
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/api/health/"
+Invoke-RestMethod -Method Get -Uri "http://localhost:8000/api/health/"
 ```
 
 Register:
@@ -385,7 +685,7 @@ $registerBody = @{
 
 $session = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/register/" `
+  -Uri "http://localhost:8000/api/auth/register/" `
   -ContentType "application/json" `
   -Body $registerBody
 
@@ -404,7 +704,7 @@ $verifyBody = @{
 
 $session = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/verify-email/" `
+  -Uri "http://localhost:8000/api/auth/verify-email/" `
   -ContentType "application/json" `
   -Body $verifyBody
 
@@ -420,7 +720,7 @@ $resendBody = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/verification/resend/" `
+  -Uri "http://localhost:8000/api/auth/verification/resend/" `
   -ContentType "application/json" `
   -Body $resendBody
 ```
@@ -436,7 +736,7 @@ $changeEmailBody = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/verification/change-email/" `
+  -Uri "http://localhost:8000/api/auth/verification/change-email/" `
   -ContentType "application/json" `
   -Body $changeEmailBody
 ```
@@ -451,7 +751,7 @@ $loginBody = @{
 
 $session = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/token/" `
+  -Uri "http://localhost:8000/api/auth/token/" `
   -ContentType "application/json" `
   -Body $loginBody
 
@@ -467,9 +767,40 @@ $refreshBody = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/token/refresh/" `
+  -Uri "http://localhost:8000/api/auth/token/refresh/" `
   -ContentType "application/json" `
   -Body $refreshBody
+```
+
+Request a password reset email:
+
+```powershell
+$resetRequestBody = @{
+  email = "visitor@example.com"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/password-reset/" `
+  -ContentType "application/json" `
+  -Body $resetRequestBody
+```
+
+Confirm password reset with the `uid` and `token` from the email link:
+
+```powershell
+$resetConfirmBody = @{
+  uid = "<uid-from-email-link>"
+  token = "<token-from-email-link>"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/password-reset/confirm/" `
+  -ContentType "application/json" `
+  -Body $resetConfirmBody
 ```
 
 Send an authenticated request:
@@ -481,8 +812,74 @@ $headers = @{
 
 Invoke-RestMethod `
   -Method Get `
-  -Uri "http://127.0.0.1:8000/api/health/" `
+  -Uri "http://localhost:8000/api/health/" `
   -Headers $headers
+```
+
+Change the current user's password:
+
+```powershell
+$passwordChangeBody = @{
+  current_password = "StrongPass123!"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/password-change/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $passwordChangeBody
+```
+
+Start TOTP setup:
+
+```powershell
+$totpSetupBody = @{
+  current_password = "StrongPass123!"
+} | ConvertTo-Json
+
+$totpSetup = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/totp/setup/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $totpSetupBody
+
+$totpSetup
+```
+
+Confirm TOTP after scanning the returned `otpauth_url`:
+
+```powershell
+$totpConfirmBody = @{
+  totp_code = "123456"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/totp/confirm/" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $totpConfirmBody
+```
+
+Reset password with enrolled TOTP:
+
+```powershell
+$totpResetBody = @{
+  email = "visitor@example.com"
+  totp_code = "123456"
+  new_password = "NewPassword123!"
+  new_password_confirm = "NewPassword123!"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/auth/password-reset/totp/" `
+  -ContentType "application/json" `
+  -Body $totpResetBody
 ```
 
 Test validation errors:
@@ -496,7 +893,7 @@ $badBody = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/register/" `
+  -Uri "http://localhost:8000/api/auth/register/" `
   -ContentType "application/json" `
   -Body $badBody
 ```
@@ -507,7 +904,7 @@ Invoke-RestMethod `
 try {
   Invoke-RestMethod `
     -Method Post `
-    -Uri "http://127.0.0.1:8000/api/auth/register/" `
+    -Uri "http://localhost:8000/api/auth/register/" `
     -ContentType "application/json" `
     -Body $badBody
 } catch {
@@ -525,7 +922,7 @@ $ssoBody = @{
 
 $session = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/sso/login/" `
+  -Uri "http://localhost:8000/api/auth/sso/login/" `
   -ContentType "application/json" `
   -Body $ssoBody
 
@@ -546,7 +943,7 @@ $linkBody = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/api/auth/sso/link/" `
+  -Uri "http://localhost:8000/api/auth/sso/link/" `
   -ContentType "application/json" `
   -Headers $headers `
   -Body $linkBody
@@ -568,6 +965,127 @@ MICROSOFT_JWKS_URL=https://login.microsoftonline.com/common/discovery/v2.0/keys
 DJANGO_SSO_HTTP_TIMEOUT_SECONDS=5
 ```
 
+### Google SSO Status And Test
+
+For the importable Postman collection, environment file, and full Postman setup guide, see [`backend/docs/POSTMAN.md`](postman/POSTMAN.md).
+
+Current status:
+
+- Backend Google SSO is wired.
+- `GOOGLE_OAUTH_CLIENT_ID` is configured in local `backend/.env`.
+- Docker loads `backend/.env` for the backend service.
+- Frontend Google sign-in is not implemented yet, so there is no browser button that can produce the Google token.
+
+Quick backend confidence test:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe manage.py test accounts
+```
+
+Real end-to-end test after a Google button exists:
+
+1. Start backend and frontend.
+2. Click "Continue with Google" in the frontend.
+3. Pick a Google account.
+4. The frontend sends Google's returned `credential` to `POST /api/auth/sso/login/`.
+5. Success means CatSOS returns `access`, `refresh`, `token_type`, and `user`.
+
+The important frontend detail is simple: send the Google `credential` value as `token`. Do not send a Google access token or client secret.
+
+Expected API request:
+
+```json
+{
+  "provider": "google",
+  "token": "<google-credential-id-token>"
+}
+```
+
+Expected API success:
+
+```json
+{
+  "access": "<jwt-access-token>",
+  "refresh": "<jwt-refresh-token>",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "email": "google-account@example.com"
+  }
+}
+```
+
+Postman test:
+
+1. Start the backend.
+2. Create a `POST` request to `http://localhost:8000/api/auth/sso/login/`.
+3. In `Headers`, set `Content-Type` to `application/json`.
+4. In `Body`, choose `raw` and `JSON`, then paste:
+
+```json
+{
+  "provider": "google",
+  "token": "<google-credential-id-token>"
+}
+```
+
+5. Click `Send`.
+6. Success is a `200 OK` response containing `access`, `refresh`, `token_type`, and `user`.
+
+Do not use Postman's `Authorization` tab for this request. The Google token goes in the JSON body as `token`.
+
+If you use Postman to get the Google token first, request OAuth scopes `openid email profile` and copy the returned `id_token`. Do not copy `access_token`; CatSOS verifies Google ID tokens only.
+
+If testing fails, check only these three things first:
+
+- `GOOGLE_OAUTH_CLIENT_ID` matches the Google Web Client used by the frontend.
+- Google Cloud has `http://localhost:5173` as an authorized JavaScript origin.
+- The frontend sends the Google `credential` value, not another token type.
+
+If Postman shows `socket hang up`, the request probably did not reach a running Django app. Check the backend first:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://localhost:8000/api/health/"
+docker compose ps
+docker compose logs --tail 80 backend
+```
+
+If the backend container is unhealthy or logs show missing Python packages, rebuild and migrate:
+
+```powershell
+docker compose up -d --build backend
+docker compose exec backend python manage.py migrate
+```
+
+After that, the placeholder token request should return `400 Bad Request` with:
+
+```json
+{
+  "token": ["Invalid Google ID token."]
+}
+```
+
+That `400` means the endpoint is reachable. To get `200 OK`, replace the placeholder with a real Google ID token.
+
+## Password Recovery Configuration
+
+Password reset links use the configured frontend origin:
+
+```text
+DJANGO_FRONTEND_URL=http://localhost:5173
+DJANGO_PASSWORD_RESET_TIMEOUT=3600
+DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DJANGO_DEFAULT_FROM_EMAIL=no-reply@catsos.local
+DJANGO_TOTP_ISSUER_NAME=CatSOS
+DJANGO_TOTP_STEP_SECONDS=30
+DJANGO_TOTP_DIGITS=6
+DJANGO_TOTP_WINDOW=1
+```
+
+`DJANGO_PASSWORD_RESET_TIMEOUT` is in seconds. Django's local console email backend is enough for development.
+`DJANGO_TOTP_WINDOW=1` accepts one 30-second step before or after the current authenticator-app code to tolerate small clock drift.
+
 ## Throttling
 
 Auth-sensitive endpoints use scoped DRF throttling.
@@ -584,6 +1102,8 @@ Default local rates:
 | Token refresh | `60/minute` |
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
+| Password reset per email | `5/hour` |
+| Password reset per IP | `10/hour` |
 
 Environment overrides:
 
@@ -596,6 +1116,8 @@ DJANGO_AUTH_LOGIN_RATE=20/minute
 DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
+DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
+DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```
 
 When a throttle limit is exceeded, DRF returns:

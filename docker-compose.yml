@@ -5,18 +5,20 @@ services:
     build:
       context: ./backend
       target: development
+    env_file:
+      - ./backend/.env
     environment:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: local-docker-secret
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
-      DJANGO_CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      DJANGO_CSRF_TRUSTED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      DJANGO_ALLOWED_HOSTS: localhost,backend
+      DJANGO_CORS_ALLOWED_ORIGINS: http://localhost:5173
+      DJANGO_CSRF_TRUSTED_ORIGINS: http://localhost:5173
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=2)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=2)\""]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -26,7 +28,7 @@ services:
       context: ./frontend
       target: development
     environment:
-      VITE_API_BASE_URL: http://127.0.0.1:8000
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
       - "5173:5173"
     volumes:
