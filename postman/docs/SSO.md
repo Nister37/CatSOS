@@ -42,7 +42,6 @@ The collection refers to these environment variables directly:
 | `google_id_token` | Google ID token copied from Postman token details |
 | `microsoft_tenant_id` | Microsoft tenant segment, usually `common` for local testing |
 | `microsoft_oauth_client_id` | Microsoft Application Client ID |
-| `microsoft_oauth_client_secret` | Microsoft client secret, local Postman only |
 | `microsoft_id_token` | Microsoft ID token copied from Postman token details |
 | `access_token` | CatSOS JWT access token |
 | `refresh_token` | CatSOS JWT refresh token |
@@ -97,21 +96,39 @@ Client Authentication: Send client credentials in body
 In Microsoft Entra admin center:
 
 1. Open `Identity` -> `Applications` -> `App registrations`.
-2. Open the CatSOS app registration.
-3. Keep the frontend redirect URI if it already exists:
+2. Open the CatSOS app registration. Do not use `Enterprise applications`; that is the service-principal view and does not contain the sign-in audience setting.
+3. If you cannot find `Supported account types`, open `Manage` -> `Manifest` and check `signInAudience`:
+
+```text
+AzureADMyOrg                         single tenant, work/school accounts in this tenant only
+AzureADMultipleOrgs                  work/school accounts in any Entra tenant
+AzureADandPersonalMicrosoftAccount   work/school accounts plus personal Microsoft accounts
+PersonalMicrosoftAccount             personal Microsoft accounts only
+```
+
+For local testing with a personal Outlook, Hotmail, Live, Skype, or Xbox account, use `AzureADandPersonalMicrosoftAccount`.
+
+4. Keep the frontend redirect URI if it already exists:
 
 ```text
 http://localhost:5173/auth/callback/microsoft
 ```
 
-4. Add a separate Postman redirect URI under `Authentication` -> `Add a platform` -> `Web`:
+5. Add a separate Postman redirect URI under `Authentication` -> `Add a platform` -> `Single-page application`:
 
 ```text
 https://oauth.pstmn.io/v1/callback
 ```
 
-5. Create a client secret under `Certificates & secrets`.
-6. Copy the secret value into Postman variable `microsoft_oauth_client_secret`.
+6. On the `Settings` tab, keep the implicit/hybrid flow checkboxes off:
+
+```text
+Access tokens: unchecked
+ID tokens: unchecked
+Allow public client flows: disabled
+```
+
+7. Do not create or use a Microsoft client secret for the Postman helper. This flow uses public-client Authorization Code with PKCE.
 
 Configure the backend with the same Application Client ID:
 
@@ -132,35 +149,69 @@ consumers     personal Microsoft accounts only
 tenant ID     single-tenant app registrations
 ```
 
-The local default is `common`.
+The local default is `common`. This endpoint still follows the app registration's supported account types.
+If you sign in with a personal Outlook, Hotmail, Live, Skype, or Xbox account, the app registration must support personal Microsoft accounts or Microsoft can fail before CatSOS receives a token with `unauthorized_client: The client does not exist or is not enabled for consumers`.
+If the app registration is already set to `Any Entra ID Tenant + Personal Microsoft accounts` and you are testing a personal Microsoft account, `consumers` is also valid and can avoid account-picker/session confusion.
+
+Known working local setup for a personal Microsoft account:
+
+```text
+Azure Supported accounts: Any Entra ID Tenant + Personal Microsoft accounts
+Azure Postman redirect URI: Single-page application -> https://oauth.pstmn.io/v1/callback
+Postman microsoft_tenant_id: consumers
+Postman Client Secret: empty
+Postman Client Authentication: Send client credentials in body, if no None option exists
+Postman Advanced -> Token Request -> Request Header: Origin = https://oauth.pstmn.io
+```
 
 ## Microsoft Test Flow
 
 1. Select the `CatSOS Local` Postman environment.
 2. Set `microsoft_oauth_client_id` to the same value as `MICROSOFT_OAUTH_CLIENT_ID`.
-3. Set `microsoft_oauth_client_secret`.
-4. Leave `microsoft_tenant_id` as `common`, unless the app registration is single-tenant.
-5. Run `00 - Setup & Smoke / Health Check`.
-6. Open `30 - Microsoft SSO / Microsoft OAuth Helper (Get ID Token)`.
-7. Open the `Authorization` tab.
-8. Confirm the fields resolve from variables:
+3. Set `microsoft_tenant_id`:
 
 ```text
-Grant Type: Authorization Code
+consumers     personal Outlook, Hotmail, Live, Skype, or Xbox account
+common        mixed account testing, or work/school plus personal-account app registrations
+organizations work or school accounts only
+tenant ID     single-tenant app registrations
+```
+
+4. Run `00 - Setup & Smoke / Health Check`.
+5. Open `30 - Microsoft SSO / Microsoft OAuth Helper (Get ID Token)`.
+6. Open the `Authorization` tab.
+7. Confirm the fields resolve from variables:
+
+```text
+Grant Type: Authorization Code (With PKCE)
+Code Challenge Method: SHA-256
 Callback URL: {{oauth_callback_url}}
 Auth URL: https://login.microsoftonline.com/{{microsoft_tenant_id}}/oauth2/v2.0/authorize
 Access Token URL: https://login.microsoftonline.com/{{microsoft_tenant_id}}/oauth2/v2.0/token
 Client ID: {{microsoft_oauth_client_id}}
-Client Secret: {{microsoft_oauth_client_secret}}
 Scope: {{sso_oidc_scope}}
-Client Authentication: Send client credentials in body
+Client Secret: empty
+Client Authentication: None, or `Send client credentials in body` if your Postman version has no `None` option
+Advanced -> Token Request -> Request Header: Origin = https://oauth.pstmn.io
 ```
 
-9. Click `Get New Access Token`.
-10. Sign in with Microsoft.
-11. Copy `id_token` from the returned token details.
-12. Paste it into `microsoft_id_token`.
-13. Run `30 - Microsoft SSO / Microsoft SSO Login`.
+If the imported helper still shows plain `Authorization Code`, change it manually to `Authorization Code (With PKCE)` before requesting a token. Microsoft can reject the plain flow with `Proof Key for Code Exchange is required for cross-origin authorization code redemption`.
+
+If the token request fails with `AADSTS90023: Public clients can't send a client secret`, clear the Client Secret field. If your Postman version has no `None` option, keep `Send client credentials in body` selected but leave Client Secret empty.
+
+If the token request fails with `AADSTS90023` or `AADSTS9002327` about `Single-Page Application` tokens and cross-origin requests, add the `Origin` token-request header shown above. The value is only the origin:
+
+```text
+https://oauth.pstmn.io
+```
+
+Do not use the full callback URL as the `Origin` header value.
+
+8. Click `Get New Access Token`.
+9. Sign in with Microsoft.
+10. Copy `id_token` from the returned token details.
+11. Paste it into `microsoft_id_token`.
+12. Run `30 - Microsoft SSO / Microsoft SSO Login`.
 
 Expected CatSOS response:
 

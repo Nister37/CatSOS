@@ -446,7 +446,12 @@
               "oauth2": [
                 {
                   "key": "grant_type",
-                  "value": "authorization_code",
+                  "value": "authorization_code_with_pkce",
+                  "type": "string"
+                },
+                {
+                  "key": "challengeAlgorithm",
+                  "value": "S256",
                   "type": "string"
                 },
                 {
@@ -470,11 +475,6 @@
                   "type": "string"
                 },
                 {
-                  "key": "clientSecret",
-                  "value": "{{microsoft_oauth_client_secret}}",
-                  "type": "string"
-                },
-                {
                   "key": "scope",
                   "value": "{{sso_oidc_scope}}",
                   "type": "string"
@@ -486,7 +486,7 @@
                 },
                 {
                   "key": "client_authentication",
-                  "value": "body",
+                  "value": "none",
                   "type": "string"
                 }
               ]

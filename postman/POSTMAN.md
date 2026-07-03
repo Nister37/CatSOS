@@ -84,7 +84,7 @@ postman/CatSOS.postman_collection.json
 
 Do not reimport the environment unless you want to reset local values.
 
-If the environment is reset, refill the provider client secrets, regenerate provider ID tokens, and log in again.
+If the environment is reset, refill the Google client secret if you test Google, regenerate provider ID tokens, and log in again.
 
 ## Security Note
 
