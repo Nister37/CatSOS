@@ -12,7 +12,7 @@ class AccountUserAdmin(UserAdmin):
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('first_name', 'last_name')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'profile_picture')}),
         (
             'Email verification',
             {'fields': ('is_email_verified', 'email_verification_sent_at', 'email_verified_at')},

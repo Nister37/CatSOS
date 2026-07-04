@@ -12,6 +12,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
@@ -33,6 +34,28 @@ PASSWORD_RESET_RATE_LIMIT_DETAIL = 'Too many password reset requests. Try again 
 PASSWORD_CHANGE_SUCCESS_DETAIL = 'Password has been changed successfully.'
 TOTP_ENABLED_DETAIL = 'Authenticator app verification has been enabled.'
 TOTP_DISABLED_DETAIL = 'Authenticator app verification has been disabled.'
+
+
+def replace_profile_picture(*, user, image):
+    old_picture_name = user.profile_picture.name
+    user.profile_picture = image
+    user.save(update_fields=['profile_picture'])
+
+    if old_picture_name and old_picture_name != user.profile_picture.name:
+        default_storage.delete(old_picture_name)
+
+    return user
+
+
+def delete_profile_picture(*, user):
+    old_picture_name = user.profile_picture.name
+    if not old_picture_name:
+        return user
+
+    user.profile_picture = ''
+    user.save(update_fields=['profile_picture'])
+    default_storage.delete(old_picture_name)
+    return user
 
 
 class AccountNotVerifiedError(Exception):
