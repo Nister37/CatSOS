@@ -20,8 +20,16 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from accounts.views import CurrentUserView, ProfilePictureView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/me/', CurrentUserView.as_view(), name='account-me'),
+    path(
+        'api/me/profile-picture/',
+        ProfilePictureView.as_view(),
+        name='account-profile-picture',
+    ),
     path('api/auth/', include('accounts.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
