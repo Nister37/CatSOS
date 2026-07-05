@@ -40,29 +40,35 @@ export function Navbar() {
         </div>
 
         {/* Desktop CTA + mobile hamburger */}
-        <div className="flex items-center gap-md">
-          <button className="hidden md:block bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform">
+        <div className="hidden md:flex items-center">
+          <Link
+            to="/login"
+            className="text-on-primary opacity-60 hover:opacity-100 hover:text-primary-container transition-opacity font-label-md text-label-md mr-md"
+          >
+            Join
+          </Link>
+          <button className="bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform">
             Report a Missing Cat
           </button>
-
-          {/* Hamburger — mobile only */}
-          <button
-            className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-[5px] bg-transparent border-0 p-0 cursor-pointer"
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((prev) => !prev)}
-          >
-            <span
-              className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-[7px]' : ''}`}
-            />
-            <span
-              className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`}
-            />
-            <span
-              className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`}
-            />
-          </button>
         </div>
+
+        {/* Hamburger — mobile only */}
+        <button
+          className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-[5px] bg-transparent border-0 p-0 cursor-pointer"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((prev) => !prev)}
+        >
+          <span
+            className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-[7px]' : ''}`}
+          />
+          <span
+            className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`}
+          />
+          <span
+            className={`block w-6 h-0.5 bg-on-primary rounded-full transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`}
+          />
+        </button>
       </nav>
 
       {/* Mobile menu */}
@@ -80,7 +86,14 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          <button className="mt-md bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full">
+          <Link
+            to="/login"
+            onClick={closeMenu}
+            className="mt-md text-center text-on-primary opacity-60 hover:opacity-100 hover:text-primary-container transition-opacity font-label-md text-label-md py-sm"
+          >
+            Join
+          </Link>
+          <button className="mt-sm bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full">
             Report a Missing Cat
           </button>
         </div>
