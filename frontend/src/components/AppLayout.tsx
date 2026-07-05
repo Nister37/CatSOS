@@ -1,8 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
 
+import { Link } from 'react-router-dom';
+
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { signInDemoUser, signOut } from '../features/auth/authSlice';
+import { signOut } from '../features/auth/authSlice';
 import { setLanguage, type SupportedLanguage } from '../features/language/languageSlice';
 import { NotificationList } from './NotificationList';
 
@@ -43,12 +45,10 @@ export function AppLayout() {
           </select>
           {user ? (
             <button type="button" onClick={() => dispatch(signOut())}>
-              Sign out
+              Sign out ({user.firstName || user.email})
             </button>
           ) : (
-            <button type="button" onClick={() => dispatch(signInDemoUser())}>
-              Sign in
-            </button>
+            <Link to="/login">Sign in</Link>
           )}
         </div>
       </header>
