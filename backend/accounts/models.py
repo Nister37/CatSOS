@@ -1,7 +1,22 @@
-from django.contrib.auth.models import AbstractUser, BaseUserManager
+from pathlib import Path
+from uuid import uuid4
+
 from django.conf import settings
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+
+PROFILE_PICTURE_UPLOAD_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
+
+
+def profile_picture_upload_path(instance, filename):
+    extension = Path(filename).suffix.lower()
+    if extension not in PROFILE_PICTURE_UPLOAD_EXTENSIONS:
+        extension = '.jpg'
+
+    user_segment = instance.pk or 'new'
+    return f'profile-pictures/user-{user_segment}/{uuid4().hex}{extension}'
 
 
 class UserManager(BaseUserManager):
@@ -39,6 +54,7 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     username = None
     email = models.EmailField(_('email address'), unique=True)
+    profile_picture = models.ImageField(upload_to=profile_picture_upload_path, blank=True)
     is_email_verified = models.BooleanField(default=False)
     email_verification_code_hash = models.CharField(max_length=128, blank=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)

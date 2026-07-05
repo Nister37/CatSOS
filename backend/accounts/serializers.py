@@ -28,11 +28,65 @@ from .services import (
     verify_email_code,
 )
 from .sso import SSOProviderError
+from .validators import validate_profile_picture_upload
+
+
+def build_profile_picture_url(user, request=None):
+    if not user.profile_picture:
+        return None
+
+    try:
+        url = user.profile_picture.url
+    except ValueError:
+        return None
+
+    if request is None:
+        return url
+    return request.build_absolute_uri(url)
+
+
+def build_avatar_fallback(user):
+    name_parts = [user.first_name.strip(), user.last_name.strip()]
+    initials = ''.join(part[0] for part in name_parts if part)
+    if initials:
+        return initials[:2].upper()
+
+    local_part = user.email.split('@', 1)[0].strip()
+    return (local_part[:1] or '?').upper()
 
 
 class AccountSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     email = serializers.EmailField(read_only=True)
+
+
+class CurrentUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    profile_picture_url = serializers.SerializerMethodField()
+    avatar_fallback = serializers.SerializerMethodField()
+
+    def get_profile_picture_url(self, user) -> str | None:
+        return build_profile_picture_url(
+            user,
+            request=self.context.get('request'),
+        )
+
+    def get_avatar_fallback(self, user) -> str:
+        return build_avatar_fallback(user)
+
+
+class ProfilePictureUploadSerializer(serializers.Serializer):
+    profile_picture = serializers.FileField(write_only=True)
+
+    def validate_profile_picture(self, value):
+        try:
+            validate_profile_picture_upload(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
 
 class AuthResponseSerializer(serializers.Serializer):

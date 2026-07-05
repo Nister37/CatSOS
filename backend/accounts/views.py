@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -10,12 +11,14 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import (
     AuthResponseSerializer,
     ChangeVerificationEmailSerializer,
+    CurrentUserSerializer,
     DetailResponseSerializer,
     LoginSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PasswordResetTOTPSerializer,
+    ProfilePictureUploadSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
     SSOLinkResponseSerializer,
@@ -44,7 +47,9 @@ from .services import (
     InvalidTOTPCodeError,
     PasswordResetInvalidTokenError,
     PasswordResetRateLimitError,
+    delete_profile_picture,
     request_password_reset,
+    replace_profile_picture,
     reset_password_with_totp,
     reset_password_with_token,
 )
@@ -69,6 +74,82 @@ class NoStoreAPIView(APIView):
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         return set_no_store_headers(response)
+
+
+class CurrentUserView(NoStoreAPIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={
+            200: CurrentUserSerializer,
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def get(self, request):
+        serializer = CurrentUserSerializer(request.user, context={'request': request})
+        return no_store_response(serializer.data)
+
+
+class ProfilePictureView(NoStoreAPIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def _serialize_user(self, request):
+        serializer = CurrentUserSerializer(request.user, context={'request': request})
+        return serializer.data
+
+    def _upload(self, request):
+        serializer = ProfilePictureUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        replace_profile_picture(
+            user=request.user,
+            image=serializer.validated_data['profile_picture'],
+        )
+        return no_store_response(self._serialize_user(request))
+
+    @extend_schema(
+        request=ProfilePictureUploadSerializer,
+        responses={
+            200: CurrentUserSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        return self._upload(request)
+
+    @extend_schema(
+        request=ProfilePictureUploadSerializer,
+        responses={
+            200: CurrentUserSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def put(self, request):
+        return self._upload(request)
+
+    @extend_schema(
+        request=ProfilePictureUploadSerializer,
+        responses={
+            200: CurrentUserSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def patch(self, request):
+        return self._upload(request)
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: CurrentUserSerializer,
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def delete(self, request):
+        delete_profile_picture(user=request.user)
+        return no_store_response(self._serialize_user(request))
 
 
 class RegisterView(NoStoreAPIView):

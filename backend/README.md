@@ -12,6 +12,8 @@ Django backend for the CatSOS API.
 ## Local URLs
 
 - API health: `http://localhost:8000/api/health/`
+- Current user profile: `http://localhost:8000/api/me/`
+- Current user profile picture: `http://localhost:8000/api/me/profile-picture/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
 - Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
@@ -36,5 +38,7 @@ Registration sends an 8-digit email verification code. Email verification and lo
 Password recovery uses email reset links built from `DJANGO_FRONTEND_URL`, Django's default token generator, and enrolled authenticator-app TOTP codes as the second recovery option. Reset requests never return reset tokens in JSON. Successful password reset and logged-in password change send confirmation emails. SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, TOTP recovery, and logged-in password change with current-password verification. When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
 
 SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs with `GOOGLE_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_ID`; GitHub uses the provider access token to fetch the authenticated user's verified primary email.
+
+Authenticated users can upload, replace, and delete their profile picture through `/api/me/profile-picture/`. The backend accepts JPEG, PNG, and WebP images up to `DJANGO_PROFILE_PICTURE_MAX_SIZE_BYTES` bytes, stores them under media storage with generated filenames, and returns `/api/me/` profile data with `profile_picture_url` plus `avatar_fallback` for users without an image.
 
 Auth endpoints return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.
