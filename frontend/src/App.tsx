@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 
 import { AppLayout } from './components/AppLayout';
 import { DashboardPage } from './pages/DashboardPage';
+import { EmailVerificationPage } from './pages/EmailVerificationPage';
 import { HomePage } from './pages/HomePage';
 import { IntakePage } from './pages/IntakePage';
 import { LoginPage } from './pages/LoginPage';
@@ -26,6 +27,7 @@ export function App() {
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
+      <Route path="verify-email" element={<EmailVerificationPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

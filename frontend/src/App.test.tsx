@@ -44,15 +44,28 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /return to dashboard/i })).toHaveAttribute('href', '/');
   });
 
-  it('updates session and language controls in the app layout', async () => {
+  it('shows a sign-in link when logged out and a sign-out button when logged in', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<App />, { route: '/dashboard' });
+    renderWithProviders(<App />, {
+      route: '/dashboard',
+      preloadedState: {
+        auth: {
+          user: { id: 1, email: 'coord@example.com', firstName: 'Jane', lastName: 'Doe', avatarFallback: 'JD' },
+          accessToken: 'tok',
+          refreshToken: 'rtok',
+        },
+      },
+    });
 
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /sign out/i }));
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
+  });
+
+  it('updates the language control in the app layout', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: '/dashboard' });
 
     await user.selectOptions(screen.getByLabelText(/language/i), 'pl');
     expect(document.documentElement.lang).toBe('pl');
@@ -71,13 +84,14 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
   });
 
-  it('keeps signup submission client side', async () => {
+  it('shows validation errors on empty signup submission', async () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { route: '/signup' });
 
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     expect(screen.getByRole('heading', { name: /join the community/i })).toBeInTheDocument();
+    expect(await screen.findByText(/valid email address/i)).toBeInTheDocument();
   });
 
   it('shows validation errors for an incomplete intake report', async () => {

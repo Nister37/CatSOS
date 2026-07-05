@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python manage.py test)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(yarn test *)"
     ]
   }
 }

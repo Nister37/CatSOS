@@ -1,9 +1,46 @@
-import { Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Link, useNavigate } from 'react-router-dom';
 
-import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Navbar } from '../components/Navbar';
+import { signupSchema, type SignupFormData } from '../schemas/authSchema';
+import { register as registerApi } from '../api/auth';
+import { addNotification } from '../features/notifications/notificationsSlice';
+import { useAppDispatch } from '../app/hooks';
 
 export function SignupPage() {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<SignupFormData>({
+    resolver: zodResolver(signupSchema),
+  });
+
+  const onSubmit = async (data: SignupFormData) => {
+    try {
+      await registerApi(data.email, data.password, data.passwordConfirm);
+      dispatch(addNotification('Account created! Please verify your email.', 'success'));
+      navigate('/verify-email', { state: { email: data.email } });
+    } catch (err: unknown) {
+      const apiError = err as Record<string, string[]>;
+      if (Array.isArray(apiError.email)) {
+        setError('email', { message: apiError.email[0] });
+      } else if (Array.isArray(apiError.password)) {
+        setError('password', { message: apiError.password[0] });
+      } else if (Array.isArray(apiError.password_confirm)) {
+        setError('passwordConfirm', { message: apiError.password_confirm[0] });
+      } else {
+        setError('root', { message: 'Registration failed. Please try again.' });
+      }
+    }
+  };
+
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
@@ -16,46 +53,96 @@ export function SignupPage() {
         {/* Registration card */}
         <div className="w-full max-w-md bg-surface-container-lowest p-lg rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] z-10">
           <div className="text-center mb-lg">
-            <h1 className="font-headline-lg text-headline-lg text-on-background mb-xs">Join the Community</h1>
-            <p className="font-body-md text-body-md text-secondary">Be part of the safety net for our feline friends.</p>
+            <h1 className="font-headline-lg text-headline-lg text-on-background mb-xs">
+              Join the Community
+            </h1>
+            <p className="font-body-md text-body-md text-secondary">
+              Be part of the safety net for our feline friends.
+            </p>
           </div>
 
-          <form className="space-y-md" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-md" onSubmit={handleSubmit(onSubmit)} noValidate>
             <div className="space-y-xs">
-              <label htmlFor="name" className="font-label-md text-label-md text-on-surface-variant block">Full Name</label>
-              <input
-                id="name"
-                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
-                placeholder="Jane Doe"
-                type="text"
-              />
-            </div>
-
-            <div className="space-y-xs">
-              <label htmlFor="email" className="font-label-md text-label-md text-on-surface-variant block">Email</label>
+              <label
+                htmlFor="email"
+                className="font-label-md text-label-md text-on-surface-variant block"
+              >
+                Email
+              </label>
               <input
                 id="email"
-                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
-                placeholder="jane@example.com"
                 type="email"
+                placeholder="jane@example.com"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? 'email-error' : undefined}
+                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
+                {...register('email')}
               />
+              {errors.email && (
+                <p id="email-error" role="alert" className="text-error text-label-sm">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-xs">
-              <label htmlFor="password" className="font-label-md text-label-md text-on-surface-variant block">Password</label>
+              <label
+                htmlFor="password"
+                className="font-label-md text-label-md text-on-surface-variant block"
+              >
+                Password
+              </label>
               <input
                 id="password"
-                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
-                placeholder="••••••••"
                 type="password"
+                placeholder="••••••••"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? 'password-error' : undefined}
+                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
+                {...register('password')}
               />
+              {errors.password && (
+                <p id="password-error" role="alert" className="text-error text-label-sm">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
+
+            <div className="space-y-xs">
+              <label
+                htmlFor="passwordConfirm"
+                className="font-label-md text-label-md text-on-surface-variant block"
+              >
+                Confirm Password
+              </label>
+              <input
+                id="passwordConfirm"
+                type="password"
+                placeholder="••••••••"
+                aria-invalid={Boolean(errors.passwordConfirm)}
+                aria-describedby={errors.passwordConfirm ? 'passwordConfirm-error' : undefined}
+                className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
+                {...register('passwordConfirm')}
+              />
+              {errors.passwordConfirm && (
+                <p id="passwordConfirm-error" role="alert" className="text-error text-label-sm">
+                  {errors.passwordConfirm.message}
+                </p>
+              )}
+            </div>
+
+            {errors.root && (
+              <p role="alert" className="text-error text-label-sm text-center">
+                {errors.root.message}
+              </p>
+            )}
 
             <button
               type="submit"
-              className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg shadow-md hover:brightness-110 active:scale-95 transition-all mt-sm"
+              disabled={isSubmitting}
+              className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg shadow-md hover:brightness-110 active:scale-95 transition-all mt-sm disabled:opacity-60"
             >
-              Create Account
+              {isSubmitting ? 'Creating Account…' : 'Create Account'}
             </button>
           </form>
 
@@ -72,12 +159,27 @@ export function SignupPage() {
           </div>
 
           {/* Google SSO */}
-          <button className="w-full bg-on-background text-on-primary font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-base hover:opacity-90 active:scale-95 transition-all">
+          <button
+            type="button"
+            className="w-full bg-on-background text-on-primary font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-base hover:opacity-90 active:scale-95 transition-all"
+          >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="currentColor" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="currentColor" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="currentColor" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="currentColor" />
+              <path
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                fill="currentColor"
+              />
+              <path
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                fill="currentColor"
+              />
+              <path
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                fill="currentColor"
+              />
+              <path
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                fill="currentColor"
+              />
             </svg>
             Sign up with Google
           </button>
