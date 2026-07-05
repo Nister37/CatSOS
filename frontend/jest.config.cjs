@@ -7,6 +7,7 @@ module.exports = {
   },
   moduleNameMapper: {
     '^react-leaflet$': '<rootDir>/src/test/reactLeafletMock.tsx',
+    '^leaflet$': '<rootDir>/src/test/leafletMock.ts',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/main.tsx', '!src/test/**'],

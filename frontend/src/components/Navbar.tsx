@@ -47,9 +47,12 @@ export function Navbar() {
           >
             Join
           </Link>
-          <button className="bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform">
+          <Link
+            to="/report-missing"
+            className="bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform"
+          >
             Report a Missing Cat
-          </button>
+          </Link>
         </div>
 
         {/* Hamburger — mobile only */}
@@ -93,9 +96,13 @@ export function Navbar() {
           >
             Join
           </Link>
-          <button className="mt-sm bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full">
+          <Link
+            to="/report-missing"
+            onClick={closeMenu}
+            className="mt-sm block text-center bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full"
+          >
             Report a Missing Cat
-          </button>
+          </Link>
         </div>
       </div>
     </header>
