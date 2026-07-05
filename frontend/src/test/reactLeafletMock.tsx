@@ -18,4 +18,4 @@ export const useMap = () => ({
   off: () => {},
 });
 
-export const useMapEvents = (_handlers: Record<string, unknown>) => null;
+export const useMapEvents = (_handlers: Record<string, unknown>) => null; // eslint-disable-line @typescript-eslint/no-unused-vars

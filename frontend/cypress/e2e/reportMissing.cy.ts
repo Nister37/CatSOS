@@ -1,16 +1,4 @@
 // Helpers
-const stubGeolocation = (lat = 51.5074, lng = -0.1278) => {
-  cy.window().then((win) => {
-    cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
-      (success: PositionCallback) => {
-        success({
-          coords: { latitude: lat, longitude: lng, accuracy: 10 } as GeolocationCoordinates,
-          timestamp: Date.now(),
-        });
-      },
-    );
-  });
-};
 
 const interceptNominatim = () => {
   cy.intercept('https://nominatim.openstreetmap.org/**', {

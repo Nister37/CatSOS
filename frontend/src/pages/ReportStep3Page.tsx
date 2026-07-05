@@ -41,7 +41,7 @@ export function ReportStep3Page() {
     },
   });
 
-  const onSubmit = async (_data: ReportStep3Data) => {
+  const onSubmit = async () => {
     setIsSubmitting(true);
     // Simulate API call
     await new Promise((r) => setTimeout(r, 1500));
