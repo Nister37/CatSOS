@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function Hero() {
   return (
     <section className="relative overflow-hidden bg-background py-xl md:py-32">
@@ -13,9 +15,12 @@ export function Hero() {
             sightings, and get instant alerts to bring your feline friend home safely.
           </p>
           <div className="flex flex-col sm:flex-row gap-md justify-center lg:justify-start">
-            <button className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:shadow-lg transition-all">
+            <Link
+              to="/report-missing"
+              className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:shadow-lg transition-all"
+            >
               Report Missing Cat
-            </button>
+            </Link>
             <button className="border-2 border-on-background text-on-background px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:bg-on-background hover:text-on-primary transition-all">
               Report a Sighting
             </button>
