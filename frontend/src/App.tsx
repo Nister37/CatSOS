@@ -7,6 +7,7 @@ import { IntakePage } from './pages/IntakePage';
 import { LoginPage } from './pages/LoginPage';
 import { ReportStep1Page } from './pages/ReportStep1Page';
 import { ReportStep2Page } from './pages/ReportStep2Page';
+import { ReportStep3Page } from './pages/ReportStep3Page';
 import { SignupPage } from './pages/SignupPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -17,6 +18,7 @@ export function App() {
       <Route path="report-missing">
         <Route index element={<ReportStep1Page />} />
         <Route path="location" element={<ReportStep2Page />} />
+        <Route path="contact" element={<ReportStep3Page />} />
       </Route>
       <Route element={<AppLayout />}>
         <Route path="dashboard" element={<DashboardPage />} />
