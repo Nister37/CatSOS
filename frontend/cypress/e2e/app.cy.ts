@@ -1,7 +1,7 @@
 describe('CatSOS SPA', () => {
   it('renders the dashboard and passes automated accessibility checks', () => {
     cy.visit('/');
-    cy.findByRole('heading', { name: /field dashboard/i }).should('be.visible');
+    cy.findByRole('heading', { name: /lost your cat/i }).should('be.visible');
     cy.injectAxe();
     cy.checkA11y();
   });
