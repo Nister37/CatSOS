@@ -22,8 +22,9 @@ export function SignupPage() {
 
           <form className="space-y-md" onSubmit={(e) => e.preventDefault()}>
             <div className="space-y-xs">
-              <label className="font-label-md text-label-md text-on-surface-variant block">Full Name</label>
+              <label htmlFor="name" className="font-label-md text-label-md text-on-surface-variant block">Full Name</label>
               <input
+                id="name"
                 className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
                 placeholder="Jane Doe"
                 type="text"
@@ -31,8 +32,9 @@ export function SignupPage() {
             </div>
 
             <div className="space-y-xs">
-              <label className="font-label-md text-label-md text-on-surface-variant block">Email</label>
+              <label htmlFor="email" className="font-label-md text-label-md text-on-surface-variant block">Email</label>
               <input
+                id="email"
                 className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
                 placeholder="jane@example.com"
                 type="email"
@@ -40,8 +42,9 @@ export function SignupPage() {
             </div>
 
             <div className="space-y-xs">
-              <label className="font-label-md text-label-md text-on-surface-variant block">Password</label>
+              <label htmlFor="password" className="font-label-md text-label-md text-on-surface-variant block">Password</label>
               <input
+                id="password"
                 className="w-full bg-surface-container-low border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary-fixed-dim"
                 placeholder="••••••••"
                 type="password"

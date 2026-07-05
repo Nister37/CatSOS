@@ -41,15 +41,15 @@ export function Footer() {
             © 2024 CatSOS. All rights reserved.
           </p>
           <div className="flex gap-md">
-            <a className="text-secondary-fixed-dim hover:text-on-primary transition-colors" href="#">
+            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Share">
               <span className="material-symbols-outlined">share</span>
-            </a>
-            <a className="text-secondary-fixed-dim hover:text-on-primary transition-colors" href="#">
+            </button>
+            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Email">
               <span className="material-symbols-outlined">mail</span>
-            </a>
-            <a className="text-secondary-fixed-dim hover:text-on-primary transition-colors" href="#">
+            </button>
+            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Help">
               <span className="material-symbols-outlined">help</span>
-            </a>
+            </button>
           </div>
         </div>
       </div>

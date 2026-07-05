@@ -11,7 +11,7 @@ export function MissingCatCard({ name, photo, area, lastSeen }: MissingCatCardPr
       <div className="relative h-64 overflow-hidden">
         <img
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          alt={`Photo of ${name}, a missing cat`}
+          alt={`${name}, a missing cat`}
           src={photo}
         />
         <div className="absolute top-4 left-4 bg-primary-container text-on-primary px-3 py-1 rounded-full font-label-md text-label-md font-bold uppercase tracking-wider shadow-md">

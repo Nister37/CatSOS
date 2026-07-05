@@ -43,9 +43,9 @@ export function LoginPage() {
                   <label className="font-label-md text-label-md text-on-surface-variant" htmlFor="password">
                     Password
                   </label>
-                  <a className="font-label-sm text-label-sm text-primary hover:underline" href="#">
+                  <button type="button" className="font-label-sm text-label-sm text-primary hover:underline">
                     Forgot?
-                  </a>
+                  </button>
                 </div>
                 <input
                   className="bg-surface-container-low border-2 border-transparent rounded-lg px-md py-sm font-body-md text-body-md transition-all duration-200 focus:outline-none focus:border-on-background focus:bg-white"
