@@ -6,14 +6,14 @@ export function Hero() {
           <h1 className="font-display-lg text-display-lg mb-md text-on-background leading-tight">
             Lost your cat? <br />
             The community is{' '}
-            <span className="text-primary-container">here to help.</span>
+            <span className="text-primary">here to help.</span>
           </h1>
           <p className="font-body-lg text-body-lg text-secondary mb-lg max-w-xl mx-auto lg:mx-0">
             Join thousands of neighbors looking out for each other. Report missing cats, share
             sightings, and get instant alerts to bring your feline friend home safely.
           </p>
           <div className="flex flex-col sm:flex-row gap-md justify-center lg:justify-start">
-            <button className="bg-primary-container text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:shadow-lg transition-all">
+            <button className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:shadow-lg transition-all">
               Report Missing Cat
             </button>
             <button className="border-2 border-on-background text-on-background px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:bg-on-background hover:text-on-primary transition-all">

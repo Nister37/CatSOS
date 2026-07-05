@@ -47,7 +47,7 @@ export function Navbar() {
           >
             Join
           </Link>
-          <button className="bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform">
+          <button className="bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform">
             Report a Missing Cat
           </button>
         </div>
@@ -93,7 +93,7 @@ export function Navbar() {
           >
             Join
           </Link>
-          <button className="mt-sm bg-primary-container text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full">
+          <button className="mt-sm bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold w-full">
             Report a Missing Cat
           </button>
         </div>

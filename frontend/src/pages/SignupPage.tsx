@@ -53,7 +53,7 @@ export function SignupPage() {
 
             <button
               type="submit"
-              className="w-full bg-primary-container text-on-primary font-label-md text-label-md py-md rounded-lg shadow-md hover:brightness-110 active:scale-95 transition-all mt-sm"
+              className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg shadow-md hover:brightness-110 active:scale-95 transition-all mt-sm"
             >
               Create Account
             </button>
@@ -86,7 +86,7 @@ export function SignupPage() {
           <div className="mt-lg text-center">
             <p className="font-body-md text-body-md text-secondary">
               Already have an account?{' '}
-              <Link className="text-primary-container font-bold hover:underline" to="/login">
+              <Link className="text-primary font-bold hover:underline" to="/login">
                 Log In
               </Link>
             </p>

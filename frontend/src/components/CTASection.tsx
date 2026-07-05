@@ -18,7 +18,7 @@ export function CTASection() {
             </p>
           </div>
           <div className="relative z-10">
-            <button className="bg-primary-container text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:scale-105 transition-all shadow-xl">
+            <button className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:scale-105 transition-all shadow-xl">
               Join the Network
             </button>
           </div>

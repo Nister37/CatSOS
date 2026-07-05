@@ -14,7 +14,7 @@ export function MissingCatCard({ name, photo, area, lastSeen }: MissingCatCardPr
           alt={`${name}, a missing cat`}
           src={photo}
         />
-        <div className="absolute top-4 left-4 bg-primary-container text-on-primary px-3 py-1 rounded-full font-label-md text-label-md font-bold uppercase tracking-wider shadow-md">
+        <div className="absolute top-4 left-4 bg-primary text-on-primary px-3 py-1 rounded-full font-label-md text-label-md font-bold uppercase tracking-wider shadow-md">
           Missing
         </div>
       </div>

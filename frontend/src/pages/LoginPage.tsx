@@ -58,7 +58,7 @@ export function LoginPage() {
 
               <button
                 type="submit"
-                className="w-full bg-primary-container text-on-primary font-label-md text-label-md py-md rounded-lg hover:brightness-110 active:scale-[0.98] transition-all shadow-sm flex justify-center items-center gap-base"
+                className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg hover:brightness-110 active:scale-[0.98] transition-all shadow-sm flex justify-center items-center gap-base"
               >
                 Log In
                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
@@ -95,7 +95,7 @@ export function LoginPage() {
           </div>
 
           {/* Secure badge */}
-          <div className="mt-lg flex justify-center items-center gap-xs text-tertiary opacity-40">
+          <div className="mt-lg flex justify-center items-center gap-xs text-tertiary">
             <span className="material-symbols-outlined text-[16px]">verified_user</span>
             <span className="font-label-sm text-label-sm uppercase tracking-widest">Secure Connection</span>
           </div>
