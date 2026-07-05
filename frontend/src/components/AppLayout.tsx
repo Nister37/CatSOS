@@ -26,7 +26,7 @@ export function AppLayout() {
           <h1>Rescue operations</h1>
         </div>
         <nav aria-label="Primary navigation" className="nav-links">
-          <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : undefined)}>
+          <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : undefined)}>
             Dashboard
           </NavLink>
           <NavLink to="/intake" className={({ isActive }) => (isActive ? 'active' : undefined)}>

@@ -6,7 +6,7 @@ import { renderWithProviders } from './test/renderWithProviders';
 
 describe('App', () => {
   it('renders the dashboard route', () => {
-    renderWithProviders(<App />);
+    renderWithProviders(<App />, { route: '/dashboard' });
 
     expect(screen.getByRole('heading', { name: /field dashboard/i })).toBeInTheDocument();
   });
