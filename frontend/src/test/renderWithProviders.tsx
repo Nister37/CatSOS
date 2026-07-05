@@ -8,17 +8,26 @@ import { createAppStore, type AppStore, type RootState } from '../app/store';
 type RenderWithProvidersOptions = RenderOptions & {
   preloadedState?: Partial<RootState>;
   route?: string;
+  locationState?: unknown;
   store?: AppStore;
 };
 
 export function renderWithProviders(
   ui: ReactElement,
-  { preloadedState, route = '/', store = createAppStore(preloadedState), ...renderOptions }: RenderWithProvidersOptions = {},
+  {
+    preloadedState,
+    route = '/',
+    locationState,
+    store = createAppStore(preloadedState),
+    ...renderOptions
+  }: RenderWithProvidersOptions = {},
 ) {
+  const initialEntry = locationState != null ? { pathname: route, state: locationState } : route;
+
   function Wrapper({ children }: PropsWithChildren) {
     return (
       <Provider store={store}>
-        <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>{children}</MemoryRouter>
       </Provider>
     );
   }
