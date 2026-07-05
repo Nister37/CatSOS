@@ -83,7 +83,7 @@ describe('Report Missing Cat — Step 1', () => {
   });
 
   it('enables the chip number field when "Yes" is selected', () => {
-    cy.findByRole('radio', { name: /yes/i }).click();
+    cy.findByRole('group', { name: /has microchip/i }).contains('Yes').click();
     cy.findByPlaceholderText(/15-digit number/i)
       .closest('div')
       .should('not.have.class', 'opacity-50');
