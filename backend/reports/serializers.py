@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import LostCatReport
+from .models import LostCatReport, LostCatReportTimelineEvent
 
 
 class LostCatReportOwnerSerializer(serializers.ModelSerializer):
@@ -107,3 +107,51 @@ class LostCatReportCreateSerializer(LostCatReportWriteSerializer):
 
 class LostCatReportUpdateSerializer(LostCatReportWriteSerializer):
     pass
+
+
+class LostCatReportStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=LostCatReport.Status.choices)
+
+
+class LostCatReportTimelineActorSerializer(serializers.Serializer):
+    display_name = serializers.CharField(read_only=True)
+    avatar_fallback = serializers.CharField(read_only=True)
+
+
+class LostCatReportTimelineEventSerializer(serializers.ModelSerializer):
+    actor = serializers.SerializerMethodField()
+    from_status = serializers.CharField(read_only=True)
+    to_status = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = LostCatReportTimelineEvent
+        fields = (
+            'id',
+            'event_type',
+            'from_status',
+            'to_status',
+            'location_summary',
+            'actor',
+            'created_at',
+        )
+        read_only_fields = fields
+
+    def get_actor(self, timeline_event) -> dict[str, str] | None:
+        actor = timeline_event.actor
+        if actor is None:
+            return None
+
+        display_name = actor.display_name.strip() or 'CatSOS user'
+        initials = [
+            part[0].upper()
+            for part in display_name.split()
+            if part and part[0].isalpha()
+        ]
+        avatar_fallback = ''.join(initials[:2]) or display_name[:1].upper()
+
+        return LostCatReportTimelineActorSerializer(
+            {
+                'display_name': display_name,
+                'avatar_fallback': avatar_fallback,
+            }
+        ).data

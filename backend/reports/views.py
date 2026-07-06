@@ -12,11 +12,20 @@ from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
     LostCatReportOwnerSerializer,
+    LostCatReportStatusUpdateSerializer,
+    LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
 )
+from .services import change_report_status
 
 
 class LostCatReportPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class LostCatReportTimelinePagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
@@ -55,6 +64,9 @@ class LostCatReportBaseView(APIView):
     def get_queryset(self):
         return LostCatReport.objects.filter(owner=self.request.user)
 
+    def get_object(self):
+        return get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+
 
 class LostCatReportListCreateView(LostCatReportBaseView):
     @extend_schema(
@@ -89,9 +101,6 @@ class LostCatReportListCreateView(LostCatReportBaseView):
 
 
 class LostCatReportDetailView(LostCatReportBaseView):
-    def get_object(self):
-        return get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
-
     @extend_schema(
         responses={
             200: LostCatReportOwnerSerializer,
@@ -139,3 +148,43 @@ class LostCatReportDetailView(LostCatReportBaseView):
         updated_report = serializer.save()
         response_serializer = LostCatReportOwnerSerializer(updated_report)
         return no_store_response(response_serializer.data)
+
+
+class LostCatReportStatusView(LostCatReportBaseView):
+    @extend_schema(
+        request=LostCatReportStatusUpdateSerializer,
+        responses={
+            200: LostCatReportOwnerSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def patch(self, request, pk):
+        report = self.get_object()
+        serializer = LostCatReportStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_report, _timeline_event = change_report_status(
+            report=report,
+            actor=request.user,
+            new_status=serializer.validated_data['status'],
+        )
+        response_serializer = LostCatReportOwnerSerializer(updated_report)
+        return no_store_response(response_serializer.data)
+
+
+class LostCatReportTimelineView(LostCatReportBaseView):
+    @extend_schema(
+        responses={
+            200: LostCatReportTimelineEventSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_object()
+        queryset = report.timeline_events.select_related('actor')
+        paginator = LostCatReportTimelinePagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = LostCatReportTimelineEventSerializer(page, many=True)
+        return set_no_store_headers(paginator.get_paginated_response(serializer.data))
