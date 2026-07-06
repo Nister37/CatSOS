@@ -71,6 +71,9 @@ class LostCatReportCreateApiTests(APITestCase):
         defaults.update(overrides)
         return LostCatReport.objects.create(owner=owner, **defaults)
 
+    def _detail_url(self, report):
+        return reverse('lost-report-detail', args=[report.id])
+
     def test_create_report_requires_authentication(self):
         response = self.client.post(
             reverse('lost-report-list'),
@@ -202,3 +205,208 @@ class LostCatReportCreateApiTests(APITestCase):
 
     def test_lost_cat_report_is_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(LostCatReport))
+
+    def test_owner_can_retrieve_report_detail_for_editing(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Luna',
+            contact_phone='+48 600 999 111',
+            contact_email='private-owner@example.com',
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._detail_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['id'], str(report.id))
+        self.assertEqual(response.data['cat_name'], 'Luna')
+        self.assertEqual(response.data['contact_phone'], '+48 600 999 111')
+        self.assertEqual(response.data['contact_email'], 'private-owner@example.com')
+        self.assertNotIn('owner', response.data)
+        self.assertNotIn('moderation_status', response.data)
+        self.assertNotIn('moderation_notes', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_get_report_detail_requires_authentication(self):
+        report = self._create_report(self.owner)
+
+        response = self.client.get(self._detail_url(report))
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    def test_get_report_detail_requires_ownership(self):
+        report = self._create_report(self.other_user)
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._detail_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_owner_can_patch_editable_report_fields(self):
+        report = self._create_report(
+            self.owner,
+            has_microchip=True,
+            chip_number='985112003456789',
+            last_seen_lat=52.2297,
+            last_seen_lng=21.0122,
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {
+                'cat_name': 'Luna',
+                'description': 'Likely hiding near the school.',
+                'last_seen_address': '8 School Road',
+                'last_seen_landmark': 'Behind the gym',
+                'last_seen_lat': 52.2401,
+                'last_seen_lng': 21.0202,
+                'contact_visibility': LostCatReport.ContactVisibility.PUBLIC,
+                'notify_sms': False,
+                'has_microchip': False,
+                'chip_number': 'should-not-persist',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cat_name'], 'Luna')
+        self.assertEqual(response.data['description'], 'Likely hiding near the school.')
+        self.assertEqual(response.data['last_seen_address'], '8 School Road')
+        self.assertEqual(response.data['contact_visibility'], LostCatReport.ContactVisibility.PUBLIC)
+        self.assertFalse(response.data['notify_sms'])
+        self.assertFalse(response.data['has_microchip'])
+        self.assertEqual(response.data['chip_number'], '')
+
+        report.refresh_from_db()
+        self.assertEqual(report.cat_name, 'Luna')
+        self.assertEqual(report.last_seen_landmark, 'Behind the gym')
+        self.assertEqual(report.last_seen_lat, 52.2401)
+        self.assertEqual(report.last_seen_lng, 21.0202)
+        self.assertEqual(report.chip_number, '')
+
+    def test_owner_can_put_full_editable_report_payload(self):
+        report = self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.put(
+            self._detail_url(report),
+            self._payload(
+                cat_name='Updated Luna',
+                coat_color='Grey tabby',
+                description='Updated search description.',
+                last_seen_address='91 River Road',
+                contact_email='updated-owner@example.com',
+            ),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cat_name'], 'Updated Luna')
+        self.assertEqual(response.data['coat_color'], 'Grey tabby')
+        self.assertEqual(response.data['description'], 'Updated search description.')
+        self.assertEqual(response.data['last_seen_address'], '91 River Road')
+        self.assertEqual(response.data['contact_email'], 'updated-owner@example.com')
+
+        report.refresh_from_db()
+        self.assertEqual(report.owner, self.owner)
+        self.assertEqual(report.cat_name, 'Updated Luna')
+
+    def test_put_returns_field_errors_when_required_fields_are_missing(self):
+        report = self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.put(self._detail_url(report), {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cat_name', response.data)
+        self.assertIn('coat_color', response.data)
+        self.assertIn('description', response.data)
+        self.assertIn('last_seen_address', response.data)
+        self.assertIn('contact_name', response.data)
+        self.assertIn('contact_phone', response.data)
+        self.assertIn('contact_email', response.data)
+
+    def test_patch_requires_coordinate_pair_for_final_state(self):
+        report = self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {'last_seen_lat': 52.2401},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('last_seen_location', response.data)
+        report.refresh_from_db()
+        self.assertIsNone(report.last_seen_lat)
+        self.assertIsNone(report.last_seen_lng)
+
+    def test_non_owner_cannot_patch_report(self):
+        report = self._create_report(self.other_user, cat_name='Other cat')
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {'cat_name': 'Should not change'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        report.refresh_from_db()
+        self.assertEqual(report.cat_name, 'Other cat')
+
+    def test_staff_cannot_edit_someone_elses_report_through_owner_api(self):
+        staff_user = get_user_model().objects.create_user(
+            email='staff@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+            is_staff=True,
+        )
+        report = self._create_report(self.owner, cat_name='Owner cat')
+        self._authenticate(staff_user)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {'cat_name': 'Staff changed'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        report.refresh_from_db()
+        self.assertEqual(report.cat_name, 'Owner cat')
+
+    def test_update_does_not_change_lifecycle_or_moderation_fields(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.MISSING,
+            moderation_status=LostCatReport.ModerationStatus.PENDING,
+            moderation_notes='',
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {
+                'cat_name': 'Still missing Luna',
+                'status': LostCatReport.Status.FOUND,
+                'moderation_status': LostCatReport.ModerationStatus.HIDDEN,
+                'moderation_notes': 'malicious moderation change',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cat_name'], 'Still missing Luna')
+        self.assertEqual(response.data['status'], LostCatReport.Status.MISSING)
+        self.assertNotIn('moderation_status', response.data)
+        self.assertNotIn('moderation_notes', response.data)
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, LostCatReport.Status.MISSING)
+        self.assertEqual(report.moderation_status, LostCatReport.ModerationStatus.PENDING)
+        self.assertEqual(report.moderation_notes, '')

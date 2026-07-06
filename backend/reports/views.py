@@ -1,6 +1,7 @@
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -8,7 +9,11 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import LostCatReport
-from .serializers import LostCatReportCreateSerializer, LostCatReportOwnerSerializer
+from .serializers import (
+    LostCatReportCreateSerializer,
+    LostCatReportOwnerSerializer,
+    LostCatReportUpdateSerializer,
+)
 
 
 class LostCatReportPagination(PageNumberPagination):
@@ -28,14 +33,16 @@ def no_store_response(data, *, status_code=status.HTTP_200_OK):
     return set_no_store_headers(response)
 
 
-class LostCatReportListCreateView(APIView):
+class LostCatReportBaseView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'lost_report_read'
     throttle_scope_by_method = {
         'GET': 'lost_report_read',
+        'PATCH': 'lost_report_write',
         'POST': 'lost_report_write',
+        'PUT': 'lost_report_write',
     }
 
     def get_throttles(self):
@@ -48,6 +55,8 @@ class LostCatReportListCreateView(APIView):
     def get_queryset(self):
         return LostCatReport.objects.filter(owner=self.request.user)
 
+
+class LostCatReportListCreateView(LostCatReportBaseView):
     @extend_schema(
         responses={
             200: LostCatReportOwnerSerializer(many=True),
@@ -77,3 +86,56 @@ class LostCatReportListCreateView(APIView):
             response_serializer.data,
             status_code=status.HTTP_201_CREATED,
         )
+
+
+class LostCatReportDetailView(LostCatReportBaseView):
+    def get_object(self):
+        return get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+
+    @extend_schema(
+        responses={
+            200: LostCatReportOwnerSerializer,
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_object()
+        serializer = LostCatReportOwnerSerializer(report)
+        return no_store_response(serializer.data)
+
+    @extend_schema(
+        request=LostCatReportUpdateSerializer,
+        responses={
+            200: LostCatReportOwnerSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def patch(self, request, pk):
+        return self._update(request, partial=True)
+
+    @extend_schema(
+        request=LostCatReportUpdateSerializer,
+        responses={
+            200: LostCatReportOwnerSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def put(self, request, pk):
+        return self._update(request, partial=False)
+
+    def _update(self, request, *, partial):
+        report = self.get_object()
+        serializer = LostCatReportUpdateSerializer(
+            report,
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        updated_report = serializer.save()
+        response_serializer = LostCatReportOwnerSerializer(updated_report)
+        return no_store_response(response_serializer.data)

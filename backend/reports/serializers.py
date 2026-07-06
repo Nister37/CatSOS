@@ -40,7 +40,7 @@ class LostCatReportOwnerSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class LostCatReportCreateSerializer(serializers.ModelSerializer):
+class LostCatReportWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = LostCatReport
         fields = (
@@ -71,13 +71,24 @@ class LostCatReportCreateSerializer(serializers.ModelSerializer):
             'notify_email',
         )
 
+    def _value_from_attrs_or_instance(self, attrs, field_name, default=None):
+        if field_name in attrs:
+            return attrs[field_name]
+        if self.instance is not None:
+            return getattr(self.instance, field_name)
+        return default
+
     def validate(self, attrs):
-        has_microchip = attrs.get('has_microchip', False)
-        if not has_microchip and attrs.get('chip_number'):
+        has_microchip = self._value_from_attrs_or_instance(
+            attrs,
+            'has_microchip',
+            False,
+        )
+        if not has_microchip:
             attrs['chip_number'] = ''
 
-        lat = attrs.get('last_seen_lat')
-        lng = attrs.get('last_seen_lng')
+        lat = self._value_from_attrs_or_instance(attrs, 'last_seen_lat')
+        lng = self._value_from_attrs_or_instance(attrs, 'last_seen_lng')
         if (lat is None) != (lng is None):
             raise serializers.ValidationError(
                 {
@@ -88,3 +99,11 @@ class LostCatReportCreateSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class LostCatReportCreateSerializer(LostCatReportWriteSerializer):
+    pass
+
+
+class LostCatReportUpdateSerializer(LostCatReportWriteSerializer):
+    pass
