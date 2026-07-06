@@ -13,15 +13,13 @@ jest.mock('./services/reportsApi', () => ({
 
 describe('ScrollToTop', () => {
   it('calls window.scrollTo(0,0) on route change', async () => {
-    const scrollTo = jest.spyOn(window, 'scrollTo').mockImplementation(() => {});
     const user = userEvent.setup();
     renderWithProviders(<App />, { route: '/login' });
 
     await user.click(screen.getByRole('link', { name: /sign up/i }));
     await screen.findByRole('heading', { name: /join the community/i });
 
-    expect(scrollTo).toHaveBeenCalledWith(0, 0);
-    scrollTo.mockRestore();
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
   });
 });
 
