@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'api',
     'accounts',
+    'reports',
 ]
 
 MIDDLEWARE = [
@@ -248,6 +249,7 @@ REST_FRAMEWORK = {
         'auth_sso_login': os.getenv('DJANGO_AUTH_SSO_LOGIN_RATE', '20/minute'),
         'auth_sso_link': os.getenv('DJANGO_AUTH_SSO_LINK_RATE', '20/minute'),
         'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
+        'lost_report_write': os.getenv('DJANGO_LOST_REPORT_WRITE_RATE', '30/minute'),
     },
 }
 
