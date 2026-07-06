@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -31,6 +32,7 @@ def no_store_response(data, *, status_code=status.HTTP_200_OK):
 
 class PublicReportSightingCreateView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'sighting_write'
 
@@ -60,12 +62,18 @@ class PublicReportSightingCreateView(APIView):
 
         serializer = SightingCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        validated_data = dict(serializer.validated_data)
+        photo = validated_data.pop('photo', None)
         sighting = create_sighting(
             report=report,
             submitted_by=request.user,
-            validated_data=serializer.validated_data,
+            validated_data=validated_data,
+            photo=photo,
         )
-        response_serializer = SightingSerializer(sighting)
+        response_serializer = SightingSerializer(
+            sighting,
+            context={'request': request},
+        )
         return no_store_response(
             response_serializer.data,
             status_code=status.HTTP_201_CREATED,

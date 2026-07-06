@@ -2,7 +2,7 @@ from django.db import transaction
 
 from reports.models import LostCatReportTimelineEvent
 
-from .models import Sighting
+from .models import Sighting, SightingPhoto
 
 
 def build_sighting_location_summary(sighting):
@@ -12,12 +12,18 @@ def build_sighting_location_summary(sighting):
 
 
 @transaction.atomic
-def create_sighting(*, report, submitted_by, validated_data):
+def create_sighting(*, report, submitted_by, validated_data, photo=None):
     sighting = Sighting.objects.create(
         report=report,
         submitted_by=submitted_by,
         **validated_data,
     )
+    if photo is not None:
+        SightingPhoto.objects.create(
+            sighting=sighting,
+            uploaded_by=submitted_by,
+            image=photo,
+        )
     LostCatReportTimelineEvent.objects.create(
         report=report,
         actor=submitted_by,

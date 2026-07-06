@@ -1,21 +1,32 @@
 from datetime import timedelta
+from io import BytesIO
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 from reports.models import LostCatReport, LostCatReportTimelineEvent
 
-from .models import Sighting
+from .models import Sighting, SightingPhoto
 
 
 class SightingCreateApiTests(APITestCase):
     def setUp(self):
+        self.media_root = TemporaryDirectory()
+        self.addCleanup(self.media_root.cleanup)
+        media_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
             password='StrongPass123!',
@@ -62,6 +73,23 @@ class SightingCreateApiTests(APITestCase):
         payload.update(overrides)
         return payload
 
+    def _image_upload(
+        self,
+        *,
+        filename='sighting.jpg',
+        content_type='image/jpeg',
+        image_format='JPEG',
+    ):
+        image_bytes = BytesIO()
+        image = Image.new('RGB', (4, 4), color='white')
+        image.save(image_bytes, format=image_format)
+        image.close()
+        return SimpleUploadedFile(
+            filename,
+            image_bytes.getvalue(),
+            content_type=content_type,
+        )
+
     def test_sighting_submission_requires_authentication(self):
         report = self._create_report()
 
@@ -102,6 +130,61 @@ class SightingCreateApiTests(APITestCase):
         )
         self.assertEqual(timeline_event.actor, self.helper)
         self.assertEqual(timeline_event.location_summary, 'Behind the bakery')
+
+    def test_authenticated_user_can_submit_sighting_with_photo(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        self._authenticate(self.helper)
+        payload = self._payload(photo=self._image_upload())
+
+        response = self.client.post(self._url(report), payload, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        sighting = Sighting.objects.get()
+        photo = SightingPhoto.objects.get(sighting=sighting)
+        self.assertEqual(photo.uploaded_by, self.helper)
+        self.assertTrue(photo.image.name.startswith('sighting-photos/'))
+        self.assertNotIn(str(sighting.id), photo.image.name)
+        self.assertNotIn(str(report.id), photo.image.name)
+        self.assertEqual(len(response.data['photos']), 1)
+        self.assertEqual(response.data['photos'][0]['id'], str(photo.id))
+        self.assertEqual(
+            response.data['photos'][0]['url'],
+            f'http://testserver{photo.image.url}',
+        )
+        self.assertNotIn('image', response.data['photos'][0])
+        self.assertNotIn('path', response.data['photos'][0])
+        self.assertNotIn('uploaded_by', response.data['photos'][0])
+
+    def test_sighting_photo_rejects_unsupported_type(self):
+        report = self._create_report()
+        self._authenticate(self.helper)
+        payload = self._payload(
+            photo=self._image_upload(
+                filename='sighting.gif',
+                content_type='image/gif',
+                image_format='GIF',
+            )
+        )
+
+        response = self.client.post(self._url(report), payload, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertFalse(Sighting.objects.exists())
+        self.assertFalse(SightingPhoto.objects.exists())
+
+    def test_sighting_photo_rejects_oversized_file(self):
+        report = self._create_report()
+        self._authenticate(self.helper)
+        payload = self._payload(photo=self._image_upload())
+
+        with override_settings(SIGHTING_PHOTO_MAX_SIZE_BYTES=10):
+            response = self.client.post(self._url(report), payload, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertFalse(Sighting.objects.exists())
+        self.assertFalse(SightingPhoto.objects.exists())
 
     def test_sighting_submission_rejects_invalid_location(self):
         report = self._create_report()
@@ -170,5 +253,6 @@ class SightingCreateApiTests(APITestCase):
 
     def test_sighting_is_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(Sighting))
+        self.assertTrue(admin.site.is_registered(SightingPhoto))
 
 # Create your tests here.
