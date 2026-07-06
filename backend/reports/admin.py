@@ -1,10 +1,29 @@
 from django.contrib import admin
 
-from .models import LostCatReport
+from .models import LostCatReport, LostCatReportTimelineEvent
+
+
+class LostCatReportTimelineEventInline(admin.TabularInline):
+    model = LostCatReportTimelineEvent
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        'id',
+        'actor',
+        'event_type',
+        'from_status',
+        'to_status',
+        'location_summary',
+        'created_at',
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(LostCatReport)
 class LostCatReportAdmin(admin.ModelAdmin):
+    inlines = (LostCatReportTimelineEventInline,)
     list_display = (
         'cat_name',
         'owner',
@@ -78,3 +97,30 @@ class LostCatReportAdmin(admin.ModelAdmin):
         ),
         ('Timestamps', {'fields': ('created_at', 'updated_at')}),
     )
+
+
+@admin.register(LostCatReportTimelineEvent)
+class LostCatReportTimelineEventAdmin(admin.ModelAdmin):
+    list_display = (
+        'report',
+        'event_type',
+        'from_status',
+        'to_status',
+        'actor',
+        'created_at',
+    )
+    list_filter = ('event_type', 'from_status', 'to_status', 'created_at')
+    search_fields = ('report__cat_name', 'actor__email')
+    readonly_fields = (
+        'id',
+        'report',
+        'actor',
+        'event_type',
+        'from_status',
+        'to_status',
+        'location_summary',
+        'created_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
