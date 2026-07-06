@@ -13,6 +13,8 @@ from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
     LostCatReportOwnerSerializer,
+    LostCatReportPhotoSerializer,
+    LostCatReportPhotoUploadSerializer,
     LostCatReportPublicListSerializer,
     LostCatReportPublicSerializer,
     LostCatReportSimilarReportSerializer,
@@ -20,7 +22,13 @@ from .serializers import (
     LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
 )
-from .services import change_report_status, find_similar_reports
+from .services import (
+    change_report_status,
+    create_report_photo,
+    delete_report_photo,
+    find_similar_reports,
+    set_main_report_photo,
+)
 
 ACTIVE_SEARCH_STATUSES = (
     LostCatReport.Status.MISSING,
@@ -251,6 +259,92 @@ class LostCatReportSimilarView(LostCatReportBaseView):
                 'results': serializer.data,
             }
         )
+
+
+class LostCatReportPhotoListCreateView(LostCatReportBaseView):
+    parser_classes = [MultiPartParser]
+
+    @extend_schema(
+        responses={
+            200: LostCatReportPhotoSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_object()
+        serializer = LostCatReportPhotoSerializer(
+            report.photos.all(),
+            many=True,
+            context={'request': request},
+        )
+        return no_store_response(serializer.data)
+
+    @extend_schema(
+        request=LostCatReportPhotoUploadSerializer,
+        responses={
+            201: LostCatReportPhotoSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def post(self, request, pk):
+        report = self.get_object()
+        serializer = LostCatReportPhotoUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        photo = create_report_photo(
+            report=report,
+            image=serializer.validated_data['photo'],
+            is_main=serializer.validated_data.get('is_main', False),
+        )
+        response_serializer = LostCatReportPhotoSerializer(
+            photo,
+            context={'request': request},
+        )
+        return no_store_response(
+            response_serializer.data,
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class LostCatReportPhotoBaseView(LostCatReportBaseView):
+    def get_photo(self):
+        report = self.get_object()
+        return get_object_or_404(report.photos.all(), pk=self.kwargs['photo_id'])
+
+
+class LostCatReportPhotoMainView(LostCatReportPhotoBaseView):
+    @extend_schema(
+        request=None,
+        responses={
+            200: LostCatReportPhotoSerializer,
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report photo not found'),
+        },
+    )
+    def patch(self, request, pk, photo_id):
+        photo = set_main_report_photo(photo=self.get_photo())
+        serializer = LostCatReportPhotoSerializer(
+            photo,
+            context={'request': request},
+        )
+        return no_store_response(serializer.data)
+
+
+class LostCatReportPhotoDetailView(LostCatReportPhotoBaseView):
+    @extend_schema(
+        request=None,
+        responses={
+            204: OpenApiResponse(description='Report photo deleted'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report photo not found'),
+        },
+    )
+    def delete(self, request, pk, photo_id):
+        delete_report_photo(photo=self.get_photo())
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        return set_no_store_headers(response)
 
 
 class LostCatReportPublicDetailView(APIView):

@@ -1,5 +1,6 @@
 from math import asin, cos, radians, sin, sqrt
 
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
@@ -32,6 +33,37 @@ def create_report_photo(*, report, image, is_main=False):
         image=image,
         is_main=should_make_main,
     )
+
+
+@transaction.atomic
+def set_main_report_photo(*, photo):
+    LostCatReportPhoto.objects.filter(
+        report=photo.report,
+        is_main=True,
+    ).exclude(pk=photo.pk).update(is_main=False)
+
+    if not photo.is_main:
+        photo.is_main = True
+        photo.save(update_fields=('is_main',))
+
+    return photo
+
+
+@transaction.atomic
+def delete_report_photo(*, photo):
+    report = photo.report
+    image_name = photo.image.name
+    was_main = photo.is_main
+
+    photo.delete()
+
+    if was_main:
+        replacement = LostCatReportPhoto.objects.filter(report=report).first()
+        if replacement is not None:
+            set_main_report_photo(photo=replacement)
+
+    if image_name:
+        transaction.on_commit(lambda: default_storage.delete(image_name))
 
 
 def _has_location(report):

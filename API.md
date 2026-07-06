@@ -52,6 +52,10 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `PATCH` | [`/api/reports/{id}/status/`](#patch-apireportsidstatus) | JWT | `200` | Change one authenticated owner's report status. |
 | `GET` | [`/api/reports/{id}/timeline/`](#get-apireportsidtimeline) | JWT | `200` | List timeline events for one authenticated owner's report. |
 | `GET` | [`/api/reports/{id}/similar/`](#get-apireportsidsimilar) | JWT | `200` | List public-safe similar nearby reports for one owned report. |
+| `GET` | [`/api/reports/{id}/photos/`](#get-apireportsidphotos) | JWT | `200` | List photos for one authenticated owner's report. |
+| `POST` | [`/api/reports/{id}/photos/`](#post-apireportsidphotos) | JWT | `201` | Upload an additional photo for one authenticated owner's report. |
+| `PATCH` | [`/api/reports/{id}/photos/{photo_id}/main/`](#patch-apireportsidphotosphotoidmain) | JWT | `200` | Set one report photo as the main photo. |
+| `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
 | `GET` | [`/api/public/reports/`](#get-apipublicreports) | Public | `200` | Browse public-safe lost cat report cards. |
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
@@ -506,6 +510,92 @@ Success response:
 ```
 
 Current matching is deterministic and AI-free. It ranks active, non-hidden reports by approximate distance plus simple breed, coat, and gender matches. Candidate reports use the same public-safe card shape as `GET /api/public/reports/`.
+
+<a id="get-apireportsidphotos"></a>
+### List My Lost Cat Report Photos
+
+`GET /api/reports/{id}/photos/`
+
+Returns photos for one report owned by the authenticated user. Reports owned by another user return `404 Not Found`.
+
+Success response:
+
+```json
+[
+  {
+    "id": "7cf0eb87-f6b8-4d14-b924-41aafab4d7e0",
+    "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg",
+    "is_main": true,
+    "created_at": "2026-07-06T10:30:00Z"
+  }
+]
+```
+
+Owner photo responses include the photo ID needed for gallery management, but do not expose original filenames, filesystem paths, or private owner data.
+
+<a id="post-apireportsidphotos"></a>
+### Upload Lost Cat Report Photo
+
+`POST /api/reports/{id}/photos/`
+
+Uploads an additional photo for one report owned by the authenticated user. Send `multipart/form-data` with the image under the field name `photo`.
+
+Multipart fields:
+
+```text
+photo=<JPEG, PNG, or WebP file>
+is_main=true
+```
+
+`is_main` is optional and defaults to `false`. If the uploaded photo is the report's first photo, it becomes the main photo automatically. If `is_main=true`, existing main photos for that report are cleared.
+
+Success response:
+
+```json
+{
+  "id": "7cf0eb87-f6b8-4d14-b924-41aafab4d7e0",
+  "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg",
+  "is_main": true,
+  "created_at": "2026-07-06T10:30:00Z"
+}
+```
+
+Validation behavior is the same as create-time report photo uploads: JPEG, PNG, and WebP only, image bytes verified with Pillow, and max size controlled by `DJANGO_REPORT_PHOTO_MAX_SIZE_BYTES`.
+
+<a id="patch-apireportsidphotosphotoidmain"></a>
+### Set Main Lost Cat Report Photo
+
+`PATCH /api/reports/{id}/photos/{photo_id}/main/`
+
+Sets one photo from an owned report as the main photo. The public report card and public report detail `main_photo.url` use this selected photo.
+
+Success response:
+
+```json
+{
+  "id": "7cf0eb87-f6b8-4d14-b924-41aafab4d7e0",
+  "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg",
+  "is_main": true,
+  "created_at": "2026-07-06T10:30:00Z"
+}
+```
+
+Reports owned by another user or photos that do not belong to the report return `404 Not Found`.
+
+<a id="delete-apireportsidphotosphotoid"></a>
+### Delete Lost Cat Report Photo
+
+`DELETE /api/reports/{id}/photos/{photo_id}/`
+
+Deletes one photo from an owned report and removes its stored media file after the database transaction commits. If the deleted photo was the main photo and other photos remain, the next available photo is promoted to main.
+
+Success response:
+
+```text
+HTTP 204 No Content
+```
+
+Reports owned by another user or photos that do not belong to the report return `404 Not Found`.
 
 <a id="get-apipublicreports"></a>
 ### Browse Public Lost Cat Reports
