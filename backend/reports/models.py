@@ -29,6 +29,7 @@ class LostCatReport(models.Model):
         HIDDEN = 'HIDDEN', 'Hidden'
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    public_id = models.UUIDField(default=uuid4, editable=False, unique=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

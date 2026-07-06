@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -80,6 +82,9 @@ class LostCatReportCreateApiTests(APITestCase):
     def _timeline_url(self, report):
         return reverse('lost-report-timeline', args=[report.id])
 
+    def _public_url(self, report):
+        return reverse('lost-report-public-detail', args=[report.public_id])
+
     def test_create_report_requires_authentication(self):
         response = self.client.post(
             reverse('lost-report-list'),
@@ -111,6 +116,7 @@ class LostCatReportCreateApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('public_id', response.data)
         self.assertEqual(response.data['cat_name'], 'Luna')
         self.assertEqual(response.data['status'], LostCatReport.Status.MISSING)
         self.assertEqual(response.data['coat_color'], 'Black with a white chest spot')
@@ -226,6 +232,7 @@ class LostCatReportCreateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['id'], str(report.id))
+        self.assertEqual(response.data['public_id'], str(report.public_id))
         self.assertEqual(response.data['cat_name'], 'Luna')
         self.assertEqual(response.data['contact_phone'], '+48 600 999 111')
         self.assertEqual(response.data['contact_email'], 'private-owner@example.com')
@@ -774,5 +781,139 @@ class LostCatReportCreateApiTests(APITestCase):
         self._authenticate(self.owner)
 
         response = self.client.get(self._timeline_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_report_detail_is_available_without_authentication(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Luna',
+            age_years=4,
+            breed='Domestic shorthair',
+            coat_color='Black',
+            eye_color='Green',
+            gender=LostCatReport.Gender.FEMALE,
+            collar_description='Red collar',
+            has_microchip=True,
+            chip_number='985112003456789',
+            personality='Shy but food motivated.',
+            description='Likely hiding near gardens.',
+            disappeared_at=timezone.now(),
+            last_seen_address='12 Private Home Street',
+            last_seen_landmark='Near the playground',
+            last_seen_lat=52.2297,
+            last_seen_lng=21.0122,
+            reward_amount='50.00',
+            reward_note='Reward after safe recovery.',
+            contact_name='Marta Owner',
+            contact_phone='+48 600 111 222',
+            contact_email='public-owner@example.com',
+            contact_visibility=LostCatReport.ContactVisibility.PUBLIC,
+            status=LostCatReport.Status.FOUND,
+            found_message='Luna is home. Thank you.',
+            resolved_at=timezone.now(),
+        )
+        LostCatReportTimelineEvent.objects.create(
+            report=report,
+            actor=self.owner,
+            event_type=LostCatReportTimelineEvent.EventType.STATUS_CHANGED,
+            from_status=LostCatReport.Status.MISSING,
+            to_status=LostCatReport.Status.FOUND,
+            location_summary='12 Private Home Street',
+        )
+
+        response = self.client.get(self._public_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['public_id'], str(report.public_id))
+        self.assertEqual(response.data['cat_name'], 'Luna')
+        self.assertEqual(response.data['status'], LostCatReport.Status.FOUND)
+        self.assertEqual(response.data['found_message'], 'Luna is home. Thank you.')
+        self.assertFalse(response.data['is_active_search'])
+        self.assertEqual(response.data['last_seen_landmark'], 'Near the playground')
+        self.assertEqual(
+            response.data['approximate_location'],
+            {
+                'latitude': 52.23,
+                'longitude': 21.012,
+                'is_approximate': True,
+            },
+        )
+        self.assertEqual(response.data['contact']['visibility'], LostCatReport.ContactVisibility.PUBLIC)
+        self.assertEqual(response.data['contact']['phone'], '+48 600 111 222')
+        self.assertEqual(response.data['contact']['email'], 'public-owner@example.com')
+        self.assertIsNone(response.data['main_photo'])
+        self.assertEqual(response.data['photos'], [])
+        self.assertEqual(len(response.data['timeline']), 1)
+        self.assertEqual(
+            response.data['timeline'][0]['event_type'],
+            LostCatReportTimelineEvent.EventType.STATUS_CHANGED,
+        )
+        self.assertNotIn('actor', response.data['timeline'][0])
+        self.assertNotIn('location_summary', response.data['timeline'][0])
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_public_report_detail_hides_private_fields(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Milo',
+            has_microchip=True,
+            chip_number='private-chip',
+            last_seen_address='Exact private address',
+            last_seen_landmark='Near the bakery',
+            contact_name='Private Owner',
+            contact_phone='+48 600 999 888',
+            contact_email='private-owner@example.com',
+            contact_visibility=LostCatReport.ContactVisibility.APP_ONLY,
+        )
+
+        response = self.client.get(self._public_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('id', response.data)
+        self.assertNotIn('owner', response.data)
+        self.assertNotIn('last_seen_address', response.data)
+        self.assertNotIn('chip_number', response.data)
+        self.assertNotIn('contact_name', response.data)
+        self.assertNotIn('contact_phone', response.data)
+        self.assertNotIn('contact_email', response.data)
+        self.assertNotIn('notify_push', response.data)
+        self.assertNotIn('notify_sms', response.data)
+        self.assertNotIn('notify_email', response.data)
+        self.assertNotIn('moderation_status', response.data)
+        self.assertNotIn('moderation_notes', response.data)
+        self.assertEqual(response.data['contact']['visibility'], LostCatReport.ContactVisibility.APP_ONLY)
+        self.assertNotIn('phone', response.data['contact'])
+        self.assertNotIn('email', response.data['contact'])
+
+    def test_public_report_detail_hides_private_contact_choice(self):
+        report = self._create_report(
+            self.owner,
+            contact_visibility=LostCatReport.ContactVisibility.PRIVATE,
+            contact_phone='+48 600 999 888',
+            contact_email='private-owner@example.com',
+        )
+
+        response = self.client.get(self._public_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['contact']['visibility'], LostCatReport.ContactVisibility.PRIVATE)
+        self.assertNotIn('phone', response.data['contact'])
+        self.assertNotIn('email', response.data['contact'])
+
+    def test_public_report_detail_returns_404_for_hidden_report(self):
+        report = self._create_report(
+            self.owner,
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+
+        response = self.client.get(self._public_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_report_detail_returns_404_for_unknown_public_id(self):
+        response = self.client.get(
+            reverse('lost-report-public-detail', args=[uuid4()])
+        )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

@@ -51,6 +51,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `PUT` | [`/api/reports/{id}/`](#put-apireportsid) | JWT | `200` | Replace editable fields on one authenticated owner's lost cat report. |
 | `PATCH` | [`/api/reports/{id}/status/`](#patch-apireportsidstatus) | JWT | `200` | Change one authenticated owner's report status. |
 | `GET` | [`/api/reports/{id}/timeline/`](#get-apireportsidtimeline) | JWT | `200` | List timeline events for one authenticated owner's report. |
+| `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -212,6 +213,7 @@ Success response:
 ```json
 {
   "id": "2f7b9db5-5697-47c2-9004-6dbd87a17a28",
+  "public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
   "cat_name": "Luna",
   "age_years": 4,
   "breed": "Domestic shorthair",
@@ -444,6 +446,72 @@ The response is paginated:
 ```
 
 Timeline actor data is intentionally public-safe and does not expose account email, phone, password state, or moderation fields.
+
+<a id="get-apipublicreportspublicid"></a>
+### Public Lost Cat Report Detail
+
+`GET /api/public/reports/{public_id}/`
+
+Public endpoint for QR-linked and shared lost-cat report pages. It does not require authentication.
+
+Success response:
+
+```json
+{
+  "public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "cat_name": "Luna",
+  "age_years": 4,
+  "breed": "Domestic shorthair",
+  "coat_color": "Black with a white chest spot",
+  "eye_color": "Green",
+  "gender": "FEMALE",
+  "collar_description": "Red reflective collar with bell",
+  "has_microchip": true,
+  "personality": "Shy with strangers, responds to treats.",
+  "description": "Indoor cat, likely hiding close to home.",
+  "disappeared_at": "2026-07-06T10:00:00Z",
+  "last_seen_landmark": "Near the playground",
+  "approximate_location": {
+    "latitude": 52.23,
+    "longitude": 21.012,
+    "is_approximate": true
+  },
+  "reward_amount": "100.00",
+  "reward_note": "Reward for confirmed recovery.",
+  "status": "MISSING",
+  "found_message": "",
+  "resolved_at": null,
+  "is_active_search": true,
+  "contact": {
+    "visibility": "APP_ONLY",
+    "instructions": "Log in to CatSOS to submit a sighting."
+  },
+  "main_photo": null,
+  "photos": [],
+  "timeline": [
+    {
+      "event_type": "STATUS_CHANGED",
+      "from_status": "MISSING",
+      "to_status": "RECENTLY_SEEN",
+      "created_at": "2026-07-06T10:30:00Z"
+    }
+  ],
+  "updated_at": "2026-07-06T10:30:00Z"
+}
+```
+
+Contact behavior:
+
+- `PUBLIC` returns `name`, `phone`, and `email` from the report contact fields.
+- `APP_ONLY` and `PRIVATE` return instructions only and do not expose direct contact details.
+
+Privacy behavior:
+
+- Hidden moderated reports return `404 Not Found`.
+- The response does not include internal report `id`, owner ID, owner email, exact `last_seen_address`, `chip_number`, notification preferences, or moderation fields.
+- Coordinates are rounded and marked approximate.
+- Timeline entries do not expose actor private data or location summaries.
+- `main_photo` and `photos` are present as stable fields but remain empty until the report photo API is implemented.
 
 ## Auth Payloads
 

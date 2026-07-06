@@ -42,9 +42,9 @@ class LostCatReportAdmin(admin.ModelAdmin):
         'owner__email',
         'contact_email',
     )
-    readonly_fields = ('id', 'resolved_at', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'public_id', 'resolved_at', 'created_at', 'updated_at')
     fieldsets = (
-        ('Ownership', {'fields': ('id', 'owner')}),
+        ('Ownership', {'fields': ('id', 'public_id', 'owner')}),
         (
             'Cat details',
             {

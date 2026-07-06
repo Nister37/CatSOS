@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -13,6 +13,7 @@ from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
     LostCatReportOwnerSerializer,
+    LostCatReportPublicSerializer,
     LostCatReportStatusUpdateSerializer,
     LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
@@ -215,3 +216,34 @@ class LostCatReportTimelineView(LostCatReportBaseView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = LostCatReportTimelineEventSerializer(page, many=True)
         return set_no_store_headers(paginator.get_paginated_response(serializer.data))
+
+
+class LostCatReportPublicDetailView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'lost_report_read'
+
+    def get_queryset(self):
+        return (
+            LostCatReport.objects.exclude(
+                moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+            )
+            .prefetch_related('timeline_events')
+        )
+
+    def get_object(self):
+        return get_object_or_404(
+            self.get_queryset(),
+            public_id=self.kwargs['public_id'],
+        )
+
+    @extend_schema(
+        responses={
+            200: LostCatReportPublicSerializer,
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, public_id):
+        report = self.get_object()
+        serializer = LostCatReportPublicSerializer(report)
+        return no_store_response(serializer.data)
