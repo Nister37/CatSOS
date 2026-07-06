@@ -20,10 +20,12 @@ That means:
 The required Jenkins check is:
 
 ```text
-continuous-integration/jenkins/branch
+continuous-integration/jenkins/pr-merge
 ```
 
-If this check is pending or failed, GitHub should block the merge button.
+This is the pull request build that tests the branch as it would look after
+merging into `main`. If this check is pending or failed, GitHub should block the
+merge button.
 
 This is one shared Jenkins setup for the team. Developers do not need to create their own Jenkins jobs or credentials on their machines. Each developer only needs normal GitHub repository access and Tailscale access if they want to open the Jenkins UI.
 

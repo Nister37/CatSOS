@@ -55,6 +55,13 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(_('email address'), unique=True)
     profile_picture = models.ImageField(upload_to=profile_picture_upload_path, blank=True)
+    display_name = models.CharField(max_length=150, blank=True)
+    public_bio = models.TextField(blank=True)
+    public_location = models.CharField(max_length=120, blank=True)
+    public_email = models.EmailField(blank=True)
+    public_phone = models.CharField(max_length=32, blank=True)
+    contribution_points = models.PositiveIntegerField(default=0)
+    public_badges = models.JSONField(default=list, blank=True)
     is_email_verified = models.BooleanField(default=False)
     email_verification_code_hash = models.CharField(max_length=128, blank=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)

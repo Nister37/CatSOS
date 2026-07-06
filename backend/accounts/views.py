@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import Http404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -19,6 +21,7 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetTOTPSerializer,
     ProfilePictureUploadSerializer,
+    PublicProfileSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
     SSOLinkResponseSerializer,
@@ -33,6 +36,7 @@ from .serializers import (
     build_auth_response,
     build_sso_link_response,
     build_verification_pending_response,
+    user_has_public_activity,
 )
 from .services import VerificationCodeCooldownError
 from .services import (
@@ -87,6 +91,37 @@ class CurrentUserView(NoStoreAPIView):
     )
     def get(self, request):
         serializer = CurrentUserSerializer(request.user, context={'request': request})
+        return no_store_response(serializer.data)
+
+
+class PublicProfileView(NoStoreAPIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_profile'
+
+    @extend_schema(
+        responses={
+            200: PublicProfileSerializer,
+            404: OpenApiResponse(description='Public profile not found'),
+            429: OpenApiResponse(description='Public profile rate limit exceeded'),
+        },
+    )
+    def get(self, request, pk):
+        User = get_user_model()
+        try:
+            user = User.objects.get(
+                pk=pk,
+                is_active=True,
+                is_email_verified=True,
+            )
+        except User.DoesNotExist:
+            raise Http404
+
+        if not user_has_public_activity(user):
+            raise Http404
+
+        serializer = PublicProfileSerializer(user, context={'request': request})
         return no_store_response(serializer.data)
 
 

@@ -75,9 +75,21 @@ Keep the setup simple:
 
 ```text
 Discover branches: enabled
+Branch discovery strategy: Exclude branches that are also filed as PRs
 Discover pull requests from origin: enabled
 Discover pull requests from forks: disabled for now
+Filter by name with wildcards: main PR-*
 ```
+
+Do not choose **All branches** for branch discovery. If Jenkins discovers all
+branches and also discovers pull requests from origin, opening a pull request can
+create two builds for the same commit: one branch build and one pull request
+build.
+
+The wildcard filter keeps the long-running shared job focused on `main` and pull
+request jobs such as `PR-12`. Without that filter, Jenkins can still build a
+feature branch before its pull request exists, or again after the pull request is
+merged or closed if the remote feature branch was not deleted.
 
 For pull request strategy, choose the option that builds the pull request as it would look after merging into the target branch. The label is usually similar to:
 
@@ -209,7 +221,7 @@ In GitHub:
 10. After Jenkins has reported at least one build result, select this Jenkins status check as required:
 
     ```text
-    continuous-integration/jenkins/branch
+    continuous-integration/jenkins/pr-merge
     ```
 
 11. Enable **Require branches to be up to date before merging** if available.

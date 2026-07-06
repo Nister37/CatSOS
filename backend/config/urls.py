@@ -20,7 +20,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from accounts.views import CurrentUserView, ProfilePictureView
+from accounts.views import CurrentUserView, ProfilePictureView, PublicProfileView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -30,6 +30,7 @@ urlpatterns = [
         ProfilePictureView.as_view(),
         name='account-profile-picture',
     ),
+    path('api/profiles/<int:pk>/', PublicProfileView.as_view(), name='account-public-profile'),
     path('api/auth/', include('accounts.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

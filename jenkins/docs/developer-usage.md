@@ -82,6 +82,30 @@ Check the Jenkins server with:
 docker compose -f docker-compose.jenkins.yml ps jenkins
 ```
 
+## If Jenkins Runs Twice for One Pull Request
+
+The usual cause is the Multibranch Pipeline discovery configuration. Jenkins is
+building both:
+
+- the source branch job, for example `feature/my-change`
+- the pull request job, for example `PR-12`
+
+In the `catsos-ci` job configuration, open **Branch Sources** -> **Behaviors**
+and use this discovery setup:
+
+```text
+Discover branches: enabled
+Branch discovery strategy: Exclude branches that are also filed as PRs
+Discover pull requests from origin: enabled
+Pull request strategy: Merging the pull request with the current target branch revision
+Filter by name with wildcards: main PR-*
+```
+
+Do not use **All branches** unless you intentionally want both branch and pull
+request builds. Also delete remote feature branches after merging. Once a pull
+request is closed, a still-existing feature branch is no longer "filed as a PR",
+so Jenkins may discover it as a normal branch job during the next scan.
+
 ## If GitHub Does Not Block Merge
 
 Jenkins running is not enough. GitHub must protect `main`.
@@ -97,7 +121,7 @@ Required:
 - **Require a pull request before merging** is enabled
 - **Required approvals** is set to `0`
 - **Require status checks to pass** is enabled
-- `continuous-integration/jenkins/branch` is selected as a required status check
+- `continuous-integration/jenkins/pr-merge` is selected as a required status check
 - force pushes are blocked
 - branch deletion is restricted
 
