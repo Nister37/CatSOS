@@ -43,6 +43,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | Method | Path | Auth | Status | Purpose |
 | --- | --- | --- | --- | --- |
 | `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
+| `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -77,6 +78,39 @@ Success response:
   "service": "catsos-backend"
 }
 ```
+
+<a id="get-apiprofilesid"></a>
+### Public Contributor Profile
+
+`GET /api/profiles/{id}/`
+
+Returns a limited public profile only for active, email-verified contributors who have public activity through points or badges.
+
+Success response:
+
+```json
+{
+  "id": 1,
+  "display_name": "Marta Helper",
+  "profile_picture_url": "http://localhost:8000/media/profile-pictures/user-1/avatar.jpg",
+  "avatar_fallback": "MH",
+  "points": 125,
+  "badges": ["Search lead", "Foster mentor"],
+  "public_info": {
+    "bio": "Coordinates evening searches.",
+    "location": "Warsaw",
+    "email": "helper-public@example.org",
+    "phone": "+48 600 000 000"
+  }
+}
+```
+
+Privacy behavior:
+
+- The account login email is never returned by this endpoint.
+- `public_info.email` and `public_info.phone` are returned only when the contributor has explicit public contact fields set.
+- Unverified, inactive, or no-activity accounts return `404 Not Found`.
+- Responses send `Cache-Control: no-store` to avoid stale public contact data being cached.
 
 ## Auth Payloads
 
@@ -1088,7 +1122,7 @@ DJANGO_TOTP_WINDOW=1
 
 ## Throttling
 
-Auth-sensitive endpoints use scoped DRF throttling.
+Auth-sensitive endpoints and public profile lookups use scoped DRF throttling.
 
 Default local rates:
 
@@ -1102,6 +1136,7 @@ Default local rates:
 | Token refresh | `60/minute` |
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
+| Public profile | `120/minute` |
 | Password reset per email | `5/hour` |
 | Password reset per IP | `10/hour` |
 
@@ -1116,6 +1151,7 @@ DJANGO_AUTH_LOGIN_RATE=20/minute
 DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
+DJANGO_PUBLIC_PROFILE_RATE=120/minute
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```

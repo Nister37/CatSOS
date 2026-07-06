@@ -247,6 +247,7 @@ REST_FRAMEWORK = {
         'auth_token_refresh': os.getenv('DJANGO_AUTH_TOKEN_REFRESH_RATE', '60/minute'),
         'auth_sso_login': os.getenv('DJANGO_AUTH_SSO_LOGIN_RATE', '20/minute'),
         'auth_sso_link': os.getenv('DJANGO_AUTH_SSO_LINK_RATE', '20/minute'),
+        'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
     },
 }
 

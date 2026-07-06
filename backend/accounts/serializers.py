@@ -31,6 +31,10 @@ from .sso import SSOProviderError
 from .validators import validate_profile_picture_upload
 
 
+PUBLIC_PROFILE_MAX_BADGES = 20
+PUBLIC_PROFILE_MAX_BADGE_LENGTH = 80
+
+
 def build_profile_picture_url(user, request=None):
     if not user.profile_picture:
         return None
@@ -55,6 +59,51 @@ def build_avatar_fallback(user):
     return (local_part[:1] or '?').upper()
 
 
+def build_public_display_name(user):
+    display_name = user.display_name.strip()
+    if display_name:
+        return display_name
+
+    return f'Contributor #{user.pk}'
+
+
+def build_public_avatar_fallback(user):
+    display_name = build_public_display_name(user)
+    initials = [
+        part[0].upper()
+        for part in display_name.replace('#', ' ').split()
+        if part and part[0].isalpha()
+    ]
+    return ''.join(initials[:2]) or '?'
+
+
+def build_public_badges(user):
+    if not isinstance(user.public_badges, list):
+        return []
+
+    badges = []
+    for badge in user.public_badges:
+        if not isinstance(badge, str):
+            continue
+
+        badge = badge.strip()
+        if not badge:
+            continue
+
+        badge = badge[:PUBLIC_PROFILE_MAX_BADGE_LENGTH]
+        if badge not in badges:
+            badges.append(badge)
+
+        if len(badges) >= PUBLIC_PROFILE_MAX_BADGES:
+            break
+
+    return badges
+
+
+def user_has_public_activity(user):
+    return user.contribution_points > 0 or bool(build_public_badges(user))
+
+
 class AccountSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     email = serializers.EmailField(read_only=True)
@@ -76,6 +125,47 @@ class CurrentUserSerializer(serializers.Serializer):
 
     def get_avatar_fallback(self, user) -> str:
         return build_avatar_fallback(user)
+
+
+class PublicProfileSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    display_name = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
+    avatar_fallback = serializers.SerializerMethodField()
+    points = serializers.IntegerField(source='contribution_points', read_only=True)
+    badges = serializers.SerializerMethodField()
+    public_info = serializers.SerializerMethodField()
+
+    def get_display_name(self, user) -> str:
+        return build_public_display_name(user)
+
+    def get_profile_picture_url(self, user) -> str | None:
+        return build_profile_picture_url(
+            user,
+            request=self.context.get('request'),
+        )
+
+    def get_avatar_fallback(self, user) -> str:
+        return build_public_avatar_fallback(user)
+
+    def get_badges(self, user) -> list[str]:
+        return build_public_badges(user)
+
+    def get_public_info(self, user) -> dict[str, str]:
+        public_info = {}
+        safe_fields = {
+            'bio': user.public_bio,
+            'location': user.public_location,
+            'email': user.public_email,
+            'phone': user.public_phone,
+        }
+
+        for key, value in safe_fields.items():
+            value = (value or '').strip()
+            if value:
+                public_info[key] = value
+
+        return public_info
 
 
 class ProfilePictureUploadSerializer(serializers.Serializer):
