@@ -44,6 +44,8 @@ These are framework defaults in this project, not custom endpoint behavior.
 | --- | --- | --- | --- | --- |
 | `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
 | `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
+| `GET` | [`/api/reports/`](#get-apireports) | JWT | `200` | List the authenticated owner's lost cat reports. |
+| `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -111,6 +113,156 @@ Privacy behavior:
 - `public_info.email` and `public_info.phone` are returned only when the contributor has explicit public contact fields set.
 - Unverified, inactive, or no-activity accounts return `404 Not Found`.
 - Responses send `Cache-Control: no-store` to avoid stale public contact data being cached.
+
+## Lost Cat Reports
+
+Lost cat report endpoints require:
+
+```text
+Authorization: Bearer <access>
+```
+
+Owner API responses send:
+
+```text
+Cache-Control: no-store
+Pragma: no-cache
+```
+
+Admins moderate reports separately in Django admin.
+
+<a id="get-apireports"></a>
+### List My Lost Cat Reports
+
+`GET /api/reports/`
+
+Returns only reports owned by the authenticated user.
+
+The response is paginated:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "2f7b9db5-5697-47c2-9004-6dbd87a17a28",
+      "cat_name": "Luna",
+      "status": "MISSING"
+    }
+  ]
+}
+```
+
+Query parameters:
+
+```text
+page=1
+page_size=20
+```
+
+<a id="post-apireports"></a>
+### Create Lost Cat Report
+
+`POST /api/reports/`
+
+JSON request:
+
+```json
+{
+  "cat_name": "Luna",
+  "age_years": 4,
+  "breed": "Domestic shorthair",
+  "coat_color": "Black with a white chest spot",
+  "eye_color": "Green",
+  "gender": "FEMALE",
+  "collar_description": "Red reflective collar with bell",
+  "has_microchip": true,
+  "chip_number": "985112003456789",
+  "personality": "Shy with strangers, responds to treats.",
+  "description": "Indoor cat, likely hiding close to home.",
+  "disappeared_at": "2026-07-06T10:00:00Z",
+  "last_seen_address": "12 Maple Street",
+  "last_seen_landmark": "Near the playground",
+  "last_seen_lat": 52.2297,
+  "last_seen_lng": 21.0122,
+  "reward_amount": "100.00",
+  "reward_note": "Reward for confirmed recovery.",
+  "contact_name": "Marta Owner",
+  "contact_phone": "+48 600 111 222",
+  "contact_email": "owner@example.com",
+  "contact_visibility": "APP_ONLY",
+  "notify_push": true,
+  "notify_sms": true,
+  "notify_email": false
+}
+```
+
+Success response:
+
+```json
+{
+  "id": "2f7b9db5-5697-47c2-9004-6dbd87a17a28",
+  "cat_name": "Luna",
+  "age_years": 4,
+  "breed": "Domestic shorthair",
+  "coat_color": "Black with a white chest spot",
+  "eye_color": "Green",
+  "gender": "FEMALE",
+  "collar_description": "Red reflective collar with bell",
+  "has_microchip": true,
+  "chip_number": "985112003456789",
+  "personality": "Shy with strangers, responds to treats.",
+  "description": "Indoor cat, likely hiding close to home.",
+  "disappeared_at": "2026-07-06T10:00:00Z",
+  "last_seen_address": "12 Maple Street",
+  "last_seen_landmark": "Near the playground",
+  "last_seen_lat": 52.2297,
+  "last_seen_lng": 21.0122,
+  "reward_amount": "100.00",
+  "reward_note": "Reward for confirmed recovery.",
+  "contact_name": "Marta Owner",
+  "contact_phone": "+48 600 111 222",
+  "contact_email": "owner@example.com",
+  "contact_visibility": "APP_ONLY",
+  "notify_push": true,
+  "notify_sms": true,
+  "notify_email": false,
+  "status": "MISSING",
+  "created_at": "2026-07-06T10:00:00Z",
+  "updated_at": "2026-07-06T10:00:00Z"
+}
+```
+
+The backend sets `status` to `MISSING` when the report is created. Status changes are handled by a separate report lifecycle API.
+
+Latitude and longitude must be supplied together or both omitted.
+
+Gender values:
+
+```text
+UNKNOWN
+FEMALE
+MALE
+```
+
+Contact visibility values:
+
+```text
+APP_ONLY
+PUBLIC
+PRIVATE
+```
+
+Status values:
+
+```text
+MISSING
+RECENTLY_SEEN
+FOUND
+CLOSED
+```
 
 ## Auth Payloads
 
@@ -1137,6 +1289,8 @@ Default local rates:
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
 | Public profile | `120/minute` |
+| Lost report read | `120/minute` |
+| Lost report write | `30/minute` |
 | Password reset per email | `5/hour` |
 | Password reset per IP | `10/hour` |
 
@@ -1152,6 +1306,8 @@ DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
 DJANGO_PUBLIC_PROFILE_RATE=120/minute
+DJANGO_LOST_REPORT_READ_RATE=120/minute
+DJANGO_LOST_REPORT_WRITE_RATE=30/minute
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```
