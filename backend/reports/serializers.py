@@ -1,8 +1,12 @@
 import re
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import LostCatReport, LostCatReportTimelineEvent
+from .services import create_report_photo
+from .validators import validate_report_photo_upload
 
 FOUND_MESSAGE_MAX_LENGTH = 500
 PRIVATE_EMAIL_PATTERN = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
@@ -31,6 +35,35 @@ def build_approximate_location(report):
         'longitude': round(report.last_seen_lng, 3),
         'is_approximate': True,
     }
+
+
+def build_report_photo_url(photo, request=None):
+    if photo is None or not photo.image:
+        return None
+
+    try:
+        url = photo.image.url
+    except ValueError:
+        return None
+
+    if request is None:
+        return url
+    return request.build_absolute_uri(url)
+
+
+def serialize_report_photo(photo, request=None) -> dict[str, str] | None:
+    url = build_report_photo_url(photo, request=request)
+    if url is None:
+        return None
+    return {'url': url}
+
+
+def get_report_main_photo(report):
+    photos = report.photos.all()
+    main_photo = next((photo for photo in photos if photo.is_main), None)
+    if main_photo is not None:
+        return main_photo
+    return next(iter(photos), None)
 
 
 class LostCatReportOwnerSerializer(serializers.ModelSerializer):
@@ -77,6 +110,8 @@ class LostCatReportOwnerSerializer(serializers.ModelSerializer):
 
 
 class LostCatReportWriteSerializer(serializers.ModelSerializer):
+    photo = serializers.ImageField(required=False, write_only=True)
+
     class Meta:
         model = LostCatReport
         fields = (
@@ -105,7 +140,15 @@ class LostCatReportWriteSerializer(serializers.ModelSerializer):
             'notify_push',
             'notify_sms',
             'notify_email',
+            'photo',
         )
+
+    def validate_photo(self, value):
+        try:
+            validate_report_photo_upload(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
     def _value_from_attrs_or_instance(self, attrs, field_name, default=None):
         if field_name in attrs:
@@ -135,6 +178,22 @@ class LostCatReportWriteSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        photo = validated_data.pop('photo', None)
+        report = super().create(validated_data)
+        if photo is not None:
+            create_report_photo(report=report, image=photo, is_main=True)
+        return report
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        photo = validated_data.pop('photo', None)
+        report = super().update(instance, validated_data)
+        if photo is not None:
+            create_report_photo(report=report, image=photo, is_main=True)
+        return report
 
 
 class LostCatReportCreateSerializer(LostCatReportWriteSerializer):
@@ -296,10 +355,21 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
         }
 
     def get_main_photo(self, report) -> dict | None:
-        return None
+        return serialize_report_photo(
+            get_report_main_photo(report),
+            request=self.context.get('request'),
+        )
 
     def get_photos(self, report) -> list[dict]:
-        return []
+        photos = []
+        for photo in report.photos.all():
+            photo_data = serialize_report_photo(
+                photo,
+                request=self.context.get('request'),
+            )
+            if photo_data is not None:
+                photos.append(photo_data)
+        return photos
 
     def get_timeline(self, report) -> list[dict]:
         timeline_events = report.timeline_events.all()[:20]
@@ -358,7 +428,10 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
         return ''
 
     def get_main_photo(self, report) -> dict | None:
-        return None
+        return serialize_report_photo(
+            get_report_main_photo(report),
+            request=self.context.get('request'),
+        )
 
 
 class LostCatReportSimilarReportSerializer(serializers.Serializer):

@@ -3,7 +3,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import JSONParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -85,6 +85,8 @@ class LostCatReportBaseView(APIView):
 
 
 class LostCatReportListCreateView(LostCatReportBaseView):
+    parser_classes = [JSONParser, MultiPartParser]
+
     def get_queryset(self):
         queryset = super().get_queryset()
         active = self.request.query_params.get('active')
@@ -120,10 +122,16 @@ class LostCatReportListCreateView(LostCatReportBaseView):
         },
     )
     def post(self, request):
-        serializer = LostCatReportCreateSerializer(data=request.data)
+        serializer = LostCatReportCreateSerializer(
+            data=request.data,
+            context={'request': request},
+        )
         serializer.is_valid(raise_exception=True)
         report = serializer.save(owner=request.user)
-        response_serializer = LostCatReportOwnerSerializer(report)
+        response_serializer = LostCatReportOwnerSerializer(
+            report,
+            context={'request': request},
+        )
         return no_store_response(
             response_serializer.data,
             status_code=status.HTTP_201_CREATED,
@@ -232,7 +240,11 @@ class LostCatReportSimilarView(LostCatReportBaseView):
     def get(self, request, pk):
         report = self.get_object()
         similar_reports = find_similar_reports(report=report)
-        serializer = LostCatReportSimilarReportSerializer(similar_reports, many=True)
+        serializer = LostCatReportSimilarReportSerializer(
+            similar_reports,
+            many=True,
+            context={'request': request},
+        )
         return no_store_response(
             {
                 'count': len(serializer.data),
@@ -251,7 +263,7 @@ class LostCatReportPublicDetailView(APIView):
             LostCatReport.objects.exclude(
                 moderation_status=LostCatReport.ModerationStatus.HIDDEN,
             )
-            .prefetch_related('timeline_events')
+            .prefetch_related('photos', 'timeline_events')
         )
 
     def get_object(self):
@@ -268,7 +280,10 @@ class LostCatReportPublicDetailView(APIView):
     )
     def get(self, request, public_id):
         report = self.get_object()
-        serializer = LostCatReportPublicSerializer(report)
+        serializer = LostCatReportPublicSerializer(
+            report,
+            context={'request': request},
+        )
         return no_store_response(serializer.data)
 
 
@@ -280,7 +295,7 @@ class LostCatReportPublicListView(APIView):
     def get_queryset(self):
         queryset = LostCatReport.objects.exclude(
             moderation_status=LostCatReport.ModerationStatus.HIDDEN,
-        )
+        ).prefetch_related('photos')
         status_filter = self.request.query_params.get('status')
         active = self.request.query_params.get('active')
 
@@ -310,5 +325,9 @@ class LostCatReportPublicListView(APIView):
     def get(self, request):
         paginator = LostCatReportPagination()
         page = paginator.paginate_queryset(self.get_queryset(), request, view=self)
-        serializer = LostCatReportPublicListSerializer(page, many=True)
+        serializer = LostCatReportPublicListSerializer(
+            page,
+            many=True,
+            context={'request': request},
+        )
         return set_no_store_headers(paginator.get_paginated_response(serializer.data))

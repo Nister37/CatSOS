@@ -45,7 +45,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
 | `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
 | `GET` | [`/api/reports/`](#get-apireports) | JWT | `200` | List the authenticated owner's lost cat reports. |
-| `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report. |
+| `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report with an optional main photo. |
 | `GET` | [`/api/reports/{id}/`](#get-apireportsid) | JWT | `200` | View one authenticated owner's lost cat report. |
 | `PATCH` | [`/api/reports/{id}/`](#patch-apireportsid) | JWT | `200` | Partially update one authenticated owner's lost cat report. |
 | `PUT` | [`/api/reports/{id}/`](#put-apireportsid) | JWT | `200` | Replace editable fields on one authenticated owner's lost cat report. |
@@ -178,6 +178,8 @@ active=true
 
 `POST /api/reports/`
 
+Accepts either `application/json` for text-only report creation or `multipart/form-data` when uploading the first report photo. For multipart requests, send the existing report fields as form fields and the image file under the field name `photo`.
+
 JSON request:
 
 ```json
@@ -209,6 +211,14 @@ JSON request:
   "notify_email": false
 }
 ```
+
+Multipart photo field:
+
+```text
+photo=<JPEG, PNG, or WebP file>
+```
+
+Photo uploads are optional. When present, the backend validates extension, content type, image bytes, and size, stores the file in configured media storage, and creates a `LostCatReportPhoto` linked to the new report with `is_main=true`. The default max report photo size is `DJANGO_REPORT_PHOTO_MAX_SIZE_BYTES=5242880` bytes.
 
 Success response:
 
@@ -250,7 +260,7 @@ Success response:
 }
 ```
 
-The backend sets `status` to `MISSING` when the report is created. Status changes are handled by a separate report lifecycle API.
+The backend sets `status` to `MISSING` when the report is created. Status changes are handled by a separate report lifecycle API. Public report endpoints return the main photo as `{"url": "<absolute media URL>"}` when a main photo exists.
 
 Latitude and longitude must be supplied together or both omitted.
 
@@ -349,7 +359,7 @@ created_at
 updated_at
 ```
 
-Status changes are handled by a separate report lifecycle API. Photos are handled by the report photo API when available, not by this JSON edit endpoint.
+Status changes are handled by a separate report lifecycle API. Report creation can include one main photo by sending `photo` in a multipart `POST /api/reports/` request.
 
 Validation behavior:
 
@@ -550,14 +560,16 @@ Success response:
       "resolved_at": null,
       "is_active_search": true,
       "latest_sighting": null,
-      "main_photo": null,
+      "main_photo": {
+        "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
+      },
       "updated_at": "2026-07-06T10:30:00Z"
     }
   ]
 }
 ```
 
-`latest_sighting` is currently `null` until the sightings API is implemented. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
+`main_photo` is `null` when the report has no main photo. When present, it contains only a `url` key with an absolute media URL. `latest_sighting` is currently `null` until the sightings API is implemented. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
 
 <a id="get-apipublicreportspublicid"></a>
 ### Public Lost Cat Report Detail
@@ -598,8 +610,14 @@ Success response:
     "visibility": "APP_ONLY",
     "instructions": "Log in to CatSOS to submit a sighting."
   },
-  "main_photo": null,
-  "photos": [],
+  "main_photo": {
+    "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
+  },
+  "photos": [
+    {
+      "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
+    }
+  ],
   "timeline": [
     {
       "event_type": "STATUS_CHANGED",
@@ -623,7 +641,8 @@ Privacy behavior:
 - The response does not include internal report `id`, owner ID, owner email, exact `last_seen_address`, `chip_number`, notification preferences, or moderation fields.
 - Coordinates are rounded and marked approximate.
 - Timeline entries do not expose actor private data or location summaries.
-- `main_photo` and `photos` are present as stable fields but remain empty until the report photo API is implemented.
+- `main_photo` is `null` when no main photo exists. When present, it contains only `url`.
+- `photos` contains URL-only photo objects and does not expose internal IDs, storage paths, original filenames, or owner data.
 
 ## Auth Payloads
 
