@@ -404,7 +404,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
         return photos
 
     def get_timeline(self, report) -> list[dict]:
-        timeline_events = report.timeline_events.all()[:20]
+        timeline_events = report.timeline_events.order_by('created_at')[:20]
         return LostCatReportPublicTimelineEventSerializer(
             timeline_events,
             many=True,
