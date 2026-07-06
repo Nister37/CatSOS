@@ -429,14 +429,14 @@ Resolved status behavior:
 - `found_message` is accepted only for `FOUND` or `CLOSED`.
 - `found_message` is limited to 500 characters and rejects obvious email addresses or phone numbers because it may be shown publicly later.
 
-Public report pages are not implemented yet. When CAT-022 adds them, they should read this canonical report `status`.
+Public report pages read this canonical report `status`.
 
 <a id="get-apireportsidtimeline"></a>
 ### List My Lost Cat Report Timeline
 
 `GET /api/reports/{id}/timeline/`
 
-Returns timeline events for one report owned by the authenticated user. Reports owned by another user return `404 Not Found`.
+Returns timeline events for one report owned by the authenticated user in chronological order. Reports owned by another user return `404 Not Found`.
 
 The response is paginated:
 
@@ -448,6 +448,30 @@ The response is paginated:
   "results": [
     {
       "id": "45e87e07-5e11-4c3f-9a78-88914f66ccdf",
+      "event_type": "REPORT_CREATED",
+      "from_status": "",
+      "to_status": "",
+      "location_summary": "Near the playground",
+      "actor": {
+        "display_name": "Marta Owner",
+        "avatar_fallback": "MO"
+      },
+      "created_at": "2026-07-06T10:00:00Z"
+    },
+    {
+      "id": "cf86cf49-c3d1-468a-91d0-3b551624d743",
+      "event_type": "SIGHTING_CREATED",
+      "from_status": "",
+      "to_status": "",
+      "location_summary": "Behind the bakery",
+      "actor": {
+        "display_name": "Helpful Neighbor",
+        "avatar_fallback": "HN"
+      },
+      "created_at": "2026-07-06T10:20:00Z"
+    },
+    {
+      "id": "1cb21c2b-4be2-49f5-9a42-603088868c6f",
       "event_type": "STATUS_CHANGED",
       "from_status": "MISSING",
       "to_status": "RECENTLY_SEEN",
@@ -463,6 +487,14 @@ The response is paginated:
 ```
 
 Timeline actor data is intentionally public-safe and does not expose account email, phone, password state, or moderation fields.
+
+Timeline event types currently include:
+
+```text
+REPORT_CREATED
+SIGHTING_CREATED
+STATUS_CHANGED
+```
 
 <a id="get-apireportsidsimilar"></a>
 ### List Similar Nearby Reports
@@ -731,7 +763,7 @@ Privacy behavior:
 - Hidden moderated reports return `404 Not Found`.
 - The response does not include internal report `id`, owner ID, owner email, exact `last_seen_address`, `chip_number`, notification preferences, or moderation fields.
 - Coordinates are rounded and marked approximate.
-- Timeline entries do not expose actor private data or location summaries.
+- Timeline entries are chronological and do not expose actor private data or location summaries.
 - `main_photo` is `null` when no main photo exists. When present, it contains only `url`.
 - `photos` contains URL-only photo objects and does not expose internal IDs, storage paths, original filenames, or owner data.
 
