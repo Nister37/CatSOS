@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
@@ -12,11 +13,31 @@ from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
     LostCatReportOwnerSerializer,
+    LostCatReportStatusUpdateSerializer,
+    LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
 )
+from .services import change_report_status
+
+ACTIVE_SEARCH_STATUSES = (
+    LostCatReport.Status.MISSING,
+    LostCatReport.Status.RECENTLY_SEEN,
+)
+RESOLVED_REPORT_STATUSES = (
+    LostCatReport.Status.FOUND,
+    LostCatReport.Status.CLOSED,
+)
+TRUE_QUERY_VALUES = {'1', 'true', 'yes'}
+FALSE_QUERY_VALUES = {'0', 'false', 'no'}
 
 
 class LostCatReportPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class LostCatReportTimelinePagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
@@ -55,8 +76,25 @@ class LostCatReportBaseView(APIView):
     def get_queryset(self):
         return LostCatReport.objects.filter(owner=self.request.user)
 
+    def get_object(self):
+        return get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+
 
 class LostCatReportListCreateView(LostCatReportBaseView):
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        active = self.request.query_params.get('active')
+        if active is None:
+            return queryset
+
+        normalized_active = active.strip().lower()
+        if normalized_active in TRUE_QUERY_VALUES:
+            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+        if normalized_active in FALSE_QUERY_VALUES:
+            return queryset.filter(status__in=RESOLVED_REPORT_STATUSES)
+
+        raise ValidationError({'active': ['Use true or false.']})
+
     @extend_schema(
         responses={
             200: LostCatReportOwnerSerializer(many=True),
@@ -89,9 +127,6 @@ class LostCatReportListCreateView(LostCatReportBaseView):
 
 
 class LostCatReportDetailView(LostCatReportBaseView):
-    def get_object(self):
-        return get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
-
     @extend_schema(
         responses={
             200: LostCatReportOwnerSerializer,
@@ -139,3 +174,44 @@ class LostCatReportDetailView(LostCatReportBaseView):
         updated_report = serializer.save()
         response_serializer = LostCatReportOwnerSerializer(updated_report)
         return no_store_response(response_serializer.data)
+
+
+class LostCatReportStatusView(LostCatReportBaseView):
+    @extend_schema(
+        request=LostCatReportStatusUpdateSerializer,
+        responses={
+            200: LostCatReportOwnerSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def patch(self, request, pk):
+        report = self.get_object()
+        serializer = LostCatReportStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_report, _timeline_event = change_report_status(
+            report=report,
+            actor=request.user,
+            new_status=serializer.validated_data['status'],
+            found_message=serializer.validated_data.get('found_message'),
+        )
+        response_serializer = LostCatReportOwnerSerializer(updated_report)
+        return no_store_response(response_serializer.data)
+
+
+class LostCatReportTimelineView(LostCatReportBaseView):
+    @extend_schema(
+        responses={
+            200: LostCatReportTimelineEventSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_object()
+        queryset = report.timeline_events.select_related('actor')
+        paginator = LostCatReportTimelinePagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = LostCatReportTimelineEventSerializer(page, many=True)
+        return set_no_store_headers(paginator.get_paginated_response(serializer.data))

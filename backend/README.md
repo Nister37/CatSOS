@@ -17,6 +17,8 @@ Django backend for the CatSOS API.
 - Public contributor profile: `http://localhost:8000/api/profiles/<id>/`
 - Lost cat reports: `http://localhost:8000/api/reports/`
 - Lost cat report detail/edit: `http://localhost:8000/api/reports/<id>/`
+- Lost cat report status: `http://localhost:8000/api/reports/<id>/status/`
+- Lost cat report timeline: `http://localhost:8000/api/reports/<id>/timeline/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
 - Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
@@ -46,6 +48,6 @@ Authenticated users can upload, replace, and delete their profile picture throug
 
 Public contributor profiles are available at `/api/profiles/<id>/` for active, email-verified users with public activity. The response includes display name, profile picture, points, badges, and explicit public info only. Account email is never returned unless a separate public contact email is set.
 
-Authenticated owners can create and list their own lost cat reports through `/api/reports/` and retrieve or edit one owned report through `/api/reports/<id>/`. Creation and editing cover cat details, disappearance location, optional reward, and contact preferences. Report status changes and photo management are handled by separate APIs. Staff moderation is handled separately in Django admin through the report moderation fields.
+Authenticated owners can create and list their own lost cat reports through `/api/reports/` and retrieve or edit one owned report through `/api/reports/<id>/`. Creation and editing cover cat details, disappearance location, optional reward, and contact preferences. Owners can change status through `/api/reports/<id>/status/`, including an optional safe found message for `FOUND` or `CLOSED` reports. Resolved reports keep `found_message`, `resolved_at`, and `is_active_search=false`; reopened reports clear resolved metadata. The owner report list supports `active=true` and `active=false` filters. Status changes record `STATUS_CHANGED` timeline events readable through `/api/reports/<id>/timeline/`. Photo management is handled by a separate API. Staff moderation is handled separately in Django admin through the report moderation fields.
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.
