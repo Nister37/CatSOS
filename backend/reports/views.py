@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +18,17 @@ from .serializers import (
     LostCatReportUpdateSerializer,
 )
 from .services import change_report_status
+
+ACTIVE_SEARCH_STATUSES = (
+    LostCatReport.Status.MISSING,
+    LostCatReport.Status.RECENTLY_SEEN,
+)
+RESOLVED_REPORT_STATUSES = (
+    LostCatReport.Status.FOUND,
+    LostCatReport.Status.CLOSED,
+)
+TRUE_QUERY_VALUES = {'1', 'true', 'yes'}
+FALSE_QUERY_VALUES = {'0', 'false', 'no'}
 
 
 class LostCatReportPagination(PageNumberPagination):
@@ -69,6 +81,20 @@ class LostCatReportBaseView(APIView):
 
 
 class LostCatReportListCreateView(LostCatReportBaseView):
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        active = self.request.query_params.get('active')
+        if active is None:
+            return queryset
+
+        normalized_active = active.strip().lower()
+        if normalized_active in TRUE_QUERY_VALUES:
+            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+        if normalized_active in FALSE_QUERY_VALUES:
+            return queryset.filter(status__in=RESOLVED_REPORT_STATUSES)
+
+        raise ValidationError({'active': ['Use true or false.']})
+
     @extend_schema(
         responses={
             200: LostCatReportOwnerSerializer(many=True),
@@ -168,6 +194,7 @@ class LostCatReportStatusView(LostCatReportBaseView):
             report=report,
             actor=request.user,
             new_status=serializer.validated_data['status'],
+            found_message=serializer.validated_data.get('found_message'),
         )
         response_serializer = LostCatReportOwnerSerializer(updated_report)
         return no_store_response(response_serializer.data)
