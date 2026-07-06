@@ -90,6 +90,8 @@ class LostCatReport(models.Model):
         choices=Status.choices,
         default=Status.MISSING,
     )
+    found_message = models.TextField(blank=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
     moderation_status = models.CharField(
         max_length=20,
         choices=ModerationStatus.choices,
@@ -109,6 +111,13 @@ class LostCatReport(models.Model):
 
     def __str__(self):
         return f'{self.cat_name} ({self.status})'
+
+    @property
+    def is_active_search(self):
+        return self.status in {
+            self.Status.MISSING,
+            self.Status.RECENTLY_SEEN,
+        }
 
 
 class LostCatReportTimelineEvent(models.Model):
