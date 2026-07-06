@@ -24,6 +24,7 @@ Django backend for the CatSOS API.
 - Lost cat report main photo: `http://localhost:8000/api/reports/<id>/photos/<photo_id>/main/`
 - Public lost cat report list: `http://localhost:8000/api/public/reports/`
 - Public lost cat report detail: `http://localhost:8000/api/public/reports/<public_id>/`
+- Submit public report sighting: `http://localhost:8000/api/public/reports/<public_id>/sightings/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
 - Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
@@ -58,5 +59,7 @@ Authenticated owners can create and list their own lost cat reports through `/ap
 Owners can fetch deterministic similar nearby report suggestions through `/api/reports/<id>/similar/`. The current matcher is AI-free and uses approximate distance plus simple breed, coat, and gender matches. Suggested reports use the public-safe card shape and exclude hidden or resolved candidates.
 
 Public lost-cat report browsing is available through `/api/public/reports/`, defaulting to active searches and supporting `active` and `status` filters. Public report cards include `detail_url`, status, location summary, disappearance date, `main_photo`, and a `latest_sighting` placeholder. Public report details are available through `/api/public/reports/<public_id>/`. Public responses use the report `public_id`, approximate coordinates, public-safe contact instructions, URL-only photo objects, and status timeline events without actor private data. They do not expose owner IDs, exact addresses, chip numbers, notification preferences, moderation fields, original photo filenames, or storage paths.
+
+Authenticated helpers can submit sightings for active public reports through `/api/public/reports/<public_id>/sightings/`. The endpoint requires JWT authentication, stores timestamp, coordinates, location notes, confidence, and description notes, and creates a `SIGHTING_CREATED` report timeline event. Hidden reports return `404`; resolved reports reject new sightings. Sighting photo upload is handled separately from this JSON endpoint.
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.

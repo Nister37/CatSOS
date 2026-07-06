@@ -164,6 +164,7 @@ class LostCatReportPhoto(models.Model):
 class LostCatReportTimelineEvent(models.Model):
     class EventType(models.TextChoices):
         STATUS_CHANGED = 'STATUS_CHANGED', 'Status changed'
+        SIGHTING_CREATED = 'SIGHTING_CREATED', 'Sighting created'
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     report = models.ForeignKey(

@@ -58,6 +58,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
 | `GET` | [`/api/public/reports/`](#get-apipublicreports) | Public | `200` | Browse public-safe lost cat report cards. |
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
+| `POST` | [`/api/public/reports/{public_id}/sightings/`](#post-apipublicreportspublicidsightings) | JWT | `201` | Submit an authenticated sighting for a public report. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -733,6 +734,66 @@ Privacy behavior:
 - Timeline entries do not expose actor private data or location summaries.
 - `main_photo` is `null` when no main photo exists. When present, it contains only `url`.
 - `photos` contains URL-only photo objects and does not expose internal IDs, storage paths, original filenames, or owner data.
+
+<a id="post-apipublicreportspublicidsightings"></a>
+### Submit Sighting For Public Report
+
+`POST /api/public/reports/{public_id}/sightings/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Creates a pending sighting for a non-hidden active report. Guests cannot submit sightings. Hidden reports return `404 Not Found`; `FOUND` and `CLOSED` reports return `400 Bad Request`.
+
+Request:
+
+```json
+{
+  "seen_at": "2026-07-06T10:35:00Z",
+  "location_description": "Behind the bakery",
+  "latitude": 52.2297,
+  "longitude": 21.0122,
+  "confidence": "HIGH",
+  "notes": "The cat was walking slowly toward the courtyard."
+}
+```
+
+Success response:
+
+```json
+{
+  "id": "2ad10db8-0ac1-48ce-9c81-3cbaf356779d",
+  "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "seen_at": "2026-07-06T10:35:00Z",
+  "location_description": "Behind the bakery",
+  "latitude": 52.2297,
+  "longitude": 21.0122,
+  "confidence": "HIGH",
+  "notes": "The cat was walking slowly toward the courtyard.",
+  "verification_status": "PENDING",
+  "created_at": "2026-07-06T10:36:00Z"
+}
+```
+
+Confidence values:
+
+```text
+LOW
+MEDIUM
+HIGH
+```
+
+Validation behavior:
+
+- `seen_at` cannot be in the future beyond a small clock-skew tolerance.
+- `latitude` must be between `-90` and `90`.
+- `longitude` must be between `-180` and `180`.
+- `notes` are limited to 2000 characters.
+
+Successful submission creates a `SIGHTING_CREATED` report timeline event. Sighting photo upload is handled separately from this JSON endpoint.
 
 ## Auth Payloads
 
@@ -1761,6 +1822,7 @@ Default local rates:
 | Public profile | `120/minute` |
 | Lost report read | `120/minute` |
 | Lost report write | `30/minute` |
+| Sighting write | `30/minute` |
 | Password reset per email | `5/hour` |
 | Password reset per IP | `10/hour` |
 
@@ -1778,6 +1840,7 @@ DJANGO_AUTH_SSO_LINK_RATE=20/minute
 DJANGO_PUBLIC_PROFILE_RATE=120/minute
 DJANGO_LOST_REPORT_READ_RATE=120/minute
 DJANGO_LOST_REPORT_WRITE_RATE=30/minute
+DJANGO_SIGHTING_WRITE_RATE=30/minute
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```

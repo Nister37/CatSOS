@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'api',
     'accounts',
     'reports',
+    'sightings',
 ]
 
 MIDDLEWARE = [
@@ -255,6 +256,7 @@ REST_FRAMEWORK = {
         'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
         'lost_report_read': os.getenv('DJANGO_LOST_REPORT_READ_RATE', '120/minute'),
         'lost_report_write': os.getenv('DJANGO_LOST_REPORT_WRITE_RATE', '30/minute'),
+        'sighting_write': os.getenv('DJANGO_SIGHTING_WRITE_RATE', '30/minute'),
     },
 }
 
