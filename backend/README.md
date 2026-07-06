@@ -19,6 +19,7 @@ Django backend for the CatSOS API.
 - Lost cat report detail/edit: `http://localhost:8000/api/reports/<id>/`
 - Lost cat report status: `http://localhost:8000/api/reports/<id>/status/`
 - Lost cat report timeline: `http://localhost:8000/api/reports/<id>/timeline/`
+- Public lost cat report list: `http://localhost:8000/api/public/reports/`
 - Public lost cat report detail: `http://localhost:8000/api/public/reports/<public_id>/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
@@ -51,6 +52,6 @@ Public contributor profiles are available at `/api/profiles/<id>/` for active, e
 
 Authenticated owners can create and list their own lost cat reports through `/api/reports/` and retrieve or edit one owned report through `/api/reports/<id>/`. Creation and editing cover cat details, disappearance location, optional reward, and contact preferences. Owners can change status through `/api/reports/<id>/status/`, including an optional safe found message for `FOUND` or `CLOSED` reports. Resolved reports keep `found_message`, `resolved_at`, and `is_active_search=false`; reopened reports clear resolved metadata. The owner report list supports `active=true` and `active=false` filters. Status changes record `STATUS_CHANGED` timeline events readable through `/api/reports/<id>/timeline/`. Photo management is handled by a separate API. Staff moderation is handled separately in Django admin through the report moderation fields.
 
-Public lost-cat report details are available through `/api/public/reports/<public_id>/`. Public responses use the report `public_id`, approximate coordinates, public-safe contact instructions, empty photo placeholders until the photo API exists, and status timeline events without actor private data. They do not expose owner IDs, exact addresses, chip numbers, notification preferences, or moderation fields.
+Public lost-cat report browsing is available through `/api/public/reports/`, defaulting to active searches and supporting `active` and `status` filters. Public report details are available through `/api/public/reports/<public_id>/`. Public responses use the report `public_id`, approximate coordinates, public-safe contact instructions, empty photo placeholders until the photo API exists, and status timeline events without actor private data. They do not expose owner IDs, exact addresses, chip numbers, notification preferences, or moderation fields.
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.

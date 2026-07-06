@@ -85,6 +85,9 @@ class LostCatReportCreateApiTests(APITestCase):
     def _public_url(self, report):
         return reverse('lost-report-public-detail', args=[report.public_id])
 
+    def _public_list_url(self):
+        return reverse('lost-report-public-list')
+
     def test_create_report_requires_authentication(self):
         response = self.client.post(
             reverse('lost-report-list'),
@@ -917,3 +920,107 @@ class LostCatReportCreateApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_report_list_defaults_to_active_reports(self):
+        active_report = self._create_report(
+            self.owner,
+            cat_name='Active Luna',
+            description='Likely near gardens.',
+            last_seen_landmark='Near the park',
+            last_seen_lat=52.2297,
+            last_seen_lng=21.0122,
+            status=LostCatReport.Status.MISSING,
+        )
+        self._create_report(
+            self.owner,
+            cat_name='Resolved Milo',
+            status=LostCatReport.Status.FOUND,
+            found_message='Milo is home.',
+            resolved_at=timezone.now(),
+        )
+        self._create_report(
+            self.owner,
+            cat_name='Hidden cat',
+            status=LostCatReport.Status.MISSING,
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        card = response.data['results'][0]
+        self.assertEqual(card['public_id'], str(active_report.public_id))
+        self.assertEqual(card['cat_name'], 'Active Luna')
+        self.assertTrue(card['is_active_search'])
+        self.assertEqual(
+            card['approximate_location'],
+            {
+                'latitude': 52.23,
+                'longitude': 21.012,
+                'is_approximate': True,
+            },
+        )
+        self.assertIsNone(card['main_photo'])
+        self.assertNotIn('id', card)
+        self.assertNotIn('owner', card)
+        self.assertNotIn('last_seen_address', card)
+        self.assertNotIn('chip_number', card)
+        self.assertNotIn('contact_phone', card)
+        self.assertNotIn('contact_email', card)
+        self.assertNotIn('moderation_status', card)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_public_report_list_can_filter_resolved_reports(self):
+        self._create_report(
+            self.owner,
+            cat_name='Active Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        resolved_report = self._create_report(
+            self.owner,
+            cat_name='Resolved Milo',
+            status=LostCatReport.Status.CLOSED,
+            found_message='Milo is home.',
+            resolved_at=timezone.now(),
+        )
+
+        response = self.client.get(self._public_list_url(), {'active': 'false'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['public_id'], str(resolved_report.public_id))
+        self.assertFalse(response.data['results'][0]['is_active_search'])
+        self.assertEqual(response.data['results'][0]['found_message'], 'Milo is home.')
+
+    def test_public_report_list_can_filter_by_status(self):
+        self._create_report(
+            self.owner,
+            cat_name='Missing Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        found_report = self._create_report(
+            self.owner,
+            cat_name='Found Milo',
+            status=LostCatReport.Status.FOUND,
+            resolved_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            self._public_list_url(),
+            {'status': LostCatReport.Status.FOUND},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['public_id'], str(found_report.public_id))
+        self.assertEqual(response.data['results'][0]['status'], LostCatReport.Status.FOUND)
+
+    def test_public_report_list_rejects_invalid_filters(self):
+        active_response = self.client.get(self._public_list_url(), {'active': 'maybe'})
+        status_response = self.client.get(self._public_list_url(), {'status': 'LOST'})
+
+        self.assertEqual(active_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('active', active_response.data)
+        self.assertEqual(status_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('status', status_response.data)
