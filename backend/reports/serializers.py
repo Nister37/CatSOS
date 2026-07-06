@@ -359,3 +359,13 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
 
     def get_main_photo(self, report) -> dict | None:
         return None
+
+
+class LostCatReportSimilarReportSerializer(serializers.Serializer):
+    report = LostCatReportPublicListSerializer(read_only=True)
+    score = serializers.IntegerField(read_only=True)
+    distance_km = serializers.FloatField(read_only=True, allow_null=True)
+    reasons = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+    )

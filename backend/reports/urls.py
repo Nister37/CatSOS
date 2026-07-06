@@ -5,6 +5,7 @@ from .views import (
     LostCatReportListCreateView,
     LostCatReportPublicDetailView,
     LostCatReportPublicListView,
+    LostCatReportSimilarView,
     LostCatReportStatusView,
     LostCatReportTimelineView,
 )
@@ -25,6 +26,11 @@ urlpatterns = [
         'reports/<uuid:pk>/timeline/',
         LostCatReportTimelineView.as_view(),
         name='lost-report-timeline',
+    ),
+    path(
+        'reports/<uuid:pk>/similar/',
+        LostCatReportSimilarView.as_view(),
+        name='lost-report-similar',
     ),
     path(
         'public/reports/',
