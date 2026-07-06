@@ -29,6 +29,7 @@ class LostCatReportOwnerSerializer(serializers.ModelSerializer):
         model = LostCatReport
         fields = (
             'id',
+            'public_id',
             'cat_name',
             'age_years',
             'breed',
@@ -203,4 +204,102 @@ class LostCatReportTimelineEventSerializer(serializers.ModelSerializer):
                 'display_name': display_name,
                 'avatar_fallback': avatar_fallback,
             }
+        ).data
+
+
+class LostCatReportPublicTimelineEventSerializer(serializers.ModelSerializer):
+    from_status = serializers.CharField(read_only=True)
+    to_status = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = LostCatReportTimelineEvent
+        fields = (
+            'event_type',
+            'from_status',
+            'to_status',
+            'created_at',
+        )
+        read_only_fields = fields
+
+
+class LostCatReportPublicSerializer(serializers.ModelSerializer):
+    is_active_search = serializers.BooleanField(read_only=True)
+    approximate_location = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
+    main_photo = serializers.SerializerMethodField()
+    photos = serializers.SerializerMethodField()
+    timeline = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LostCatReport
+        fields = (
+            'public_id',
+            'cat_name',
+            'age_years',
+            'breed',
+            'coat_color',
+            'eye_color',
+            'gender',
+            'collar_description',
+            'has_microchip',
+            'personality',
+            'description',
+            'disappeared_at',
+            'last_seen_landmark',
+            'approximate_location',
+            'reward_amount',
+            'reward_note',
+            'status',
+            'found_message',
+            'resolved_at',
+            'is_active_search',
+            'contact',
+            'main_photo',
+            'photos',
+            'timeline',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_approximate_location(self, report) -> dict[str, float | bool] | None:
+        if report.last_seen_lat is None or report.last_seen_lng is None:
+            return None
+
+        return {
+            'latitude': round(report.last_seen_lat, 3),
+            'longitude': round(report.last_seen_lng, 3),
+            'is_approximate': True,
+        }
+
+    def get_contact(self, report) -> dict[str, str]:
+        if report.contact_visibility == LostCatReport.ContactVisibility.PUBLIC:
+            return {
+                'visibility': LostCatReport.ContactVisibility.PUBLIC,
+                'name': report.contact_name,
+                'phone': report.contact_phone,
+                'email': report.contact_email,
+                'instructions': 'Use these public contact details for urgent sightings.',
+            }
+
+        if report.contact_visibility == LostCatReport.ContactVisibility.APP_ONLY:
+            instructions = 'Log in to CatSOS to submit a sighting.'
+        else:
+            instructions = 'Direct public contact details are hidden by the owner.'
+
+        return {
+            'visibility': report.contact_visibility,
+            'instructions': instructions,
+        }
+
+    def get_main_photo(self, report) -> dict | None:
+        return None
+
+    def get_photos(self, report) -> list[dict]:
+        return []
+
+    def get_timeline(self, report) -> list[dict]:
+        timeline_events = report.timeline_events.all()[:20]
+        return LostCatReportPublicTimelineEventSerializer(
+            timeline_events,
+            many=True,
         ).data
