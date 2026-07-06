@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import LostCatReport, LostCatReportTimelineEvent
+from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
+
+
+class LostCatReportPhotoInline(admin.TabularInline):
+    model = LostCatReportPhoto
+    extra = 0
+    readonly_fields = ('id', 'created_at')
 
 
 class LostCatReportTimelineEventInline(admin.TabularInline):
@@ -23,7 +29,7 @@ class LostCatReportTimelineEventInline(admin.TabularInline):
 
 @admin.register(LostCatReport)
 class LostCatReportAdmin(admin.ModelAdmin):
-    inlines = (LostCatReportTimelineEventInline,)
+    inlines = (LostCatReportPhotoInline, LostCatReportTimelineEventInline)
     list_display = (
         'cat_name',
         'owner',
@@ -126,3 +132,11 @@ class LostCatReportTimelineEventAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(LostCatReportPhoto)
+class LostCatReportPhotoAdmin(admin.ModelAdmin):
+    list_display = ('report', 'is_main', 'created_at')
+    list_filter = ('is_main', 'created_at')
+    search_fields = ('report__cat_name', 'report__owner__email')
+    readonly_fields = ('id', 'created_at')

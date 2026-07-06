@@ -1,9 +1,12 @@
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+from .validators import validate_report_photo_upload
 
 
 class LostCatReport(models.Model):
@@ -119,6 +122,43 @@ class LostCatReport(models.Model):
             self.Status.MISSING,
             self.Status.RECENTLY_SEEN,
         }
+
+
+def lost_cat_report_photo_upload_to(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f'lost-cat-report-photos/{uuid4().hex}{extension}'
+
+
+class LostCatReportPhoto(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    report = models.ForeignKey(
+        LostCatReport,
+        on_delete=models.CASCADE,
+        related_name='photos',
+    )
+    image = models.ImageField(
+        upload_to=lost_cat_report_photo_upload_to,
+        validators=[validate_report_photo_upload],
+    )
+    is_main = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-is_main', 'created_at')
+        indexes = [
+            models.Index(fields=('report', 'is_main')),
+            models.Index(fields=('report', 'created_at')),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=('report',),
+                condition=models.Q(is_main=True),
+                name='unique_main_lost_cat_report_photo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Photo for {self.report_id}'
 
 
 class LostCatReportTimelineEvent(models.Model):

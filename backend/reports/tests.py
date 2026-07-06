@@ -1,19 +1,30 @@
+from io import BytesIO
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 
-from .models import LostCatReport, LostCatReportTimelineEvent
+from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
 
 class LostCatReportCreateApiTests(APITestCase):
     def setUp(self):
+        self.media_root = TemporaryDirectory()
+        self.addCleanup(self.media_root.cleanup)
+        media_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
             password='StrongPass123!',
@@ -59,6 +70,23 @@ class LostCatReportCreateApiTests(APITestCase):
         }
         payload.update(overrides)
         return payload
+
+    def _image_upload(
+        self,
+        *,
+        filename='luna.jpg',
+        content_type='image/jpeg',
+        image_format='JPEG',
+    ):
+        image_bytes = BytesIO()
+        image = Image.new('RGB', (4, 4), color='white')
+        image.save(image_bytes, format=image_format)
+        image.close()
+        return SimpleUploadedFile(
+            filename,
+            image_bytes.getvalue(),
+            content_type=content_type,
+        )
 
     def _create_report(self, owner, **overrides):
         defaults = {
@@ -138,6 +166,61 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(report.cat_name, 'Luna')
         self.assertEqual(report.status, LostCatReport.Status.MISSING)
         self.assertEqual(report.reward_amount, 100)
+
+    def test_authenticated_owner_can_create_report_with_main_photo(self):
+        self._authenticate(self.owner)
+        payload = self._payload(photo=self._image_upload())
+
+        response = self.client.post(
+            reverse('lost-report-list'),
+            payload,
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        report = LostCatReport.objects.get()
+        photo = LostCatReportPhoto.objects.get(report=report)
+        self.assertTrue(photo.is_main)
+        self.assertTrue(photo.image.name.startswith('lost-cat-report-photos/'))
+        self.assertNotIn(str(report.id), photo.image.name)
+        self.assertTrue(photo.image.name.endswith('.jpg'))
+
+    def test_create_report_rejects_unsupported_photo_type(self):
+        self._authenticate(self.owner)
+        payload = self._payload(
+            photo=self._image_upload(
+                filename='luna.gif',
+                content_type='image/gif',
+                image_format='GIF',
+            )
+        )
+
+        response = self.client.post(
+            reverse('lost-report-list'),
+            payload,
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertFalse(LostCatReport.objects.exists())
+        self.assertFalse(LostCatReportPhoto.objects.exists())
+
+    def test_create_report_rejects_oversized_photo(self):
+        self._authenticate(self.owner)
+        payload = self._payload(photo=self._image_upload())
+
+        with override_settings(REPORT_PHOTO_MAX_SIZE_BYTES=10):
+            response = self.client.post(
+                reverse('lost-report-list'),
+                payload,
+                format='multipart',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertFalse(LostCatReport.objects.exists())
+        self.assertFalse(LostCatReportPhoto.objects.exists())
 
     def test_list_returns_only_authenticated_owners_reports(self):
         owner_report = self._create_report(self.owner, cat_name='Luna')
@@ -223,6 +306,7 @@ class LostCatReportCreateApiTests(APITestCase):
 
     def test_lost_cat_report_is_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(LostCatReport))
+        self.assertTrue(admin.site.is_registered(LostCatReportPhoto))
         self.assertTrue(admin.site.is_registered(LostCatReportTimelineEvent))
 
     def test_owner_can_retrieve_report_detail_for_editing(self):
@@ -859,6 +943,24 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertNotIn('location_summary', response.data['timeline'][0])
         self.assertEqual(response['Cache-Control'], 'no-store')
 
+    def test_public_report_detail_returns_main_photo_url(self):
+        report = self._create_report(self.owner, cat_name='Luna')
+        photo = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='public-luna.jpg'),
+            is_main=True,
+        )
+
+        response = self.client.get(self._public_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expected_url = f'http://testserver{photo.image.url}'
+        self.assertEqual(response.data['main_photo'], {'url': expected_url})
+        self.assertEqual(response.data['photos'], [{'url': expected_url}])
+        self.assertNotIn('id', response.data['main_photo'])
+        self.assertNotIn('image', response.data['main_photo'])
+        self.assertNotIn('path', response.data['main_photo'])
+
     def test_public_report_detail_hides_private_fields(self):
         report = self._create_report(
             self.owner,
@@ -979,6 +1081,28 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertNotIn('contact_email', card)
         self.assertNotIn('moderation_status', card)
         self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_public_report_list_returns_main_photo_url(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Active Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        photo = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='card-luna.jpg'),
+            is_main=True,
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        card = response.data['results'][0]
+        expected_url = f'http://testserver{photo.image.url}'
+        self.assertEqual(card['main_photo'], {'url': expected_url})
+        self.assertNotIn('id', card['main_photo'])
+        self.assertNotIn('image', card['main_photo'])
+        self.assertNotIn('path', card['main_photo'])
 
     def test_public_report_list_can_filter_resolved_reports(self):
         self._create_report(
