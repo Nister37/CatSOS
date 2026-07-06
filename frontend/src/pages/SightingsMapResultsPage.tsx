@@ -86,15 +86,14 @@ export function SightingsMapResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') ?? '';
 
-  const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER);
-  const [geocodingDone, setGeocodingDone] = useState(false);
+  // null means "geocoding in progress"; initialise to default when there is no query
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(
+    query ? null : DEFAULT_CENTER,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!query) {
-      setGeocodingDone(true);
-      return;
-    }
+    if (!query) return;
     fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
     )
@@ -102,12 +101,11 @@ export function SightingsMapResultsPage() {
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setMapCenter([parseFloat(data[0].lat), parseFloat(data[0].lon)]);
+        } else {
+          setMapCenter(DEFAULT_CENTER);
         }
       })
-      .catch(() => {
-        // fall through to default center
-      })
-      .finally(() => setGeocodingDone(true));
+      .catch(() => setMapCenter(DEFAULT_CENTER));
   }, [query]);
 
   function scrollFeed(direction: 'left' | 'right') {
@@ -160,7 +158,7 @@ export function SightingsMapResultsPage() {
         {/* Map */}
         <section className="max-w-container-max mx-auto px-margin-mobile md:px-xl pb-xl">
           <div className="w-full h-[600px] rounded-[32px] overflow-hidden border border-outline-variant shadow-sm relative" style={{ isolation: 'isolate' }}>
-            {geocodingDone ? (
+            {mapCenter !== null ? (
               <SightingsMap sightings={MOCK_SIGHTINGS} center={mapCenter} />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-surface-container">
