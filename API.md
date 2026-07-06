@@ -49,6 +49,8 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `GET` | [`/api/reports/{id}/`](#get-apireportsid) | JWT | `200` | View one authenticated owner's lost cat report. |
 | `PATCH` | [`/api/reports/{id}/`](#patch-apireportsid) | JWT | `200` | Partially update one authenticated owner's lost cat report. |
 | `PUT` | [`/api/reports/{id}/`](#put-apireportsid) | JWT | `200` | Replace editable fields on one authenticated owner's lost cat report. |
+| `PATCH` | [`/api/reports/{id}/status/`](#patch-apireportsidstatus) | JWT | `200` | Change one authenticated owner's report status. |
+| `GET` | [`/api/reports/{id}/timeline/`](#get-apireportsidtimeline) | JWT | `200` | List timeline events for one authenticated owner's report. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -163,7 +165,10 @@ Query parameters:
 ```text
 page=1
 page_size=20
+active=true
 ```
+
+`active=true` returns reports with `MISSING` or `RECENTLY_SEEN` status. `active=false` returns reports with `FOUND` or `CLOSED` status. Omit `active` to list all owned reports.
 
 <a id="post-apireports"></a>
 ### Create Lost Cat Report
@@ -233,6 +238,9 @@ Success response:
   "notify_sms": true,
   "notify_email": false,
   "status": "MISSING",
+  "found_message": "",
+  "resolved_at": null,
+  "is_active_search": true,
   "created_at": "2026-07-06T10:00:00Z",
   "updated_at": "2026-07-06T10:00:00Z"
 }
@@ -328,6 +336,9 @@ Protected fields are ignored if sent:
 id
 owner
 status
+found_message
+resolved_at
+is_active_search
 moderation_status
 moderation_notes
 created_at
@@ -349,6 +360,90 @@ HTTP 200 OK
 ```
 
 The response body uses the same owner report shape returned by `POST /api/reports/`.
+
+<a id="patch-apireportsidstatus"></a>
+### Change My Lost Cat Report Status
+
+`PATCH /api/reports/{id}/status/`
+
+Only the report owner can change status through this endpoint. Reports owned by another user return `404 Not Found`.
+
+Request:
+
+```json
+{
+  "status": "RECENTLY_SEEN"
+}
+```
+
+Request with an optional found message:
+
+```json
+{
+  "status": "FOUND",
+  "found_message": "Luna is home. Thank you for helping."
+}
+```
+
+Allowed status values:
+
+```text
+MISSING
+RECENTLY_SEEN
+FOUND
+CLOSED
+```
+
+Success response:
+
+```text
+HTTP 200 OK
+```
+
+The response body uses the same owner report shape returned by `POST /api/reports/`, with the updated `status`. A real status change also creates a `STATUS_CHANGED` timeline event with the previous status, new status, actor, location summary, and timestamp. Sending the current status again is treated as a successful no-op and does not create a duplicate timeline event.
+
+Resolved status behavior:
+
+- `FOUND` and `CLOSED` set `resolved_at` when the report first becomes resolved.
+- `FOUND` and `CLOSED` set `is_active_search` to `false`.
+- `MISSING` and `RECENTLY_SEEN` clear `resolved_at` and `found_message`, and set `is_active_search` to `true`.
+- `found_message` is accepted only for `FOUND` or `CLOSED`.
+- `found_message` is limited to 500 characters and rejects obvious email addresses or phone numbers because it may be shown publicly later.
+
+Public report pages are not implemented yet. When CAT-022 adds them, they should read this canonical report `status`.
+
+<a id="get-apireportsidtimeline"></a>
+### List My Lost Cat Report Timeline
+
+`GET /api/reports/{id}/timeline/`
+
+Returns timeline events for one report owned by the authenticated user. Reports owned by another user return `404 Not Found`.
+
+The response is paginated:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "45e87e07-5e11-4c3f-9a78-88914f66ccdf",
+      "event_type": "STATUS_CHANGED",
+      "from_status": "MISSING",
+      "to_status": "RECENTLY_SEEN",
+      "location_summary": "Near the playground",
+      "actor": {
+        "display_name": "Marta Owner",
+        "avatar_fallback": "MO"
+      },
+      "created_at": "2026-07-06T10:30:00Z"
+    }
+  ]
+}
+```
+
+Timeline actor data is intentionally public-safe and does not expose account email, phone, password state, or moderation fields.
 
 ## Auth Payloads
 
