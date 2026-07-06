@@ -3,7 +3,7 @@ from math import asin, cos, radians, sin, sqrt
 from django.db import transaction
 from django.utils import timezone
 
-from .models import LostCatReport, LostCatReportTimelineEvent
+from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
 RESOLVED_REPORT_STATUSES = {
     LostCatReport.Status.FOUND,
@@ -15,6 +15,23 @@ ACTIVE_REPORT_STATUSES = {
 }
 SIMILAR_REPORT_CANDIDATE_LIMIT = 200
 SIMILAR_REPORT_RESULT_LIMIT = 5
+
+
+@transaction.atomic
+def create_report_photo(*, report, image, is_main=False):
+    should_make_main = is_main or not LostCatReportPhoto.objects.filter(
+        report=report,
+    ).exists()
+    if should_make_main:
+        LostCatReportPhoto.objects.filter(report=report, is_main=True).update(
+            is_main=False,
+        )
+
+    return LostCatReportPhoto.objects.create(
+        report=report,
+        image=image,
+        is_main=should_make_main,
+    )
 
 
 def _has_location(report):
