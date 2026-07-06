@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import LostCatReport, LostCatReportTimelineEvent
+from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 from .services import create_report_photo
 from .validators import validate_report_photo_upload
 
@@ -107,6 +107,38 @@ class LostCatReportOwnerSerializer(serializers.ModelSerializer):
             'updated_at',
         )
         read_only_fields = fields
+
+
+class LostCatReportPhotoSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LostCatReportPhoto
+        fields = (
+            'id',
+            'url',
+            'is_main',
+            'created_at',
+        )
+        read_only_fields = fields
+
+    def get_url(self, photo) -> str | None:
+        return build_report_photo_url(
+            photo,
+            request=self.context.get('request'),
+        )
+
+
+class LostCatReportPhotoUploadSerializer(serializers.Serializer):
+    photo = serializers.ImageField(write_only=True)
+    is_main = serializers.BooleanField(required=False, default=False)
+
+    def validate_photo(self, value):
+        try:
+            validate_report_photo_upload(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
 
 class LostCatReportWriteSerializer(serializers.ModelSerializer):
