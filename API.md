@@ -482,11 +482,13 @@ Success response:
   "results": [
     {
       "public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+      "detail_url": "/api/public/reports/80752d52-6f4b-4974-a8df-5532c7b0d2f4/",
       "cat_name": "Luna",
       "breed": "Domestic shorthair",
       "coat_color": "Black with a white chest spot",
       "description": "Indoor cat, likely hiding close to home.",
       "disappeared_at": "2026-07-06T10:00:00Z",
+      "location_summary": "Near the playground",
       "last_seen_landmark": "Near the playground",
       "approximate_location": {
         "latitude": 52.23,
@@ -498,6 +500,7 @@ Success response:
       "found_message": "",
       "resolved_at": null,
       "is_active_search": true,
+      "latest_sighting": null,
       "main_photo": null,
       "updated_at": "2026-07-06T10:30:00Z"
     }
@@ -505,7 +508,7 @@ Success response:
 }
 ```
 
-Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
+`latest_sighting` is currently `null` until the sightings API is implemented. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
 
 <a id="get-apipublicreportspublicid"></a>
 ### Public Lost Cat Report Detail

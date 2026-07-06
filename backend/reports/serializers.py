@@ -312,17 +312,22 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
 class LostCatReportPublicListSerializer(serializers.ModelSerializer):
     is_active_search = serializers.BooleanField(read_only=True)
     approximate_location = serializers.SerializerMethodField()
+    detail_url = serializers.SerializerMethodField()
+    latest_sighting = serializers.SerializerMethodField()
+    location_summary = serializers.SerializerMethodField()
     main_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = LostCatReport
         fields = (
             'public_id',
+            'detail_url',
             'cat_name',
             'breed',
             'coat_color',
             'description',
             'disappeared_at',
+            'location_summary',
             'last_seen_landmark',
             'approximate_location',
             'reward_amount',
@@ -330,6 +335,7 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
             'found_message',
             'resolved_at',
             'is_active_search',
+            'latest_sighting',
             'main_photo',
             'updated_at',
         )
@@ -337,6 +343,19 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
 
     def get_approximate_location(self, report) -> dict[str, float | bool] | None:
         return build_approximate_location(report)
+
+    def get_detail_url(self, report) -> str:
+        return f'/api/public/reports/{report.public_id}/'
+
+    def get_latest_sighting(self, report) -> dict | None:
+        return None
+
+    def get_location_summary(self, report) -> str:
+        if report.last_seen_landmark:
+            return report.last_seen_landmark
+        if report.last_seen_lat is not None and report.last_seen_lng is not None:
+            return 'Approximate map location available'
+        return ''
 
     def get_main_photo(self, report) -> dict | None:
         return None

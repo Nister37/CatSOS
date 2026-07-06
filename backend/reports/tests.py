@@ -951,8 +951,14 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.data['count'], 1)
         card = response.data['results'][0]
         self.assertEqual(card['public_id'], str(active_report.public_id))
+        self.assertEqual(
+            card['detail_url'],
+            f'/api/public/reports/{active_report.public_id}/',
+        )
         self.assertEqual(card['cat_name'], 'Active Luna')
         self.assertTrue(card['is_active_search'])
+        self.assertEqual(card['location_summary'], 'Near the park')
+        self.assertIsNone(card['latest_sighting'])
         self.assertEqual(
             card['approximate_location'],
             {
@@ -1015,6 +1021,25 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['public_id'], str(found_report.public_id))
         self.assertEqual(response.data['results'][0]['status'], LostCatReport.Status.FOUND)
+
+    def test_public_report_list_location_summary_falls_back_to_map_hint(self):
+        report = self._create_report(
+            self.owner,
+            last_seen_landmark='',
+            last_seen_lat=52.2297,
+            last_seen_lng=21.0122,
+            status=LostCatReport.Status.MISSING,
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['public_id'], str(report.public_id))
+        self.assertEqual(
+            response.data['results'][0]['location_summary'],
+            'Approximate map location available',
+        )
 
     def test_public_report_list_rejects_invalid_filters(self):
         active_response = self.client.get(self._public_list_url(), {'active': 'maybe'})
