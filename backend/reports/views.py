@@ -15,11 +15,12 @@ from .serializers import (
     LostCatReportOwnerSerializer,
     LostCatReportPublicListSerializer,
     LostCatReportPublicSerializer,
+    LostCatReportSimilarReportSerializer,
     LostCatReportStatusUpdateSerializer,
     LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
 )
-from .services import change_report_status
+from .services import change_report_status, find_similar_reports
 
 ACTIVE_SEARCH_STATUSES = (
     LostCatReport.Status.MISSING,
@@ -218,6 +219,26 @@ class LostCatReportTimelineView(LostCatReportBaseView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = LostCatReportTimelineEventSerializer(page, many=True)
         return set_no_store_headers(paginator.get_paginated_response(serializer.data))
+
+
+class LostCatReportSimilarView(LostCatReportBaseView):
+    @extend_schema(
+        responses={
+            200: LostCatReportSimilarReportSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_object()
+        similar_reports = find_similar_reports(report=report)
+        serializer = LostCatReportSimilarReportSerializer(similar_reports, many=True)
+        return no_store_response(
+            {
+                'count': len(serializer.data),
+                'results': serializer.data,
+            }
+        )
 
 
 class LostCatReportPublicDetailView(APIView):

@@ -1,3 +1,5 @@
+from math import asin, cos, radians, sin, sqrt
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -7,6 +9,109 @@ RESOLVED_REPORT_STATUSES = {
     LostCatReport.Status.FOUND,
     LostCatReport.Status.CLOSED,
 }
+ACTIVE_REPORT_STATUSES = {
+    LostCatReport.Status.MISSING,
+    LostCatReport.Status.RECENTLY_SEEN,
+}
+SIMILAR_REPORT_CANDIDATE_LIMIT = 200
+SIMILAR_REPORT_RESULT_LIMIT = 5
+
+
+def _has_location(report):
+    return report.last_seen_lat is not None and report.last_seen_lng is not None
+
+
+def calculate_distance_km(first_report, second_report):
+    if not _has_location(first_report) or not _has_location(second_report):
+        return None
+
+    earth_radius_km = 6371.0
+    lat1 = radians(first_report.last_seen_lat)
+    lng1 = radians(first_report.last_seen_lng)
+    lat2 = radians(second_report.last_seen_lat)
+    lng2 = radians(second_report.last_seen_lng)
+
+    delta_lat = lat2 - lat1
+    delta_lng = lng2 - lng1
+    haversine = (
+        sin(delta_lat / 2) ** 2
+        + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
+    )
+    return 2 * earth_radius_km * asin(sqrt(haversine))
+
+
+def _normalized_words(value):
+    return {
+        word
+        for word in (value or '').lower().replace(',', ' ').split()
+        if len(word) >= 3
+    }
+
+
+def _score_similar_report(report, candidate):
+    score = 0
+    reasons = []
+    distance_km = calculate_distance_km(report, candidate)
+
+    if distance_km is not None:
+        if distance_km <= 5:
+            score += 5
+            reasons.append('nearby')
+        elif distance_km <= 15:
+            score += 3
+            reasons.append('same area')
+        elif distance_km <= 30:
+            score += 1
+            reasons.append('regional match')
+
+    if report.breed and candidate.breed:
+        if report.breed.strip().lower() == candidate.breed.strip().lower():
+            score += 2
+            reasons.append('same breed')
+
+    shared_coat_words = _normalized_words(report.coat_color) & _normalized_words(
+        candidate.coat_color,
+    )
+    if shared_coat_words:
+        score += 2
+        reasons.append('similar coat')
+
+    if (
+        report.gender != LostCatReport.Gender.UNKNOWN
+        and report.gender == candidate.gender
+    ):
+        score += 1
+        reasons.append('same gender')
+
+    return {
+        'report': candidate,
+        'score': score,
+        'distance_km': None if distance_km is None else round(distance_km, 2),
+        'reasons': reasons,
+    }
+
+
+def find_similar_reports(*, report, limit=SIMILAR_REPORT_RESULT_LIMIT):
+    candidates = (
+        LostCatReport.objects.exclude(pk=report.pk)
+        .exclude(moderation_status=LostCatReport.ModerationStatus.HIDDEN)
+        .filter(status__in=ACTIVE_REPORT_STATUSES)
+        .order_by('-updated_at')[:SIMILAR_REPORT_CANDIDATE_LIMIT]
+    )
+    scored_candidates = [
+        result
+        for result in (_score_similar_report(report, candidate) for candidate in candidates)
+        if result['score'] > 0
+    ]
+    scored_candidates.sort(
+        key=lambda result: (
+            -result['score'],
+            result['distance_km'] is None,
+            result['distance_km'] if result['distance_km'] is not None else 999999,
+            -result['report'].updated_at.timestamp(),
+        )
+    )
+    return scored_candidates[:limit]
 
 
 def build_report_location_summary(report):
