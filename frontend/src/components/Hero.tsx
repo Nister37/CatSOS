@@ -21,9 +21,12 @@ export function Hero() {
             >
               Report Missing Cat
             </Link>
-            <button className="border-2 border-on-background text-on-background px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:bg-on-background hover:text-on-primary transition-all">
+            <Link
+              to="/report-sighting"
+              className="border-2 border-on-background text-on-background px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:bg-on-background hover:text-on-primary transition-all text-center"
+            >
               Report a Sighting
-            </button>
+            </Link>
           </div>
         </div>
 
