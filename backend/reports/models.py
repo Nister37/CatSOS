@@ -163,6 +163,7 @@ class LostCatReportPhoto(models.Model):
 
 class LostCatReportTimelineEvent(models.Model):
     class EventType(models.TextChoices):
+        REPORT_CREATED = 'REPORT_CREATED', 'Report created'
         STATUS_CHANGED = 'STATUS_CHANGED', 'Status changed'
         SIGHTING_CREATED = 'SIGHTING_CREATED', 'Sighting created'
 

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -24,6 +25,7 @@ from .serializers import (
 )
 from .services import (
     change_report_status,
+    create_report_created_timeline_event,
     create_report_photo,
     delete_report_photo,
     find_similar_reports,
@@ -135,7 +137,12 @@ class LostCatReportListCreateView(LostCatReportBaseView):
             context={'request': request},
         )
         serializer.is_valid(raise_exception=True)
-        report = serializer.save(owner=request.user)
+        with transaction.atomic():
+            report = serializer.save(owner=request.user)
+            create_report_created_timeline_event(
+                report=report,
+                actor=request.user,
+            )
         response_serializer = LostCatReportOwnerSerializer(
             report,
             context={'request': request},
@@ -230,7 +237,7 @@ class LostCatReportTimelineView(LostCatReportBaseView):
     )
     def get(self, request, pk):
         report = self.get_object()
-        queryset = report.timeline_events.select_related('actor')
+        queryset = report.timeline_events.select_related('actor').order_by('created_at')
         paginator = LostCatReportTimelinePagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = LostCatReportTimelineEventSerializer(page, many=True)
