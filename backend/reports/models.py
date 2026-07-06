@@ -109,3 +109,45 @@ class LostCatReport(models.Model):
 
     def __str__(self):
         return f'{self.cat_name} ({self.status})'
+
+
+class LostCatReportTimelineEvent(models.Model):
+    class EventType(models.TextChoices):
+        STATUS_CHANGED = 'STATUS_CHANGED', 'Status changed'
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    report = models.ForeignKey(
+        LostCatReport,
+        on_delete=models.CASCADE,
+        related_name='timeline_events',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='lost_cat_report_timeline_events',
+        blank=True,
+        null=True,
+    )
+    event_type = models.CharField(max_length=40, choices=EventType.choices)
+    from_status = models.CharField(
+        max_length=20,
+        choices=LostCatReport.Status.choices,
+        blank=True,
+    )
+    to_status = models.CharField(
+        max_length=20,
+        choices=LostCatReport.Status.choices,
+        blank=True,
+    )
+    location_summary = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+        indexes = [
+            models.Index(fields=('report', '-created_at')),
+            models.Index(fields=('event_type', '-created_at')),
+        ]
+
+    def __str__(self):
+        return f'{self.event_type} for {self.report_id}'
