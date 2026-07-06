@@ -46,6 +46,9 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
 | `GET` | [`/api/reports/`](#get-apireports) | JWT | `200` | List the authenticated owner's lost cat reports. |
 | `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report. |
+| `GET` | [`/api/reports/{id}/`](#get-apireportsid) | JWT | `200` | View one authenticated owner's lost cat report. |
+| `PATCH` | [`/api/reports/{id}/`](#patch-apireportsid) | JWT | `200` | Partially update one authenticated owner's lost cat report. |
+| `PUT` | [`/api/reports/{id}/`](#put-apireportsid) | JWT | `200` | Replace editable fields on one authenticated owner's lost cat report. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -263,6 +266,89 @@ RECENTLY_SEEN
 FOUND
 CLOSED
 ```
+
+<a id="get-apireportsid"></a>
+### Get My Lost Cat Report
+
+`GET /api/reports/{id}/`
+
+Returns one report owned by the authenticated user. The response includes owner-only edit fields such as private contact preferences, but does not include `owner`, `moderation_status`, or `moderation_notes`.
+
+Reports owned by another user return:
+
+```text
+HTTP 404 Not Found
+```
+
+This avoids confirming whether another user's report ID exists.
+
+<a id="patch-apireportsid"></a>
+<a id="put-apireportsid"></a>
+### Update My Lost Cat Report
+
+`PATCH /api/reports/{id}/`
+
+`PUT /api/reports/{id}/`
+
+Only the report owner can update report details through this endpoint. `PATCH` accepts partial updates. `PUT` requires a complete editable report payload.
+
+Editable fields are the same fields accepted by `POST /api/reports/`:
+
+```text
+cat_name
+age_years
+breed
+coat_color
+eye_color
+gender
+collar_description
+has_microchip
+chip_number
+personality
+description
+disappeared_at
+last_seen_address
+last_seen_landmark
+last_seen_lat
+last_seen_lng
+reward_amount
+reward_note
+contact_name
+contact_phone
+contact_email
+contact_visibility
+notify_push
+notify_sms
+notify_email
+```
+
+Protected fields are ignored if sent:
+
+```text
+id
+owner
+status
+moderation_status
+moderation_notes
+created_at
+updated_at
+```
+
+Status changes are handled by a separate report lifecycle API. Photos are handled by the report photo API when available, not by this JSON edit endpoint.
+
+Validation behavior:
+
+- Latitude and longitude must be supplied together in the final report state.
+- Setting `has_microchip` to `false` clears `chip_number`.
+- Invalid choices and model field constraints return `400 Bad Request` with field-based errors.
+
+Success response:
+
+```text
+HTTP 200 OK
+```
+
+The response body uses the same owner report shape returned by `POST /api/reports/`.
 
 ## Auth Payloads
 
