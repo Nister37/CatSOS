@@ -138,6 +138,30 @@ Admins moderate reports separately in Django admin.
 
 Returns only reports owned by the authenticated user.
 
+The response is paginated:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "2f7b9db5-5697-47c2-9004-6dbd87a17a28",
+      "cat_name": "Luna",
+      "status": "MISSING"
+    }
+  ]
+}
+```
+
+Query parameters:
+
+```text
+page=1
+page_size=20
+```
+
 <a id="post-apireports"></a>
 ### Create Lost Cat Report
 
@@ -1265,6 +1289,7 @@ Default local rates:
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
 | Public profile | `120/minute` |
+| Lost report read | `120/minute` |
 | Lost report write | `30/minute` |
 | Password reset per email | `5/hour` |
 | Password reset per IP | `10/hour` |
@@ -1281,6 +1306,7 @@ DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
 DJANGO_PUBLIC_PROFILE_RATE=120/minute
+DJANGO_LOST_REPORT_READ_RATE=120/minute
 DJANGO_LOST_REPORT_WRITE_RATE=30/minute
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10

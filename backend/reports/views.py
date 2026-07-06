@@ -1,4 +1,5 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +9,12 @@ from rest_framework.views import APIView
 
 from .models import LostCatReport
 from .serializers import LostCatReportCreateSerializer, LostCatReportOwnerSerializer
+
+
+class LostCatReportPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 def set_no_store_headers(response):
@@ -25,7 +32,18 @@ class LostCatReportListCreateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'lost_report_write'
+    throttle_scope = 'lost_report_read'
+    throttle_scope_by_method = {
+        'GET': 'lost_report_read',
+        'POST': 'lost_report_write',
+    }
+
+    def get_throttles(self):
+        self.throttle_scope = self.throttle_scope_by_method.get(
+            self.request.method,
+            'lost_report_write',
+        )
+        return super().get_throttles()
 
     def get_queryset(self):
         return LostCatReport.objects.filter(owner=self.request.user)
@@ -37,8 +55,10 @@ class LostCatReportListCreateView(APIView):
         },
     )
     def get(self, request):
-        serializer = LostCatReportOwnerSerializer(self.get_queryset(), many=True)
-        return no_store_response(serializer.data)
+        paginator = LostCatReportPagination()
+        page = paginator.paginate_queryset(self.get_queryset(), request, view=self)
+        serializer = LostCatReportOwnerSerializer(page, many=True)
+        return set_no_store_headers(paginator.get_paginated_response(serializer.data))
 
     @extend_schema(
         request=LostCatReportCreateSerializer,

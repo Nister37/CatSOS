@@ -126,10 +126,25 @@ class LostCatReportCreateApiTests(APITestCase):
         response = self.client.get(reverse('lost-report-list'))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['id'], str(owner_report.id))
-        self.assertEqual(response.data[0]['cat_name'], 'Luna')
+        self.assertEqual(response.data['count'], 1)
+        self.assertIsNone(response.data['next'])
+        self.assertIsNone(response.data['previous'])
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], str(owner_report.id))
+        self.assertEqual(response.data['results'][0]['cat_name'], 'Luna')
         self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_list_reports_is_paginated(self):
+        for index in range(3):
+            self._create_report(self.owner, cat_name=f'Cat {index}')
+        self._authenticate(self.owner)
+
+        response = self.client.get(reverse('lost-report-list'), {'page_size': 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(len(response.data['results']), 2)
+        self.assertIsNotNone(response.data['next'])
 
     def test_create_report_returns_field_errors_for_missing_required_data(self):
         self._authenticate(self.owner)
