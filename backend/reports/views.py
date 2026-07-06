@@ -13,6 +13,7 @@ from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
     LostCatReportOwnerSerializer,
+    LostCatReportPublicListSerializer,
     LostCatReportPublicSerializer,
     LostCatReportStatusUpdateSerializer,
     LostCatReportTimelineEventSerializer,
@@ -30,6 +31,7 @@ RESOLVED_REPORT_STATUSES = (
 )
 TRUE_QUERY_VALUES = {'1', 'true', 'yes'}
 FALSE_QUERY_VALUES = {'0', 'false', 'no'}
+PUBLIC_STATUS_VALUES = {status_value for status_value, _label in LostCatReport.Status.choices}
 
 
 class LostCatReportPagination(PageNumberPagination):
@@ -247,3 +249,45 @@ class LostCatReportPublicDetailView(APIView):
         report = self.get_object()
         serializer = LostCatReportPublicSerializer(report)
         return no_store_response(serializer.data)
+
+
+class LostCatReportPublicListView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'lost_report_read'
+
+    def get_queryset(self):
+        queryset = LostCatReport.objects.exclude(
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+        status_filter = self.request.query_params.get('status')
+        active = self.request.query_params.get('active')
+
+        if status_filter:
+            normalized_status = status_filter.strip().upper()
+            if normalized_status not in PUBLIC_STATUS_VALUES:
+                raise ValidationError({'status': ['Use a valid report status.']})
+            return queryset.filter(status=normalized_status)
+
+        if active is None:
+            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+
+        normalized_active = active.strip().lower()
+        if normalized_active in TRUE_QUERY_VALUES:
+            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+        if normalized_active in FALSE_QUERY_VALUES:
+            return queryset.filter(status__in=RESOLVED_REPORT_STATUSES)
+
+        raise ValidationError({'active': ['Use true or false.']})
+
+    @extend_schema(
+        responses={
+            200: LostCatReportPublicListSerializer(many=True),
+            400: OpenApiResponse(description='Validation errors'),
+        },
+    )
+    def get(self, request):
+        paginator = LostCatReportPagination()
+        page = paginator.paginate_queryset(self.get_queryset(), request, view=self)
+        serializer = LostCatReportPublicListSerializer(page, many=True)
+        return set_no_store_headers(paginator.get_paginated_response(serializer.data))

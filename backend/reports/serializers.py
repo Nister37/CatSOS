@@ -22,6 +22,17 @@ def contains_phone_like_text(value):
     return False
 
 
+def build_approximate_location(report):
+    if report.last_seen_lat is None or report.last_seen_lng is None:
+        return None
+
+    return {
+        'latitude': round(report.last_seen_lat, 3),
+        'longitude': round(report.last_seen_lng, 3),
+        'is_approximate': True,
+    }
+
+
 class LostCatReportOwnerSerializer(serializers.ModelSerializer):
     is_active_search = serializers.BooleanField(read_only=True)
 
@@ -262,14 +273,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_approximate_location(self, report) -> dict[str, float | bool] | None:
-        if report.last_seen_lat is None or report.last_seen_lng is None:
-            return None
-
-        return {
-            'latitude': round(report.last_seen_lat, 3),
-            'longitude': round(report.last_seen_lng, 3),
-            'is_approximate': True,
-        }
+        return build_approximate_location(report)
 
     def get_contact(self, report) -> dict[str, str]:
         if report.contact_visibility == LostCatReport.ContactVisibility.PUBLIC:
@@ -303,3 +307,36 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
             timeline_events,
             many=True,
         ).data
+
+
+class LostCatReportPublicListSerializer(serializers.ModelSerializer):
+    is_active_search = serializers.BooleanField(read_only=True)
+    approximate_location = serializers.SerializerMethodField()
+    main_photo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LostCatReport
+        fields = (
+            'public_id',
+            'cat_name',
+            'breed',
+            'coat_color',
+            'description',
+            'disappeared_at',
+            'last_seen_landmark',
+            'approximate_location',
+            'reward_amount',
+            'status',
+            'found_message',
+            'resolved_at',
+            'is_active_search',
+            'main_photo',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_approximate_location(self, report) -> dict[str, float | bool] | None:
+        return build_approximate_location(report)
+
+    def get_main_photo(self, report) -> dict | None:
+        return None
