@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
@@ -113,6 +114,15 @@ class LostCatReportCreateApiTests(APITestCase):
     def _similar_url(self, report):
         return reverse('lost-report-similar', args=[report.id])
 
+    def _photos_url(self, report):
+        return reverse('lost-report-photo-list', args=[report.id])
+
+    def _photo_main_url(self, report, photo):
+        return reverse('lost-report-photo-main', args=[report.id, photo.id])
+
+    def _photo_detail_url(self, report, photo):
+        return reverse('lost-report-photo-detail', args=[report.id, photo.id])
+
     def _public_url(self, report):
         return reverse('lost-report-public-detail', args=[report.public_id])
 
@@ -221,6 +231,179 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertIn('photo', response.data)
         self.assertFalse(LostCatReport.objects.exists())
         self.assertFalse(LostCatReportPhoto.objects.exists())
+
+    def test_owner_can_list_report_photo_gallery(self):
+        report = self._create_report(self.owner)
+        main_photo = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='main.jpg'),
+            is_main=True,
+        )
+        secondary_photo = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='secondary.jpg'),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._photos_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['id'], str(main_photo.id))
+        self.assertEqual(response.data[0]['is_main'], True)
+        self.assertEqual(
+            response.data[0]['url'],
+            f'http://testserver{main_photo.image.url}',
+        )
+        self.assertEqual(response.data[1]['id'], str(secondary_photo.id))
+        self.assertEqual(response.data[1]['is_main'], False)
+        self.assertNotIn('image', response.data[0])
+        self.assertNotIn('path', response.data[0])
+
+    def test_owner_can_upload_additional_report_photo(self):
+        report = self._create_report(self.owner)
+        existing_main = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='main.jpg'),
+            is_main=True,
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            self._photos_url(report),
+            {
+                'photo': self._image_upload(
+                    filename='new-main.png',
+                    content_type='image/png',
+                    image_format='PNG',
+                ),
+                'is_main': 'true',
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['is_main'])
+        new_photo = LostCatReportPhoto.objects.get(pk=response.data['id'])
+        existing_main.refresh_from_db()
+        self.assertFalse(existing_main.is_main)
+        self.assertTrue(new_photo.is_main)
+        self.assertTrue(new_photo.image.name.endswith('.png'))
+
+    def test_photo_gallery_rejects_unsupported_upload(self):
+        report = self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            self._photos_url(report),
+            {
+                'photo': self._image_upload(
+                    filename='bad.gif',
+                    content_type='image/gif',
+                    image_format='GIF',
+                )
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertFalse(LostCatReportPhoto.objects.exists())
+
+    def test_owner_can_set_main_report_photo_for_public_cards(self):
+        report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
+        old_main = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='old-main.jpg'),
+            is_main=True,
+        )
+        new_main = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='new-main.jpg'),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(self._photo_main_url(report, new_main))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_main'])
+        old_main.refresh_from_db()
+        new_main.refresh_from_db()
+        self.assertFalse(old_main.is_main)
+        self.assertTrue(new_main.is_main)
+
+        public_response = self.client.get(self._public_list_url())
+        self.assertEqual(public_response.status_code, status.HTTP_200_OK)
+        expected_url = f'http://testserver{new_main.image.url}'
+        self.assertEqual(
+            public_response.data['results'][0]['main_photo'],
+            {'url': expected_url},
+        )
+
+    def test_owner_can_delete_photo_and_main_photo_is_promoted(self):
+        report = self._create_report(self.owner)
+        old_main = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='old-main.jpg'),
+            is_main=True,
+        )
+        replacement = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='replacement.jpg'),
+        )
+        old_image_name = old_main.image.name
+        self.assertTrue(default_storage.exists(old_image_name))
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(self._photo_detail_url(report, old_main))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(LostCatReportPhoto.objects.filter(pk=old_main.pk).exists())
+        self.assertFalse(default_storage.exists(old_image_name))
+        replacement.refresh_from_db()
+        self.assertTrue(replacement.is_main)
+
+        public_response = self.client.get(self._public_url(report))
+        expected_url = f'http://testserver{replacement.image.url}'
+        self.assertEqual(public_response.data['main_photo'], {'url': expected_url})
+
+    def test_photo_gallery_requires_authentication(self):
+        report = self._create_report(self.owner)
+
+        list_response = self.client.get(self._photos_url(report))
+        upload_response = self.client.post(
+            self._photos_url(report),
+            {'photo': self._image_upload()},
+            format='multipart',
+        )
+
+        self.assertIn(
+            list_response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+        self.assertIn(
+            upload_response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    def test_photo_gallery_requires_report_ownership(self):
+        report = self._create_report(self.other_user)
+        photo = LostCatReportPhoto.objects.create(
+            report=report,
+            image=self._image_upload(filename='other.jpg'),
+            is_main=True,
+        )
+        self._authenticate(self.owner)
+
+        list_response = self.client.get(self._photos_url(report))
+        main_response = self.client.patch(self._photo_main_url(report, photo))
+        delete_response = self.client.delete(self._photo_detail_url(report, photo))
+
+        self.assertEqual(list_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(main_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(delete_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(LostCatReportPhoto.objects.filter(pk=photo.pk).exists())
 
     def test_list_returns_only_authenticated_owners_reports(self):
         owner_report = self._create_report(self.owner, cat_name='Luna')
