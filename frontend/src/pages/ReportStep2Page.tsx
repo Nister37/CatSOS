@@ -70,9 +70,9 @@ export function ReportStep2Page() {
   const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
   const [isFetchingAddress, setIsFetchingAddress] = useState(false);
 
-  const defaultDisappearedAt = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+  const [defaultDisappearedAt] = useState(
+    () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+  );
 
   const {
     register,

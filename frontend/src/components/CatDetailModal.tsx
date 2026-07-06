@@ -51,7 +51,6 @@ export function CatDetailModal({ publicId, onClose }: Props) {
   }, [onClose]);
 
   useEffect(() => {
-    setLoading(true);
     fetchReportDetail(publicId)
       .then(setReport)
       .catch(() => setReport(null))

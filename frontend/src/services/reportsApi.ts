@@ -7,6 +7,7 @@ type CreateReportPayload = {
   step1: ReportStep1Data;
   step2: ReportStep2Data;
   step3: ReportStep3Data;
+  photo?: File | null;
 };
 
 export type PublicReport = {
@@ -19,8 +20,8 @@ export type PublicReport = {
   status: string;
 };
 
-export function createReport({ step1, step2, step3 }: CreateReportPayload) {
-  const payload = {
+export function createReport({ step1, step2, step3, photo }: CreateReportPayload) {
+  const fields: Record<string, string | number | boolean | null> = {
     cat_name: step1.catName,
     breed: step1.breed ?? '',
     coat_color: step1.coatColor,
@@ -40,9 +41,18 @@ export function createReport({ step1, step2, step3 }: CreateReportPayload) {
     notify_email: step3.notifyEmail,
   };
 
+  if (photo) {
+    const form = new FormData();
+    Object.entries(fields).forEach(([k, v]) => {
+      if (v !== null && v !== undefined) form.append(k, String(v));
+    });
+    form.append('photo', photo);
+    return apiRequest<unknown>('/api/reports/', { method: 'POST', body: form });
+  }
+
   return apiRequest<unknown>('/api/reports/', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(fields),
   });
 }
 
