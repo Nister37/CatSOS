@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { signOut } from '../features/auth/authSlice';
 
 const NAV_LINKS = [
-  { label: 'Report Missing', to: '/report-missing', active: true },
+  { label: 'Report Missing', to: '/report-missing' },
   { label: 'Sightings Map', to: '/map' },
   { label: 'Shelters & Vets', to: '/shelters' },
   { label: 'About', to: '/about' },
@@ -18,6 +18,9 @@ export function Navbar() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
+
+  const { pathname } = useLocation();
+  const isActive = (to: string) => pathname === to || pathname.startsWith(to + '/');
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -55,7 +58,7 @@ export function Navbar() {
               key={link.to}
               to={link.to}
               className={
-                link.active
+                isActive(link.to)
                   ? 'text-on-primary font-bold border-b-2 border-primary-container pb-1 font-label-md text-label-md'
                   : 'text-on-primary opacity-60 hover:opacity-100 hover:text-primary-container transition-opacity font-label-md text-label-md'
               }

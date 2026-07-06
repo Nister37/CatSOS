@@ -3,7 +3,10 @@
     "allow": [
       "Bash(python manage.py test)",
       "Bash(docker compose *)",
-      "Bash(yarn test *)"
+      "Bash(yarn test *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Better\\\\Desktop\\\\coding\\\\CatSOS\\\\backend\" -Recurse -File -Filter \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)"
     ]
   }
 }
