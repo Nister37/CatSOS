@@ -1,48 +1,119 @@
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import L from 'leaflet';
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { fetchPublicReports, type PublicReport } from '../services/reportsApi';
 
-interface MockCat {
-  id: string;
-  name: string;
-  imageUrl: string | null;
+const DEFAULT_CENTER: [number, number] = [51.505, -0.09];
+const DEFAULT_ZOOM = 12;
+const PIN_ZOOM = 15;
+
+function LocationPicker({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click(e) { onPick(e.latlng.lat, e.latlng.lng); } });
+  return null;
 }
 
-const MOCK_CATS: MockCat[] = [
-  {
-    id: 'oliver',
-    name: 'Oliver',
-    imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDdvBKs7fX3EuFADHmtNzpDvY-pNaJkxG18rcdbnmsHqB9ftZwEwuEzpdEUcWlhVqvbmlfnkqcORJuuslJc_k10Cnnd-ffPyBVyQ7iNTzsOMDoV_mxa560fysOsWbs2oRaFlnR01V99YG9cLWiFUO3jI2JMnNCMMqSKBA5I895wmaWJ0C2dh_k-pDxfVI_z06kFP18ij5L-a2gVOl7CdfGxZDR5iQb4e3ifIsgaSCWSM5geiJk7BAlZrg',
-  },
-  {
-    id: 'luna',
-    name: 'Luna',
-    imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBAzoeIF-S4ZHtkYIKwRPs2n_s-llMgvuXcZxQougEJibi1biUDDBitBAYxVN0m04Xxmj1ujXmCIqZr_JCeaqPCIAXitklO4C-oqI3PSTadLW8EMvp9R04x6Sod1rIRssXiYQ0bNWX_5PZcjVJMgS16E5UOKCNZ626RQ6_MpI_xtQMlyOdwMblYsZmh367oQXkULlkqQMjrH1HTuztE2B2HdGKDIp766i22apU9KjHo_2gZ0qCG1ltj1w',
-  },
-  {
-    id: 'mochi',
-    name: 'Mochi',
-    imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCT-7wpxDA228yLoTJ8cYyp-pFUAk9fVdqotk9W4cn9xdPuyRWc0nWwWChBULT--lQL4qQzomDPaEGlEN0_iGukkknJvFbGBFzBD7_9JCNmJO9-XDgFQ1LPpU7Wt359e3n8xVSfZ947AUM_jaJQ_VOGtnTieL7vpJK7_0ot5yRdWy_dA5bILX9zCxaXth65-6lYUPQp4xDBrdH2_-BJ0azbZsWf2QDwHJi39ZMAc-cuMhCBI-auA--FAg',
-  },
-  {
-    id: 'unknown',
-    name: 'Unknown Cat',
-    imageUrl: null,
-  },
-];
+function FlyToUserOnce({ target }: { target: [number, number] | null }) {
+  const map = useMap();
+  const hasFlewRef = useRef(false);
+  useEffect(() => {
+    if (!target || hasFlewRef.current) return;
+    hasFlewRef.current = true;
+    map.flyTo(target, DEFAULT_ZOOM + 2, { duration: 1.5 });
+  }, [target, map]);
+  return null;
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'en' } },
+    );
+    const data = await res.json();
+    const addr = data.address ?? {};
+    const parts = [
+      addr.house_number && addr.road ? `${addr.house_number} ${addr.road}` : addr.road,
+      addr.suburb ?? addr.neighbourhood ?? addr.quarter,
+      addr.city ?? addr.town ?? addr.village,
+    ].filter(Boolean);
+    return parts.length ? parts.join(', ') : (data.display_name ?? '');
+  } catch {
+    return '';
+  }
+}
+
+const UNKNOWN_ID = '__unknown__';
 
 export function ReportSightingPage() {
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const location = useLocation();
+  const preSelectedId = (location.state as { preSelectedId?: string } | null)?.preSelectedId ?? null;
+
+  const [cats, setCats] = useState<PublicReport[] | null>(null);
+  const [selectedCat, setSelectedCat] = useState<string | null>(preSelectedId);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const mapRef = useRef<L.Map | null>(null);
+  const [pinPosition, setPinPosition] = useState<[number, number] | null>(null);
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
+  const [isFetchingAddress, setIsFetchingAddress] = useState(false);
+  const [sightingAddress, setSightingAddress] = useState('');
+
+  useEffect(() => {
+    fetchPublicReports(50)
+      .then(setCats)
+      .catch(() => setCats([]));
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserPosition([pos.coords.latitude, pos.coords.longitude]),
+      () => {},
+      { timeout: 8000 },
+    );
+  }, []);
+
+  const pinIcon = useMemo(
+    () =>
+      new L.DivIcon({
+        className: '',
+        html: `<span class="material-symbols-outlined" style="font-size:40px;color:#ff5a5f;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4));display:block;line-height:1;">location_on</span>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40],
+      }),
+    [],
+  );
+
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    setPinPosition([lat, lng]);
+    setIsFetchingAddress(true);
+    const addr = await reverseGeocode(lat, lng);
+    if (addr) setSightingAddress(addr);
+    setIsFetchingAddress(false);
+  }, []);
+
+  const handleLocateMe = () => {
+    if (userPosition) {
+      mapRef.current?.flyTo(userPosition, PIN_ZOOM, { duration: 1 });
+    } else {
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => {
+          const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+          setUserPosition(coords);
+          mapRef.current?.flyTo(coords, PIN_ZOOM, { duration: 1 });
+        },
+        () => {},
+      );
+    }
+  };
 
   function handleFile(file: File) {
     if (!file.type.startsWith('image/')) return;
@@ -138,54 +209,130 @@ export function ReportSightingPage() {
                     <span className="text-label-sm text-secondary">Recently Reported Nearby</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-md">
-                    {MOCK_CATS.map((cat) => {
-                      const isSelected = selectedCat === cat.id;
-                      return (
-                        <div
-                          key={cat.id}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isSelected}
-                          onClick={() => setSelectedCat(cat.id)}
-                          onKeyDown={(e) => e.key === 'Enter' && setSelectedCat(cat.id)}
-                          className="group cursor-pointer relative"
-                        >
-                          <div
-                            className={`aspect-square rounded-xl overflow-hidden mb-xs bg-surface-container transition-all group-hover:shadow-md border-2 ${
-                              isSelected
-                                ? 'border-primary-container'
-                                : 'border-transparent'
-                            } ${cat.imageUrl === null ? 'flex flex-col items-center justify-center border-dashed border-outline-variant bg-surface-container-high' : ''}`}
-                            style={
-                              isSelected
-                                ? { boxShadow: '0 0 0 4px #ff5a5f' }
-                                : undefined
-                            }
-                          >
-                            {cat.imageUrl ? (
-                              <img
-                                src={cat.imageUrl}
-                                alt={cat.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <>
-                                <span className="material-symbols-outlined text-[48px] text-secondary mb-1">
-                                  question_mark
-                                </span>
-                                <span className="text-label-sm text-secondary">Not Listed</span>
-                              </>
-                            )}
+                    {cats === null
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="animate-pulse space-y-xs">
+                            <div className="aspect-square rounded-xl bg-surface-container" />
+                            <div className="h-4 bg-surface-container rounded-lg mx-auto w-3/4" />
                           </div>
-                          <p className="font-label-md text-center">{cat.name}</p>
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 bg-primary-container text-white rounded-full p-1 shadow-sm">
-                              <span className="material-symbols-outlined text-[18px]">check</span>
+                        ))
+                      : [...cats, { public_id: UNKNOWN_ID, cat_name: 'Unknown Cat', main_photo: null } as unknown as PublicReport].map((cat) => {
+                          const isSelected = selectedCat === cat.public_id;
+                          const imageUrl = cat.public_id === UNKNOWN_ID ? null : cat.main_photo?.url;
+                          return (
+                            <div
+                              key={cat.public_id}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isSelected}
+                              onClick={() => setSelectedCat(cat.public_id)}
+                              onKeyDown={(e) => e.key === 'Enter' && setSelectedCat(cat.public_id)}
+                              className="group cursor-pointer relative"
+                            >
+                              <div
+                                className={`aspect-square rounded-xl overflow-hidden mb-xs bg-surface-container transition-all group-hover:shadow-md border-2 ${
+                                  isSelected ? 'border-primary-container' : 'border-transparent'
+                                } ${!imageUrl ? 'flex flex-col items-center justify-center border-dashed border-outline-variant bg-surface-container-high' : ''}`}
+                                style={isSelected ? { boxShadow: '0 0 0 4px #ff5a5f' } : undefined}
+                              >
+                                {imageUrl ? (
+                                  <img src={imageUrl} alt={cat.cat_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <>
+                                    <span className="material-symbols-outlined text-[48px] text-secondary mb-1">
+                                      {cat.public_id === UNKNOWN_ID ? 'question_mark' : 'pets'}
+                                    </span>
+                                    {cat.public_id === UNKNOWN_ID && (
+                                      <span className="text-label-sm text-secondary">Not Listed</span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <p className="font-label-md text-center">{cat.cat_name}</p>
+                              {isSelected && (
+                                <div className="absolute top-2 right-2 bg-primary-container text-white rounded-full p-1 shadow-sm">
+                                  <span className="material-symbols-outlined text-[18px]">check</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          );
+                        })}
+                  </div>
+                </section>
+
+                {/* Sighting location */}
+                <section>
+                  <h2 className="font-headline-md text-headline-md mb-md">Sighting Location</h2>
+                  <div className="bg-white rounded-xl border border-surface-container shadow-sm overflow-hidden isolate">
+                    <div className="relative" style={{ height: 300 }}>
+                      <MapContainer
+                        ref={mapRef}
+                        center={DEFAULT_CENTER}
+                        zoom={DEFAULT_ZOOM}
+                        scrollWheelZoom
+                        zoomControl={false}
+                        style={{ height: '100%', cursor: 'crosshair' }}
+                        aria-label="Map – click to mark where you spotted the cat"
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <LocationPicker onPick={handleMapClick} />
+                        <FlyToUserOnce target={userPosition} />
+                        {pinPosition && <Marker position={pinPosition} icon={pinIcon} />}
+                      </MapContainer>
+
+                      {/* Map controls */}
+                      <div className="absolute top-sm right-sm z-[400] flex flex-col gap-xs">
+                        <button
+                          type="button"
+                          aria-label="Zoom in"
+                          onClick={() => mapRef.current?.zoomIn()}
+                          className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-md hover:bg-surface-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-on-surface">add</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Zoom out"
+                          onClick={() => mapRef.current?.zoomOut()}
+                          className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-md hover:bg-surface-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-on-surface">remove</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Centre on my location"
+                          onClick={handleLocateMe}
+                          className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-md hover:bg-surface-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>my_location</span>
+                        </button>
+                      </div>
+
+                      {/* Tap hint */}
+                      <div className="absolute bottom-sm left-1/2 -translate-x-1/2 pointer-events-none z-[400]">
+                        <div className="bg-on-background/80 text-white px-md py-xs rounded-full text-label-sm font-label-sm flex items-center gap-xs whitespace-nowrap">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>touch_app</span>
+                          Tap to place the pin
                         </div>
-                      );
-                    })}
+                      </div>
+                    </div>
+
+                    <div className="p-md space-y-xs border-t border-surface-container">
+                      <label htmlFor="sightingAddress" className="block font-label-sm text-label-sm text-secondary uppercase">
+                        Address
+                      </label>
+                      <input
+                        id="sightingAddress"
+                        type="text"
+                        value={isFetchingAddress ? 'Fetching address…' : sightingAddress}
+                        onChange={(e) => setSightingAddress(e.target.value)}
+                        placeholder="Click the map or type an address"
+                        className="w-full bg-surface-container border-none rounded-lg p-sm focus:ring-2 focus:ring-on-background transition-all font-body-md text-body-md"
+                      />
+                    </div>
                   </div>
                 </section>
 

@@ -1,6 +1,6 @@
 interface MissingCatCardProps {
   name: string;
-  photo: string;
+  photo?: string;
   area: string;
   lastSeen: string;
 }
@@ -9,11 +9,17 @@ export function MissingCatCard({ name, photo, area, lastSeen }: MissingCatCardPr
   return (
     <div className="bg-white rounded-2xl overflow-hidden border border-surface-container cat-card-shadow group">
       <div className="relative h-64 overflow-hidden">
-        <img
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          alt={`${name}, a missing cat`}
-          src={photo}
-        />
+        {photo ? (
+          <img
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            alt={`${name}, a missing cat`}
+            src={photo}
+          />
+        ) : (
+          <div className="w-full h-full bg-surface-container flex items-center justify-center">
+            <span className="material-symbols-outlined text-6xl text-secondary opacity-40">pets</span>
+          </div>
+        )}
         <div className="absolute top-4 left-4 bg-primary text-on-primary px-3 py-1 rounded-full font-label-md text-label-md font-bold uppercase tracking-wider shadow-md">
           Missing
         </div>

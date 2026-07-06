@@ -9,7 +9,7 @@ import { reportStep1Schema, type ReportStep1Data } from '../schemas/reportStep1S
 
 export function ReportStep1Page() {
   const navigate = useNavigate();
-  const [photoName, setPhotoName] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
 
   const {
     register,
@@ -24,7 +24,7 @@ export function ReportStep1Page() {
   const hasMicrochip = watch('hasMicrochip');
 
   const onSubmit = (data: ReportStep1Data) => {
-    navigate('/report-missing/location', { state: { step1: data } });
+    navigate('/report-missing/location', { state: { step1: data, photo } });
   };
 
   return (
@@ -67,7 +67,7 @@ export function ReportStep1Page() {
             noValidate
           >
             <div className="space-y-lg">
-              {/* Name + Breed */}
+              {/* Name + Coat Color */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
                 <div className="space-y-xs">
                   <label
@@ -94,26 +94,44 @@ export function ReportStep1Page() {
 
                 <div className="space-y-xs">
                   <label
-                    htmlFor="breedColor"
+                    htmlFor="coatColor"
                     className="block text-label-md font-label-md text-on-background"
                   >
-                    Breed / Main Color
+                    Coat Color
                   </label>
                   <input
-                    id="breedColor"
+                    id="coatColor"
                     type="text"
-                    placeholder="e.g. Tuxedo, Ginger Tabby"
-                    aria-invalid={Boolean(errors.breedColor)}
-                    aria-describedby={errors.breedColor ? 'breedColor-error' : undefined}
+                    placeholder="e.g. Orange, Black & White"
+                    aria-invalid={Boolean(errors.coatColor)}
+                    aria-describedby={errors.coatColor ? 'coatColor-error' : undefined}
                     className="w-full bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background p-sm transition-all"
-                    {...register('breedColor')}
+                    {...register('coatColor')}
                   />
-                  {errors.breedColor && (
-                    <p id="breedColor-error" role="alert" className="text-error text-label-sm">
-                      {errors.breedColor.message}
+                  {errors.coatColor && (
+                    <p id="coatColor-error" role="alert" className="text-error text-label-sm">
+                      {errors.coatColor.message}
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* Breed (optional) */}
+              <div className="space-y-xs">
+                <label
+                  htmlFor="breed"
+                  className="block text-label-md font-label-md text-on-background"
+                >
+                  Breed{' '}
+                  <span className="text-secondary font-normal">(Optional)</span>
+                </label>
+                <input
+                  id="breed"
+                  type="text"
+                  placeholder="e.g. Domestic Shorthair, Maine Coon"
+                  className="w-full bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background p-sm transition-all"
+                  {...register('breed')}
+                />
               </div>
 
               {/* Photo upload */}
@@ -127,14 +145,14 @@ export function ReportStep1Page() {
                     accept="image/*"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     aria-label="Upload a recent photo of your cat"
-                    onChange={(e) => setPhotoName(e.target.files?.[0]?.name ?? null)}
+                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
                   />
                   <div className="flex flex-col items-center gap-sm pointer-events-none">
                     <span className="material-symbols-outlined text-4xl text-primary-container">
                       add_a_photo
                     </span>
-                    {photoName ? (
-                      <p className="font-headline-md text-primary-container break-all">{photoName}</p>
+                    {photo ? (
+                      <p className="font-headline-md text-primary-container break-all">{photo.name}</p>
                     ) : (
                       <>
                         <p className="font-headline-md text-primary-container">
@@ -147,6 +165,30 @@ export function ReportStep1Page() {
                     )}
                   </div>
                 </label>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-xs">
+                <label
+                  htmlFor="description"
+                  className="block text-label-md font-label-md text-on-background"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  rows={3}
+                  placeholder="Any distinguishing features, personality traits, or other details that help identify your cat…"
+                  aria-invalid={Boolean(errors.description)}
+                  aria-describedby={errors.description ? 'description-error' : undefined}
+                  className="w-full bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background p-sm transition-all resize-none"
+                  {...register('description')}
+                />
+                {errors.description && (
+                  <p id="description-error" role="alert" className="text-error text-label-sm">
+                    {errors.description.message}
+                  </p>
+                )}
               </div>
 
               {/* Microchip toggle + chip number */}

@@ -1,4 +1,11 @@
-import { Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Route, Routes, useLocation } from 'react-router-dom';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 
 import { AppLayout } from './components/AppLayout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -18,7 +25,9 @@ import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route index element={<HomePage />} />
       <Route path="report-missing">
         <Route index element={<ReportStep1Page />} />
@@ -37,6 +46,7 @@ export function App() {
       <Route path="signup" element={<SignupPage />} />
       <Route path="verify-email" element={<EmailVerificationPage />} />
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

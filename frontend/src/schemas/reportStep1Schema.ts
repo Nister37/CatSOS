@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 export const reportStep1Schema = z.object({
   catName: z.string().min(2, 'Name must be at least 2 characters'),
-  breedColor: z.string().min(1, 'Please describe the breed or color'),
+  coatColor: z.string().min(1, 'Please describe the coat color'),
+  breed: z.string().optional(),
+  description: z.string().min(5, 'Please add a short description'),
   hasMicrochip: z.enum(['yes', 'no']),
   chipNumber: z.string().optional(),
 });

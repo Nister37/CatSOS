@@ -10,10 +10,12 @@ import { Navbar } from '../components/Navbar';
 import { reportStep3Schema, type ReportStep3Data } from '../schemas/reportStep3Schema';
 import type { ReportStep1Data } from '../schemas/reportStep1Schema';
 import type { ReportStep2Data } from '../schemas/reportStep2Schema';
+import { createReport } from '../services/reportsApi';
 
 type RouterState = {
   step1?: ReportStep1Data;
   step2?: ReportStep2Data;
+  photo?: File;
 } | null;
 
 export function ReportStep3Page() {
@@ -41,20 +43,27 @@ export function ReportStep3Page() {
     },
   });
 
-  const onSubmit = async () => {
+  const onSubmit = async (step3: ReportStep3Data) => {
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 1500));
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    dispatch(
-      addNotification(
-        `Missing report for ${state?.step1?.catName ?? 'your cat'} has been posted. The community is now on alert!`,
-        'success',
-      ),
-    );
-    await new Promise((r) => setTimeout(r, 800));
-    navigate('/');
+    try {
+      await createReport({ step1: state!.step1!, step2: state!.step2!, step3 });
+      setIsSubmitted(true);
+      dispatch(
+        addNotification(
+          `Missing report for ${state?.step1?.catName ?? 'your cat'} has been posted. The community is now on alert!`,
+          'success',
+        ),
+      );
+      await new Promise((r) => setTimeout(r, 800));
+      navigate('/');
+    } catch (err) {
+      const message =
+        err && typeof err === 'object' && 'detail' in err
+          ? String((err as { detail: unknown }).detail)
+          : 'Failed to submit report. Please try again.';
+      dispatch(addNotification(message, 'error'));
+      setIsSubmitting(false);
+    }
   };
 
   return (

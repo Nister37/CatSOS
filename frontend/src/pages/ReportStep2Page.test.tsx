@@ -6,7 +6,7 @@ import { ReportStep2Page } from './ReportStep2Page';
 
 const mockNavigate = jest.fn();
 const mockStep1State = {
-  step1: { catName: 'Luna', breedColor: 'Tuxedo', hasMicrochip: 'no' as const },
+  step1: { catName: 'Luna', coatColor: 'Black & White', description: 'Friendly tabby cat', hasMicrochip: 'no' as const },
 };
 
 jest.mock('react-router-dom', () => ({

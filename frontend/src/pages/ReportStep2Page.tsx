@@ -61,12 +61,18 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 export function ReportStep2Page() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
-  const step1Data = (routerLocation.state as { step1?: ReportStep1Data } | null)?.step1;
+  const routerState = routerLocation.state as { step1?: ReportStep1Data; photo?: File } | null;
+  const step1Data = routerState?.step1;
+  const photo = routerState?.photo;
 
   const mapRef = useRef<L.Map | null>(null);
   const [pinPosition, setPinPosition] = useState<[number, number] | null>(null);
   const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
   const [isFetchingAddress, setIsFetchingAddress] = useState(false);
+
+  const defaultDisappearedAt = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
 
   const {
     register,
@@ -75,7 +81,7 @@ export function ReportStep2Page() {
     formState: { errors },
   } = useForm<ReportStep2Data>({
     resolver: zodResolver(reportStep2Schema),
-    defaultValues: { address: '', landmark: '' },
+    defaultValues: { address: '', landmark: '', disappearedAt: defaultDisappearedAt },
   });
 
   // Request geolocation once on mount to centre the map
@@ -133,6 +139,7 @@ export function ReportStep2Page() {
       state: {
         step1: step1Data,
         step2: { ...data, lat: pinPosition?.[0], lng: pinPosition?.[1] },
+        photo,
       },
     });
   };
@@ -179,7 +186,7 @@ export function ReportStep2Page() {
             {/* Map + sidebar grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
               {/* Map column */}
-              <div className="lg:col-span-8 bg-white rounded-xl overflow-hidden relative shadow-sm border border-surface-container">
+              <div className="lg:col-span-8 bg-white rounded-xl overflow-hidden relative shadow-sm border border-surface-container isolate">
                 <MapContainer
                   ref={mapRef}
                   center={DEFAULT_CENTER}
@@ -295,6 +302,22 @@ export function ReportStep2Page() {
                       placeholder="e.g. Near the park"
                       className="w-full bg-surface-container border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all font-body-md text-body-md"
                       {...register('landmark')}
+                    />
+                  </div>
+
+                  <div className="space-y-base pt-base border-t border-surface-container">
+                    <label
+                      htmlFor="disappearedAt"
+                      className="block font-label-sm text-label-sm text-secondary uppercase"
+                    >
+                      When last seen
+                    </label>
+                    <input
+                      id="disappearedAt"
+                      type="datetime-local"
+                      max={defaultDisappearedAt}
+                      className="w-full bg-surface-container border-none rounded-lg p-md focus:ring-2 focus:ring-on-background transition-all font-body-md text-body-md"
+                      {...register('disappearedAt')}
                     />
                   </div>
 

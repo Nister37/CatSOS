@@ -23,10 +23,12 @@ describe('ReportStep1Page — rendering', () => {
     expect(screen.getByText(/step 1 of 3/i)).toBeInTheDocument();
   });
 
-  it('renders the cat name and breed fields', () => {
+  it('renders the cat name, coat color, breed, and description fields', () => {
     renderWithProviders(<ReportStep1Page />);
     expect(screen.getByLabelText(/cat's name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/breed \/ main color/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/coat color/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/breed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
   });
 
   it('renders the "No" microchip radio pre-selected', () => {
@@ -76,7 +78,8 @@ describe('ReportStep1Page — validation', () => {
     renderWithProviders(<ReportStep1Page />);
 
     await user.type(screen.getByLabelText(/cat's name/i), 'A');
-    await user.type(screen.getByLabelText(/breed \/ main color/i), 'Tabby');
+    await user.type(screen.getByLabelText(/coat color/i), 'Black');
+    await user.type(screen.getByLabelText(/description/i), 'Friendly tabby cat');
     await user.click(screen.getByRole('button', { name: /next: location details/i }));
 
     await waitFor(() =>
@@ -84,15 +87,29 @@ describe('ReportStep1Page — validation', () => {
     );
   });
 
-  it('shows a validation error when breed is empty', async () => {
+  it('shows a validation error when coat color is empty', async () => {
     const user = userEvent.setup();
     renderWithProviders(<ReportStep1Page />);
 
     await user.type(screen.getByLabelText(/cat's name/i), 'Luna');
+    await user.type(screen.getByLabelText(/description/i), 'Friendly tabby cat');
     await user.click(screen.getByRole('button', { name: /next: location details/i }));
 
     await waitFor(() =>
-      expect(screen.getByText(/please describe the breed or color/i)).toBeInTheDocument(),
+      expect(screen.getByText(/please describe the coat color/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows a validation error when description is empty', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReportStep1Page />);
+
+    await user.type(screen.getByLabelText(/cat's name/i), 'Luna');
+    await user.type(screen.getByLabelText(/coat color/i), 'Black & White');
+    await user.click(screen.getByRole('button', { name: /next: location details/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/please add a short description/i)).toBeInTheDocument(),
     );
   });
 });
@@ -103,7 +120,8 @@ describe('ReportStep1Page — navigation', () => {
     renderWithProviders(<ReportStep1Page />);
 
     await user.type(screen.getByLabelText(/cat's name/i), 'Luna');
-    await user.type(screen.getByLabelText(/breed \/ main color/i), 'Tuxedo');
+    await user.type(screen.getByLabelText(/coat color/i), 'Black & White');
+    await user.type(screen.getByLabelText(/description/i), 'Friendly tabby cat');
     await user.click(screen.getByRole('button', { name: /next: location details/i }));
 
     await waitFor(() =>
@@ -111,7 +129,7 @@ describe('ReportStep1Page — navigation', () => {
         '/report-missing/location',
         expect.objectContaining({
           state: expect.objectContaining({
-            step1: expect.objectContaining({ catName: 'Luna', breedColor: 'Tuxedo', hasMicrochip: 'no' }),
+            step1: expect.objectContaining({ catName: 'Luna', coatColor: 'Black & White', hasMicrochip: 'no' }),
           }),
         }),
       ),
@@ -123,7 +141,8 @@ describe('ReportStep1Page — navigation', () => {
     renderWithProviders(<ReportStep1Page />);
 
     await user.type(screen.getByLabelText(/cat's name/i), 'Milo');
-    await user.type(screen.getByLabelText(/breed \/ main color/i), 'Orange Tabby');
+    await user.type(screen.getByLabelText(/coat color/i), 'Orange');
+    await user.type(screen.getByLabelText(/description/i), 'Fluffy orange cat');
     await user.click(screen.getByRole('radio', { name: /yes/i }));
     await user.type(screen.getByPlaceholderText(/15-digit number/i), '123456789012345');
     await user.click(screen.getByRole('button', { name: /next: location details/i }));
