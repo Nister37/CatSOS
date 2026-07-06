@@ -82,6 +82,9 @@ class LostCatReportCreateApiTests(APITestCase):
     def _timeline_url(self, report):
         return reverse('lost-report-timeline', args=[report.id])
 
+    def _similar_url(self, report):
+        return reverse('lost-report-similar', args=[report.id])
+
     def _public_url(self, report):
         return reverse('lost-report-public-detail', args=[report.public_id])
 
@@ -1049,3 +1052,96 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertIn('active', active_response.data)
         self.assertEqual(status_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('status', status_response.data)
+
+    def test_owner_can_get_similar_nearby_reports(self):
+        source_report = self._create_report(
+            self.owner,
+            cat_name='Luna',
+            breed='Domestic shorthair',
+            coat_color='Black with white patch',
+            gender=LostCatReport.Gender.FEMALE,
+            last_seen_lat=52.2297,
+            last_seen_lng=21.0122,
+        )
+        similar_report = self._create_report(
+            self.other_user,
+            cat_name='Nora',
+            breed='Domestic shorthair',
+            coat_color='Black and white',
+            gender=LostCatReport.Gender.FEMALE,
+            last_seen_landmark='Near the library',
+            last_seen_lat=52.23,
+            last_seen_lng=21.013,
+            contact_phone='+48 600 999 000',
+            contact_email='private-other@example.com',
+            status=LostCatReport.Status.RECENTLY_SEEN,
+        )
+        self._create_report(
+            self.other_user,
+            cat_name='Resolved similar cat',
+            breed='Domestic shorthair',
+            coat_color='Black and white',
+            gender=LostCatReport.Gender.FEMALE,
+            last_seen_lat=52.23,
+            last_seen_lng=21.013,
+            status=LostCatReport.Status.FOUND,
+            resolved_at=timezone.now(),
+        )
+        self._create_report(
+            self.other_user,
+            cat_name='Hidden similar cat',
+            breed='Domestic shorthair',
+            coat_color='Black and white',
+            gender=LostCatReport.Gender.FEMALE,
+            last_seen_lat=52.23,
+            last_seen_lng=21.013,
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._similar_url(source_report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        result = response.data['results'][0]
+        self.assertEqual(result['report']['public_id'], str(similar_report.public_id))
+        self.assertEqual(result['report']['cat_name'], 'Nora')
+        self.assertGreater(result['score'], 0)
+        self.assertLess(result['distance_km'], 1)
+        self.assertIn('nearby', result['reasons'])
+        self.assertIn('same breed', result['reasons'])
+        self.assertIn('similar coat', result['reasons'])
+        self.assertNotIn('contact_phone', result['report'])
+        self.assertNotIn('contact_email', result['report'])
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_similar_reports_require_source_report_ownership(self):
+        source_report = self._create_report(self.other_user)
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._similar_url(source_report))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_similar_reports_can_return_empty_results(self):
+        source_report = self._create_report(
+            self.owner,
+            breed='Siamese',
+            coat_color='Cream',
+            last_seen_lat=None,
+            last_seen_lng=None,
+        )
+        self._create_report(
+            self.other_user,
+            breed='Maine Coon',
+            coat_color='Grey',
+            last_seen_lat=None,
+            last_seen_lng=None,
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._similar_url(source_report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+        self.assertEqual(response.data['results'], [])
