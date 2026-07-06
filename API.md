@@ -748,6 +748,8 @@ Authorization: Bearer <access>
 
 Creates a pending sighting for a non-hidden active report. Guests cannot submit sightings. Hidden reports return `404 Not Found`; `FOUND` and `CLOSED` reports return `400 Bad Request`.
 
+Accepts either `application/json` for text-only sightings or `multipart/form-data` when attaching a photo. For multipart requests, send the existing sighting fields as form fields and the image file under the field name `photo`.
+
 Request:
 
 ```json
@@ -759,6 +761,12 @@ Request:
   "confidence": "HIGH",
   "notes": "The cat was walking slowly toward the courtyard."
 }
+```
+
+Multipart photo field:
+
+```text
+photo=<JPEG, PNG, or WebP file>
 ```
 
 Success response:
@@ -773,6 +781,13 @@ Success response:
   "longitude": 21.0122,
   "confidence": "HIGH",
   "notes": "The cat was walking slowly toward the courtyard.",
+  "photos": [
+    {
+      "id": "4e0987ad-6544-4564-8d8e-d7c2a48ceca8",
+      "url": "http://localhost:8000/media/sighting-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg",
+      "created_at": "2026-07-06T10:36:00Z"
+    }
+  ],
   "verification_status": "PENDING",
   "created_at": "2026-07-06T10:36:00Z"
 }
@@ -792,8 +807,9 @@ Validation behavior:
 - `latitude` must be between `-90` and `90`.
 - `longitude` must be between `-180` and `180`.
 - `notes` are limited to 2000 characters.
+- Optional `photo` uploads allow JPEG, PNG, and WebP only, verify image bytes with Pillow, and use `DJANGO_SIGHTING_PHOTO_MAX_SIZE_BYTES` for the max size.
 
-Successful submission creates a `SIGHTING_CREATED` report timeline event. Sighting photo upload is handled separately from this JSON endpoint.
+Successful submission creates a `SIGHTING_CREATED` report timeline event. Sighting photo responses expose only photo IDs, absolute media URLs, and timestamps; they do not expose original filenames, storage paths, or uploader private data.
 
 ## Auth Payloads
 
