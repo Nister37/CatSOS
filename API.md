@@ -165,7 +165,10 @@ Query parameters:
 ```text
 page=1
 page_size=20
+active=true
 ```
+
+`active=true` returns reports with `MISSING` or `RECENTLY_SEEN` status. `active=false` returns reports with `FOUND` or `CLOSED` status. Omit `active` to list all owned reports.
 
 <a id="post-apireports"></a>
 ### Create Lost Cat Report
@@ -235,6 +238,9 @@ Success response:
   "notify_sms": true,
   "notify_email": false,
   "status": "MISSING",
+  "found_message": "",
+  "resolved_at": null,
+  "is_active_search": true,
   "created_at": "2026-07-06T10:00:00Z",
   "updated_at": "2026-07-06T10:00:00Z"
 }
@@ -330,6 +336,9 @@ Protected fields are ignored if sent:
 id
 owner
 status
+found_message
+resolved_at
+is_active_search
 moderation_status
 moderation_notes
 created_at
@@ -367,6 +376,15 @@ Request:
 }
 ```
 
+Request with an optional found message:
+
+```json
+{
+  "status": "FOUND",
+  "found_message": "Luna is home. Thank you for helping."
+}
+```
+
 Allowed status values:
 
 ```text
@@ -383,6 +401,14 @@ HTTP 200 OK
 ```
 
 The response body uses the same owner report shape returned by `POST /api/reports/`, with the updated `status`. A real status change also creates a `STATUS_CHANGED` timeline event with the previous status, new status, actor, location summary, and timestamp. Sending the current status again is treated as a successful no-op and does not create a duplicate timeline event.
+
+Resolved status behavior:
+
+- `FOUND` and `CLOSED` set `resolved_at` when the report first becomes resolved.
+- `FOUND` and `CLOSED` set `is_active_search` to `false`.
+- `MISSING` and `RECENTLY_SEEN` clear `resolved_at` and `found_message`, and set `is_active_search` to `true`.
+- `found_message` is accepted only for `FOUND` or `CLOSED`.
+- `found_message` is limited to 500 characters and rejects obvious email addresses or phone numbers because it may be shown publicly later.
 
 Public report pages are not implemented yet. When CAT-022 adds them, they should read this canonical report `status`.
 

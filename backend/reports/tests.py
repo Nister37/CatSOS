@@ -453,6 +453,9 @@ class LostCatReportCreateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], LostCatReport.Status.RECENTLY_SEEN)
+        self.assertTrue(response.data['is_active_search'])
+        self.assertEqual(response.data['found_message'], '')
+        self.assertIsNone(response.data['resolved_at'])
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertNotIn('moderation_status', response.data)
         self.assertNotIn('moderation_notes', response.data)
@@ -469,6 +472,143 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(timeline_event.from_status, LostCatReport.Status.MISSING)
         self.assertEqual(timeline_event.to_status, LostCatReport.Status.RECENTLY_SEEN)
         self.assertEqual(timeline_event.location_summary, 'Near the school')
+
+    def test_owner_can_mark_report_found_with_safe_found_message(self):
+        report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._status_url(report),
+            {
+                'status': LostCatReport.Status.FOUND,
+                'found_message': 'Luna is home. Thank you for helping.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], LostCatReport.Status.FOUND)
+        self.assertEqual(
+            response.data['found_message'],
+            'Luna is home. Thank you for helping.',
+        )
+        self.assertFalse(response.data['is_active_search'])
+        self.assertIsNotNone(response.data['resolved_at'])
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, LostCatReport.Status.FOUND)
+        self.assertEqual(
+            report.found_message,
+            'Luna is home. Thank you for helping.',
+        )
+        self.assertIsNotNone(report.resolved_at)
+        self.assertFalse(report.is_active_search)
+        self.assertEqual(
+            LostCatReportTimelineEvent.objects.filter(report=report).count(),
+            1,
+        )
+
+    def test_owner_can_update_found_message_without_duplicate_timeline_event(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.FOUND,
+            found_message='Found yesterday.',
+            resolved_at=timezone.now(),
+        )
+        LostCatReportTimelineEvent.objects.create(
+            report=report,
+            actor=self.owner,
+            event_type=LostCatReportTimelineEvent.EventType.STATUS_CHANGED,
+            from_status=LostCatReport.Status.MISSING,
+            to_status=LostCatReport.Status.FOUND,
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._status_url(report),
+            {
+                'status': LostCatReport.Status.FOUND,
+                'found_message': 'Found safe and healthy.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['found_message'], 'Found safe and healthy.')
+        report.refresh_from_db()
+        self.assertEqual(report.found_message, 'Found safe and healthy.')
+        self.assertEqual(
+            LostCatReportTimelineEvent.objects.filter(report=report).count(),
+            1,
+        )
+
+    def test_reopening_report_clears_resolved_metadata(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.CLOSED,
+            found_message='Search closed.',
+            resolved_at=timezone.now(),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._status_url(report),
+            {'status': LostCatReport.Status.MISSING},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], LostCatReport.Status.MISSING)
+        self.assertTrue(response.data['is_active_search'])
+        self.assertEqual(response.data['found_message'], '')
+        self.assertIsNone(response.data['resolved_at'])
+
+        report.refresh_from_db()
+        self.assertEqual(report.status, LostCatReport.Status.MISSING)
+        self.assertEqual(report.found_message, '')
+        self.assertIsNone(report.resolved_at)
+        timeline_event = LostCatReportTimelineEvent.objects.get(report=report)
+        self.assertEqual(timeline_event.from_status, LostCatReport.Status.CLOSED)
+        self.assertEqual(timeline_event.to_status, LostCatReport.Status.MISSING)
+
+    def test_found_message_requires_resolved_status(self):
+        report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._status_url(report),
+            {
+                'status': LostCatReport.Status.RECENTLY_SEEN,
+                'found_message': 'This should not be saved.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('found_message', response.data)
+        report.refresh_from_db()
+        self.assertEqual(report.status, LostCatReport.Status.MISSING)
+        self.assertEqual(report.found_message, '')
+
+    def test_found_message_rejects_private_contact_details(self):
+        report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._status_url(report),
+            {
+                'status': LostCatReport.Status.FOUND,
+                'found_message': 'Call me at +48 600 111 222 for details.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('found_message', response.data)
+        report.refresh_from_db()
+        self.assertEqual(report.status, LostCatReport.Status.MISSING)
+        self.assertEqual(report.found_message, '')
+        self.assertIsNone(report.resolved_at)
 
     def test_changed_status_appears_on_report_list_and_detail(self):
         report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
@@ -535,6 +675,52 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], LostCatReport.Status.MISSING)
         self.assertFalse(LostCatReportTimelineEvent.objects.exists())
+
+    def test_report_list_can_filter_active_and_resolved_reports(self):
+        active_report = self._create_report(
+            self.owner,
+            cat_name='Active cat',
+            status=LostCatReport.Status.MISSING,
+        )
+        self._create_report(
+            self.owner,
+            cat_name='Resolved cat',
+            status=LostCatReport.Status.FOUND,
+            resolved_at=timezone.now(),
+        )
+        self._authenticate(self.owner)
+
+        active_response = self.client.get(reverse('lost-report-list'), {'active': 'true'})
+        resolved_response = self.client.get(
+            reverse('lost-report-list'),
+            {'active': 'false'},
+        )
+        all_response = self.client.get(reverse('lost-report-list'))
+
+        self.assertEqual(active_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(active_response.data['count'], 1)
+        self.assertEqual(active_response.data['results'][0]['id'], str(active_report.id))
+        self.assertTrue(active_response.data['results'][0]['is_active_search'])
+
+        self.assertEqual(resolved_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(resolved_response.data['count'], 1)
+        self.assertEqual(
+            resolved_response.data['results'][0]['cat_name'],
+            'Resolved cat',
+        )
+        self.assertFalse(resolved_response.data['results'][0]['is_active_search'])
+
+        self.assertEqual(all_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(all_response.data['count'], 2)
+
+    def test_report_list_rejects_invalid_active_filter(self):
+        self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.get(reverse('lost-report-list'), {'active': 'maybe'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('active', response.data)
 
     def test_owner_can_read_status_timeline_without_private_actor_data(self):
         self.owner.display_name = 'Marta Owner'

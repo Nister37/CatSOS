@@ -28,6 +28,7 @@ class LostCatReportAdmin(admin.ModelAdmin):
         'cat_name',
         'owner',
         'status',
+        'resolved_at',
         'contact_visibility',
         'moderation_status',
         'updated_at',
@@ -41,7 +42,7 @@ class LostCatReportAdmin(admin.ModelAdmin):
         'owner__email',
         'contact_email',
     )
-    readonly_fields = ('id', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'resolved_at', 'created_at', 'updated_at')
     fieldsets = (
         ('Ownership', {'fields': ('id', 'owner')}),
         (
@@ -60,6 +61,7 @@ class LostCatReportAdmin(admin.ModelAdmin):
                     'personality',
                     'description',
                     'status',
+                    'found_message',
                 )
             },
         ),
@@ -95,7 +97,7 @@ class LostCatReportAdmin(admin.ModelAdmin):
             'Moderation',
             {'fields': ('moderation_status', 'moderation_notes')},
         ),
-        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
+        ('Timestamps', {'fields': ('resolved_at', 'created_at', 'updated_at')}),
     )
 
 
