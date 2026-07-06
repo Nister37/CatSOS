@@ -3,20 +3,21 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from PIL import Image
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
-from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 from reports.models import LostCatReport, LostCatReportTimelineEvent
-
 from .models import Sighting, SightingPhoto
+from .services import create_sighting
 
 
 class SightingCreateApiTests(APITestCase):
@@ -26,6 +27,7 @@ class SightingCreateApiTests(APITestCase):
         media_override = override_settings(MEDIA_ROOT=self.media_root.name)
         media_override.enable()
         self.addCleanup(media_override.disable)
+        cache.clear()
 
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
@@ -36,6 +38,12 @@ class SightingCreateApiTests(APITestCase):
             email='helper@example.com',
             password='StrongPass123!',
             is_email_verified=True,
+        )
+        self.staff = get_user_model().objects.create_user(
+            email='staff@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+            is_staff=True,
         )
 
     def _authenticate(self, user):
@@ -61,6 +69,12 @@ class SightingCreateApiTests(APITestCase):
     def _url(self, report):
         return reverse('public-report-sighting-create', args=[report.public_id])
 
+    def _owner_list_url(self, report):
+        return reverse('report-sighting-list', args=[report.id])
+
+    def _verification_url(self, report, sighting):
+        return reverse('report-sighting-verification', args=[report.id, sighting.id])
+
     def _payload(self, **overrides):
         payload = {
             'seen_at': timezone.now().isoformat(),
@@ -74,11 +88,11 @@ class SightingCreateApiTests(APITestCase):
         return payload
 
     def _image_upload(
-        self,
-        *,
-        filename='sighting.jpg',
-        content_type='image/jpeg',
-        image_format='JPEG',
+            self,
+            *,
+            filename='sighting.jpg',
+            content_type='image/jpeg',
+            image_format='JPEG',
     ):
         image_bytes = BytesIO()
         image = Image.new('RGB', (4, 4), color='white')
@@ -250,6 +264,196 @@ class SightingCreateApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_owner_can_list_sightings_including_false_reports(self):
+        self.helper.display_name = 'Helpful Neighbor'
+        self.helper.save(update_fields=('display_name',))
+        report = self._create_report()
+        useful_sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        false_sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(location_description='Wrong courtyard'),
+        )
+        false_sighting.verification_status = Sighting.VerificationStatus.FALSE
+        false_sighting.verified_by = self.owner
+        false_sighting.verified_at = timezone.now()
+        false_sighting.save(
+            update_fields=('verification_status', 'verified_by', 'verified_at'),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.get(self._owner_list_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+        statuses = {
+            item['id']: item['verification_status']
+            for item in response.data['results']
+        }
+        self.assertEqual(statuses[str(useful_sighting.id)], Sighting.VerificationStatus.PENDING)
+        self.assertEqual(statuses[str(false_sighting.id)], Sighting.VerificationStatus.FALSE)
+        first_sighting = response.data['results'][0]
+        self.assertEqual(first_sighting['submitted_by']['display_name'], 'Helpful Neighbor')
+        self.assertNotIn('email', first_sighting['submitted_by'])
+        self.assertNotIn('contact_email', first_sighting)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_owner_can_mark_sighting_as_useful(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.USEFUL},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['verification_status'], Sighting.VerificationStatus.USEFUL)
+        self.assertEqual(response.data['verified_by']['display_name'], 'CatSOS user')
+        self.assertIsNotNone(response.data['verified_at'])
+        self.assertNotIn('email', response.data['verified_by'])
+        sighting.refresh_from_db()
+        self.assertEqual(sighting.verification_status, Sighting.VerificationStatus.USEFUL)
+        self.assertEqual(sighting.verified_by, self.owner)
+        self.assertIsNotNone(sighting.verified_at)
+
+        timeline_event = LostCatReportTimelineEvent.objects.get(
+            report=report,
+            event_type=LostCatReportTimelineEvent.EventType.SIGHTING_MARKED_USEFUL,
+        )
+        self.assertEqual(timeline_event.actor, self.owner)
+        self.assertEqual(timeline_event.location_summary, 'Behind the bakery')
+
+        public_list_response = self.client.get(reverse('lost-report-public-list'))
+        self.assertEqual(public_list_response.status_code, status.HTTP_200_OK)
+        latest_sighting = public_list_response.data['results'][0]['latest_sighting']
+        self.assertEqual(latest_sighting['location_description'], 'Behind the bakery')
+        self.assertEqual(latest_sighting['latitude'], 52.2297)
+        self.assertEqual(latest_sighting['longitude'], 21.0122)
+        self.assertEqual(latest_sighting['confidence'], Sighting.Confidence.HIGH)
+        self.assertNotIn('submitted_by', latest_sighting)
+        self.assertNotIn('notes', latest_sighting)
+
+        public_detail_response = self.client.get(
+            reverse('lost-report-public-detail', args=[report.public_id])
+        )
+        self.assertEqual(public_detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            public_detail_response.data['latest_sighting']['location_description'],
+            'Behind the bakery',
+        )
+
+    def test_owner_can_reset_sighting_verification_to_pending(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        sighting.verification_status = Sighting.VerificationStatus.FALSE
+        sighting.verified_by = self.owner
+        sighting.verified_at = timezone.now()
+        sighting.save(
+            update_fields=('verification_status', 'verified_by', 'verified_at'),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.PENDING},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['verification_status'], Sighting.VerificationStatus.PENDING)
+        self.assertIsNone(response.data['verified_by'])
+        self.assertIsNone(response.data['verified_at'])
+        sighting.refresh_from_db()
+        self.assertIsNone(sighting.verified_by)
+        self.assertIsNone(sighting.verified_at)
+
+    def test_staff_can_verify_sighting_for_any_report(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        self._authenticate(self.staff)
+
+        response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.FALSE},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sighting.refresh_from_db()
+        self.assertEqual(sighting.verification_status, Sighting.VerificationStatus.FALSE)
+        self.assertEqual(sighting.verified_by, self.staff)
+        self.assertTrue(
+            LostCatReportTimelineEvent.objects.filter(
+                report=report,
+                event_type=LostCatReportTimelineEvent.EventType.SIGHTING_MARKED_FALSE,
+                actor=self.staff,
+            ).exists()
+        )
+
+        public_list_response = self.client.get(reverse('lost-report-public-list'))
+        self.assertEqual(public_list_response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(public_list_response.data['results'][0]['latest_sighting'])
+
+    def test_helper_cannot_list_or_verify_report_sightings(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        self._authenticate(self.helper)
+
+        list_response = self.client.get(self._owner_list_url(report))
+        verify_response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.USEFUL},
+            format='json',
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(verify_response.status_code, status.HTTP_404_NOT_FOUND)
+        sighting.refresh_from_db()
+        self.assertEqual(sighting.verification_status, Sighting.VerificationStatus.PENDING)
+
+    def test_sighting_verification_rejects_invalid_status(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': 'MAYBE'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('verification_status', response.data)
+        sighting.refresh_from_db()
+        self.assertEqual(sighting.verification_status, Sighting.VerificationStatus.PENDING)
 
     def test_sighting_is_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(Sighting))

@@ -17,6 +17,7 @@ class SightingAdmin(admin.ModelAdmin):
         'submitted_by',
         'confidence',
         'verification_status',
+        'verified_by',
         'seen_at',
         'created_at',
     )
@@ -27,7 +28,7 @@ class SightingAdmin(admin.ModelAdmin):
         'location_description',
         'notes',
     )
-    readonly_fields = ('id', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'verified_by', 'verified_at', 'created_at', 'updated_at')
 
 
 @admin.register(SightingPhoto)
