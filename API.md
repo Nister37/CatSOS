@@ -51,6 +51,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `PUT` | [`/api/reports/{id}/`](#put-apireportsid) | JWT | `200` | Replace editable fields on one authenticated owner's lost cat report. |
 | `PATCH` | [`/api/reports/{id}/status/`](#patch-apireportsidstatus) | JWT | `200` | Change one authenticated owner's report status. |
 | `GET` | [`/api/reports/{id}/timeline/`](#get-apireportsidtimeline) | JWT | `200` | List timeline events for one authenticated owner's report. |
+| `GET` | [`/api/public/reports/`](#get-apipublicreports) | Public | `200` | Browse public-safe lost cat report cards. |
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
@@ -446,6 +447,65 @@ The response is paginated:
 ```
 
 Timeline actor data is intentionally public-safe and does not expose account email, phone, password state, or moderation fields.
+
+<a id="get-apipublicreports"></a>
+### Browse Public Lost Cat Reports
+
+`GET /api/public/reports/`
+
+Public paginated list for lost-cat browse pages. It does not require authentication and returns public-safe report card data. By default, it returns active searches only: `MISSING` and `RECENTLY_SEEN`.
+
+Query parameters:
+
+```text
+page=1
+page_size=20
+active=true
+status=MISSING
+```
+
+Filtering behavior:
+
+- Omit filters to browse active searches.
+- `active=true` returns `MISSING` and `RECENTLY_SEEN`.
+- `active=false` returns `FOUND` and `CLOSED`.
+- `status=<value>` returns that exact status and overrides the default active-only behavior.
+- Invalid `active` or `status` values return `400 Bad Request`.
+
+Success response:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+      "cat_name": "Luna",
+      "breed": "Domestic shorthair",
+      "coat_color": "Black with a white chest spot",
+      "description": "Indoor cat, likely hiding close to home.",
+      "disappeared_at": "2026-07-06T10:00:00Z",
+      "last_seen_landmark": "Near the playground",
+      "approximate_location": {
+        "latitude": 52.23,
+        "longitude": 21.012,
+        "is_approximate": true
+      },
+      "reward_amount": "100.00",
+      "status": "MISSING",
+      "found_message": "",
+      "resolved_at": null,
+      "is_active_search": true,
+      "main_photo": null,
+      "updated_at": "2026-07-06T10:30:00Z"
+    }
+  ]
+}
+```
+
+Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
 
 <a id="get-apipublicreportspublicid"></a>
 ### Public Lost Cat Report Detail
