@@ -19,6 +19,7 @@ Django backend for the CatSOS API.
 - Lost cat report detail/edit: `http://localhost:8000/api/reports/<id>/`
 - Lost cat report status: `http://localhost:8000/api/reports/<id>/status/`
 - Lost cat report timeline: `http://localhost:8000/api/reports/<id>/timeline/`
+- Similar nearby reports: `http://localhost:8000/api/reports/<id>/similar/`
 - Public lost cat report list: `http://localhost:8000/api/public/reports/`
 - Public lost cat report detail: `http://localhost:8000/api/public/reports/<public_id>/`
 - Account registration: `http://localhost:8000/api/auth/register/`
@@ -51,6 +52,8 @@ Authenticated users can upload, replace, and delete their profile picture throug
 Public contributor profiles are available at `/api/profiles/<id>/` for active, email-verified users with public activity. The response includes display name, profile picture, points, badges, and explicit public info only. Account email is never returned unless a separate public contact email is set.
 
 Authenticated owners can create and list their own lost cat reports through `/api/reports/` and retrieve or edit one owned report through `/api/reports/<id>/`. Creation and editing cover cat details, disappearance location, optional reward, and contact preferences. Owners can change status through `/api/reports/<id>/status/`, including an optional safe found message for `FOUND` or `CLOSED` reports. Resolved reports keep `found_message`, `resolved_at`, and `is_active_search=false`; reopened reports clear resolved metadata. The owner report list supports `active=true` and `active=false` filters. Status changes record `STATUS_CHANGED` timeline events readable through `/api/reports/<id>/timeline/`. Photo management is handled by a separate API. Staff moderation is handled separately in Django admin through the report moderation fields.
+
+Owners can fetch deterministic similar nearby report suggestions through `/api/reports/<id>/similar/`. The current matcher is AI-free and uses approximate distance plus simple breed, coat, and gender matches. Suggested reports use the public-safe card shape and exclude hidden or resolved candidates.
 
 Public lost-cat report browsing is available through `/api/public/reports/`, defaulting to active searches and supporting `active` and `status` filters. Public report cards include `detail_url`, status, location summary, disappearance date, `main_photo`, and `latest_sighting` placeholders. Public report details are available through `/api/public/reports/<public_id>/`. Public responses use the report `public_id`, approximate coordinates, public-safe contact instructions, empty photo placeholders until the photo API exists, and status timeline events without actor private data. They do not expose owner IDs, exact addresses, chip numbers, notification preferences, or moderation fields.
 
