@@ -43,6 +43,31 @@ class SightingPhotoSerializer(serializers.ModelSerializer):
         )
 
 
+class SightingUserSummarySerializer(serializers.Serializer):
+    display_name = serializers.CharField(read_only=True)
+    avatar_fallback = serializers.CharField(read_only=True)
+
+
+def build_user_summary(user) -> dict[str, str] | None:
+    if user is None:
+        return None
+
+    display_name = (user.display_name or '').strip() or 'CatSOS user'
+    initials = [
+        part[0].upper()
+        for part in display_name.split()
+        if part and part[0].isalpha()
+    ]
+    avatar_fallback = ''.join(initials[:2]) or display_name[:1].upper()
+
+    return SightingUserSummarySerializer(
+        {
+            'display_name': display_name,
+            'avatar_fallback': avatar_fallback,
+        }
+    ).data
+
+
 class SightingSerializer(serializers.ModelSerializer):
     report_public_id = serializers.UUIDField(source='report.public_id', read_only=True)
     photos = serializers.SerializerMethodField()
@@ -76,6 +101,32 @@ class SightingSerializer(serializers.ModelSerializer):
             many=True,
             context=self.context,
         ).data
+
+
+class SightingOwnerSerializer(SightingSerializer):
+    submitted_by = serializers.SerializerMethodField()
+    verified_by = serializers.SerializerMethodField()
+
+    class Meta(SightingSerializer.Meta):
+        fields = SightingSerializer.Meta.fields + (
+            'submitted_by',
+            'verified_by',
+            'verified_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_submitted_by(self, sighting) -> dict[str, str] | None:
+        return build_user_summary(sighting.submitted_by)
+
+    def get_verified_by(self, sighting) -> dict[str, str] | None:
+        return build_user_summary(sighting.verified_by)
+
+
+class SightingVerificationUpdateSerializer(serializers.Serializer):
+    verification_status = serializers.ChoiceField(
+        choices=Sighting.VerificationStatus.choices,
+    )
 
 
 class SightingCreateSerializer(serializers.ModelSerializer):
