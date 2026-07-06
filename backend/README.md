@@ -15,6 +15,7 @@ Django backend for the CatSOS API.
 - Current user profile: `http://localhost:8000/api/me/`
 - Current user profile picture: `http://localhost:8000/api/me/profile-picture/`
 - Public contributor profile: `http://localhost:8000/api/profiles/<id>/`
+- Lost cat reports: `http://localhost:8000/api/reports/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
 - Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
@@ -43,5 +44,7 @@ SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs 
 Authenticated users can upload, replace, and delete their profile picture through `/api/me/profile-picture/`. The backend accepts JPEG, PNG, and WebP images up to `DJANGO_PROFILE_PICTURE_MAX_SIZE_BYTES` bytes, stores them under media storage with generated filenames, and returns `/api/me/` profile data with `profile_picture_url` plus `avatar_fallback` for users without an image.
 
 Public contributor profiles are available at `/api/profiles/<id>/` for active, email-verified users with public activity. The response includes display name, profile picture, points, badges, and explicit public info only. Account email is never returned unless a separate public contact email is set.
+
+Authenticated owners can create and list their own lost cat reports through `/api/reports/`. Creation captures cat details, disappearance location, optional reward, contact preferences, and defaults the report status to `MISSING`. Staff moderation is handled separately in Django admin through the report moderation fields.
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.
