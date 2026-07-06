@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ReportStep1Page } from './pages/ReportStep1Page';
 import { ReportStep2Page } from './pages/ReportStep2Page';
 import { ReportStep3Page } from './pages/ReportStep3Page';
+import { SheltersPage } from './pages/SheltersPage';
 import { SignupPage } from './pages/SignupPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -25,6 +26,7 @@ export function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="intake" element={<IntakePage />} />
       </Route>
+      <Route path="shelters" element={<SheltersPage />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
       <Route path="verify-email" element={<EmailVerificationPage />} />
