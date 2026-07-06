@@ -10,6 +10,9 @@ import { ReportStep1Page } from './pages/ReportStep1Page';
 import { ReportStep2Page } from './pages/ReportStep2Page';
 import { ReportStep3Page } from './pages/ReportStep3Page';
 import { SheltersPage } from './pages/SheltersPage';
+import { ReportSightingPage } from './pages/ReportSightingPage';
+import { SightingsMapResultsPage } from './pages/SightingsMapResultsPage';
+import { SightingsMapSearchPage } from './pages/SightingsMapSearchPage';
 import { SignupPage } from './pages/SignupPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -26,6 +29,9 @@ export function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="intake" element={<IntakePage />} />
       </Route>
+      <Route path="map" element={<SightingsMapSearchPage />} />
+      <Route path="map/results" element={<SightingsMapResultsPage />} />
+      <Route path="report-sighting" element={<ReportSightingPage />} />
       <Route path="shelters" element={<SheltersPage />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
