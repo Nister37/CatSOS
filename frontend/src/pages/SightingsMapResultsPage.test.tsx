@@ -13,6 +13,12 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/map/results', search: '', hash: '', key: 'default' }),
 }));
 
+jest.mock('../services/reportsApi', () => ({
+  fetchPublicReports: jest.fn().mockResolvedValue([]),
+  fetchOwnedReports: jest.fn().mockResolvedValue([]),
+  fetchReportSightings: jest.fn().mockResolvedValue([]),
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
   global.fetch = jest.fn().mockResolvedValue({

@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '../test/renderWithProviders';
@@ -17,7 +17,16 @@ jest.mock('../services/reportsApi', () => ({
     { public_id: 'abc-1', cat_name: 'Oliver', main_photo: null, location_summary: '', last_seen_landmark: '', disappeared_at: null, status: 'MISSING' },
     { public_id: 'abc-2', cat_name: 'Luna',   main_photo: null, location_summary: '', last_seen_landmark: '', disappeared_at: null, status: 'MISSING' },
   ]),
+  createSighting: jest.fn().mockResolvedValue(undefined),
 }));
+
+const AUTH_STATE = {
+  auth: {
+    user: { id: 1, email: 'test@test.com', firstName: 'Test', lastName: 'User', avatarFallback: 'TU' },
+    accessToken: 'mock-access-token',
+    refreshToken: 'mock-refresh-token',
+  },
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -125,40 +134,37 @@ describe('ReportSightingPage — photo upload', () => {
 // ─── Form submit ──────────────────────────────────────────────────────────────
 
 describe('ReportSightingPage — submit', () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
-
-  it('shows a loading state while submitting', async () => {
-    const user = userEvent.setup({ delay: null });
+  it('redirects to /login when not authenticated', async () => {
+    const user = userEvent.setup();
     renderWithProviders(<ReportSightingPage />);
 
     await user.click(screen.getByRole('button', { name: /submit sighting/i }));
 
-    expect(screen.getByRole('button', { name: /sending/i })).toBeDisabled();
+    expect(mockNavigate).toHaveBeenCalledWith('/login', expect.objectContaining({ state: { from: '/report-sighting' } }));
   });
 
-  it('shows the success state after the timeout completes', async () => {
-    const user = userEvent.setup({ delay: null });
+  it('shows a sign-in prompt when unauthenticated', async () => {
     renderWithProviders(<ReportSightingPage />);
-
-    await user.click(screen.getByRole('button', { name: /submit sighting/i }));
-    act(() => jest.advanceTimersByTime(1500));
-
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /sighting reported/i })).toBeInTheDocument(),
-    );
+    expect(screen.getByText(/you must/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
   });
 
-  it('"Report Another Sighting" resets back to the form', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderWithProviders(<ReportSightingPage />);
+  it('shows validation error when no cat is selected (authenticated)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReportSightingPage />, { preloadedState: AUTH_STATE });
 
     await user.click(screen.getByRole('button', { name: /submit sighting/i }));
-    act(() => jest.advanceTimersByTime(1500));
-    await waitFor(() => screen.getByRole('heading', { name: /sighting reported/i }));
 
-    await user.click(screen.getByRole('button', { name: /report another sighting/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/select which cat/i);
+  });
 
-    expect(screen.getByRole('heading', { name: /report a sighting/i })).toBeInTheDocument();
+  it('shows validation error when no map pin is placed (cat selected, authenticated)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReportSightingPage />, { preloadedState: AUTH_STATE });
+
+    await user.click(await screen.findByRole('button', { name: /oliver/i }));
+    await user.click(screen.getByRole('button', { name: /submit sighting/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/tap the map/i);
   });
 });
