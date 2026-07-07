@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'sightings',
     'notifications',
     'posters',
+    'points',
 ]
 
 MIDDLEWARE = [
