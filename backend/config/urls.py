@@ -32,10 +32,12 @@ urlpatterns = [
     ),
     path('api/profiles/<int:pk>/', PublicProfileView.as_view(), name='account-public-profile'),
     path('api/auth/', include('accounts.urls')),
+    path('api/', include('assistant.urls')),
     path('api/', include('reports.urls')),
     path('api/', include('sightings.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('posters.urls')),
+    path('api/', include('points.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path(
