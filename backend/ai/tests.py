@@ -11,10 +11,12 @@ from accounts.services import create_token_pair
 
 from .services import (
     GemmaClient,
+    POSTER_TEXT_MAX_LENGTH,
     generate_gemma_text,
     generate_public_report_summary,
     improve_lost_cat_description,
     sanitize_text_for_ai,
+    suggest_lost_cat_poster_text,
 )
 
 
@@ -298,6 +300,98 @@ class DescriptionImproveServiceTests(TestCase):
         self.assertIn('Mila is a shy black cat', result['suggestion'])
         self.assertNotIn('+48 600 111 222', result['suggestion'])
         self.assertNotIn('123 Private Street', result['suggestion'])
+        mock_post.assert_not_called()
+
+
+class PosterTextSuggestionServiceTests(TestCase):
+    def test_poster_text_suggestion_sends_public_safe_prompt_only(self):
+        class CaptureClient:
+            prompt = ''
+            system_instruction = ''
+
+            def generate_text(self, *, prompt, system_instruction=''):
+                self.prompt = prompt
+                self.system_instruction = system_instruction
+                return 'MISSING: Mila. Shy black cat. Scan the QR code with sightings.'
+
+        client = CaptureClient()
+
+        result = suggest_lost_cat_poster_text(
+            cat_name='Mila',
+            breed='Domestic shorthair',
+            coat_color='Black',
+            description=(
+                'Mila is shy. Call +48 600 111 222 or email owner@example.com. '
+                'She disappeared from 123 Private Street.'
+            ),
+            last_seen_landmark='Near the playground',
+            reward_note='Call +48 600 111 222 for reward details.',
+            has_reward=True,
+            client=client,
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertTrue(result['requires_review'])
+        self.assertEqual(
+            result['suggestion'],
+            'MISSING: Mila. Shy black cat. Scan the QR code with sightings.',
+        )
+        self.assertLessEqual(len(result['suggestion']), POSTER_TEXT_MAX_LENGTH)
+        self.assertIn('poster wording', client.system_instruction)
+        self.assertNotIn('+48 600 111 222', client.prompt)
+        self.assertNotIn('owner@example.com', client.prompt)
+        self.assertNotIn('123 Private Street', client.prompt)
+        self.assertIn('[phone removed]', client.prompt)
+        self.assertIn('[email removed]', client.prompt)
+        self.assertIn('[address removed]', client.prompt)
+
+    def test_poster_text_suggestion_sanitizes_provider_output(self):
+        class UnsafeOutputClient:
+            def generate_text(self, *, prompt, system_instruction=''):
+                return (
+                    'Call +48 600 111 222 or visit 123 Private Street. '
+                    'Mila is missing near the playground.'
+                )
+
+        result = suggest_lost_cat_poster_text(
+            cat_name='Mila',
+            coat_color='Black',
+            description='Mila is shy and may hide under cars.',
+            client=UnsafeOutputClient(),
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+        self.assertNotIn('[phone removed]', result['suggestion'])
+        self.assertNotIn('[address removed]', result['suggestion'])
+        self.assertLessEqual(len(result['suggestion']), POSTER_TEXT_MAX_LENGTH)
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_poster_text_suggestion_falls_back_to_safe_text_when_disabled(
+            self,
+            mock_post,
+    ):
+        result = suggest_lost_cat_poster_text(
+            cat_name='Mila',
+            coat_color='Black',
+            description=(
+                'Mila is shy. Call +48 600 111 222. '
+                'She disappeared from 123 Private Street.'
+            ),
+            last_seen_landmark='Near the playground',
+            has_reward=True,
+        )
+
+        self.assertFalse(result['generated_by_ai'])
+        self.assertTrue(result['requires_review'])
+        self.assertIn('disabled', result['fallback_reason'])
+        self.assertIn('MISSING: Mila', result['suggestion'])
+        self.assertIn('Scan the QR code', result['suggestion'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+        self.assertLessEqual(len(result['suggestion']), POSTER_TEXT_MAX_LENGTH)
         mock_post.assert_not_called()
 
 
