@@ -172,8 +172,14 @@ describe('Report Missing Cat — Step 3', () => {
 });
 
 describe('Report Missing Cat — Full Flow', () => {
-  it('completes all three steps and returns to the homepage', () => {
-    cy.intercept('POST', '/api/reports/', { statusCode: 201, body: {} }).as('createReport');
+  it('completes all three steps and lands on the report detail page', () => {
+    cy.intercept('POST', '/api/reports/', {
+      statusCode: 201,
+      body: { id: 'e2e-report-uuid' },
+    }).as('createReport');
+    cy.intercept('GET', '/api/reports/e2e-report-uuid/', { statusCode: 200, body: {} }).as('getReport');
+    cy.intercept('GET', '/api/reports/e2e-report-uuid/sightings/', { statusCode: 200, body: { count: 0, next: null, previous: null, results: [] } }).as('getSightings');
+    cy.intercept('GET', '/api/reports/e2e-report-uuid/timeline/', { statusCode: 200, body: { count: 0, next: null, previous: null, results: [] } }).as('getTimeline');
 
     completeStep1('Luna', 'Tuxedo');
     completeStep2('Baker Street, London');
@@ -183,7 +189,6 @@ describe('Report Missing Cat — Full Flow', () => {
     completeStep3('Jane Doe', '+44 7700 900123', 'jane@example.com');
 
     cy.wait('@createReport');
-    cy.location('pathname', { timeout: 10000 }).should('eq', '/');
-    cy.findByRole('heading', { name: /lost your cat/i }).should('be.visible');
+    cy.location('pathname', { timeout: 10000 }).should('eq', '/my-reports/e2e-report-uuid');
   });
 });
