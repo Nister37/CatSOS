@@ -10,7 +10,7 @@ const interceptNominatim = () => {
 };
 
 // Step helpers
-const completeStep1 = (catName = 'Luna', breed = 'Tuxedo') => {
+const completeStep1 = (catName = 'Luna', coatColor = 'Black and white tuxedo') => {
   cy.visit('/report-missing', {
     onBeforeLoad: (win) => {
       cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
@@ -24,7 +24,8 @@ const completeStep1 = (catName = 'Luna', breed = 'Tuxedo') => {
     },
   });
   cy.findByLabelText(/cat's name/i).type(catName);
-  cy.findByLabelText(/breed \/ main color/i).type(breed);
+  cy.findByLabelText(/coat color/i).type(coatColor);
+  cy.findByLabelText(/description/i).type('Friendly indoor cat.');
   cy.findByRole('button', { name: /next: location details/i }).click();
 };
 
@@ -71,15 +72,15 @@ describe('Report Missing Cat — Step 1', () => {
 
   it('shows a validation error when the cat name is too short', () => {
     cy.findByLabelText(/cat's name/i).type('A');
-    cy.findByLabelText(/breed \/ main color/i).type('Tabby');
+    cy.findByLabelText(/coat color/i).type('Tabby');
     cy.findByRole('button', { name: /next: location details/i }).click();
     cy.findByText(/name must be at least 2 characters/i).should('be.visible');
   });
 
-  it('shows a validation error when breed is missing', () => {
+  it('shows a validation error when coat color is missing', () => {
     cy.findByLabelText(/cat's name/i).type('Luna');
     cy.findByRole('button', { name: /next: location details/i }).click();
-    cy.findByText(/please describe the breed or color/i).should('be.visible');
+    cy.findByText(/please describe the coat color/i).should('be.visible');
   });
 
   it('enables the chip number field when "Yes" is selected', () => {
@@ -91,7 +92,8 @@ describe('Report Missing Cat — Step 1', () => {
 
   it('navigates to step 2 with valid data', () => {
     cy.findByLabelText(/cat's name/i).type('Luna');
-    cy.findByLabelText(/breed \/ main color/i).type('Tuxedo');
+    cy.findByLabelText(/coat color/i).type('Tuxedo');
+    cy.findByLabelText(/description/i).type('Friendly indoor cat.');
     cy.findByRole('button', { name: /next: location details/i }).click();
     cy.location('pathname').should('eq', '/report-missing/location');
   });
