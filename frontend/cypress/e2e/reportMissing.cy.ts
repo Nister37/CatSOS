@@ -180,8 +180,8 @@ describe('Report Missing Cat — Full Flow', () => {
 
     completeStep3('Jane Doe', '+44 7700 900123', 'jane@example.com');
 
-    cy.findByText(/broadcasting alert/i).should('be.visible');
     cy.location('pathname', { timeout: 10000 }).should('eq', '/');
     cy.findByRole('heading', { name: /lost your cat/i }).should('be.visible');
+    cy.findByText(/missing report for luna has been posted/i).should('be.visible');
   });
 });
