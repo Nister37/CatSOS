@@ -35,6 +35,13 @@ def env_int(name, default):
     return int(value)
 
 
+def env_float(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return float(value)
+
+
 def load_local_env(env_path):
     if not env_path.exists():
         return
@@ -88,6 +95,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'api',
     'accounts',
+    'ai',
     'assistant',
     'reports',
     'sightings',
@@ -204,6 +212,16 @@ MICROSOFT_JWKS_URL = os.getenv(
     'https://login.microsoftonline.com/common/discovery/v2.0/keys',
 )
 SSO_HTTP_TIMEOUT_SECONDS = env_int('DJANGO_SSO_HTTP_TIMEOUT_SECONDS', 5)
+GEMMA_ENABLED = env_bool('DJANGO_GEMMA_ENABLED', False)
+GEMMA_API_KEY = os.getenv('DJANGO_GEMMA_API_KEY', '')
+GEMMA_API_BASE_URL = os.getenv(
+    'DJANGO_GEMMA_API_BASE_URL',
+    'https://generativelanguage.googleapis.com/v1beta',
+).rstrip('/')
+GEMMA_MODEL = os.getenv('DJANGO_GEMMA_MODEL', 'gemma-3-27b-it')
+GEMMA_TIMEOUT_SECONDS = env_float('DJANGO_GEMMA_TIMEOUT_SECONDS', 5.0)
+GEMMA_TEMPERATURE = env_float('DJANGO_GEMMA_TEMPERATURE', 0.2)
+GEMMA_MAX_OUTPUT_TOKENS = env_int('DJANGO_GEMMA_MAX_OUTPUT_TOKENS', 512)
 
 
 # Internationalization
