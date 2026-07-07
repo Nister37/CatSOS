@@ -186,7 +186,7 @@ def handle_report_created(*, report, actor):
         report=report,
         actor=actor,
     )
-    enqueue_report_created_notification(report=report)
+    enqueue_report_created_notification(report=report, actor=actor)
     return timeline_event
 
 
@@ -232,6 +232,7 @@ def change_report_status(*, report, actor, new_status, found_message=None):
         report=report,
         old_status=old_status,
         new_status=new_status,
+        actor=actor,
     )
 
     return report, timeline_event
