@@ -21,7 +21,9 @@ import { ReportSightingPage } from './pages/ReportSightingPage';
 import { SightingsMapResultsPage } from './pages/SightingsMapResultsPage';
 import { SightingsMapSearchPage } from './pages/SightingsMapSearchPage';
 import { SignupPage } from './pages/SignupPage';
+import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 export function App() {
   return (
@@ -45,6 +47,8 @@ export function App() {
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
       <Route path="verify-email" element={<EmailVerificationPage />} />
+      <Route path="about" element={<AboutPage />} />
+      <Route path="settings" element={<SettingsPage />} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>
