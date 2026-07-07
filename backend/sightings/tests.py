@@ -6,6 +6,7 @@ from uuid import uuid4
 from PIL import Image
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -151,6 +152,37 @@ class SightingCreateApiTests(APITestCase):
         )
         self.assertEqual(timeline_event.actor, self.helper)
         self.assertEqual(timeline_event.location_summary, 'Behind the bakery')
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_sighting_submission_sends_owner_email_notification_after_commit(self):
+        report = self._create_report(
+            status=LostCatReport.Status.MISSING,
+            notify_email=True,
+        )
+        self._authenticate(self.helper)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self._url(report),
+                self._payload(notes='Private helper note with helper@example.com'),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['owner@example.com'])
+        self.assertIn('New sighting for Luna', email.subject)
+        self.assertIn('Behind the bakery', email.body)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('helper@example.com', email.body)
+        self.assertNotIn('Private helper note', email.body)
 
     def test_authenticated_user_can_submit_sighting_with_photo(self):
         report = self._create_report(status=LostCatReport.Status.MISSING)
