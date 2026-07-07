@@ -42,6 +42,7 @@ Django backend for the CatSOS API.
 - Password reset confirm: `http://localhost:8000/api/auth/password-reset/confirm/`
 - Password reset with TOTP: `http://localhost:8000/api/auth/password-reset/totp/`
 - Logged-in password change: `http://localhost:8000/api/auth/password-change/`
+- AI description cleaner: `http://localhost:8000/api/ai/improve-description/`
 - SSO login/signup: `http://localhost:8000/api/auth/sso/login/`
 - Link SSO provider: `http://localhost:8000/api/auth/sso/link/`
 - TOTP setup: `http://localhost:8000/api/auth/totp/setup/`

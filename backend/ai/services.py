@@ -1,10 +1,32 @@
 from dataclasses import dataclass
 import logging
+import re
 
 from django.conf import settings
 import requests
 
 logger = logging.getLogger(__name__)
+
+EMAIL_PATTERN = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
+PHONE_PATTERN = re.compile(r'\+?\d[\d\s().-]{7,}\d')
+STREET_ADDRESS_PATTERN = re.compile(
+    r'\b\d{1,5}\s+'
+    r'[\w\s.\'-]{2,80}'
+    r'\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|lane|ln\.?|drive|dr\.?|'
+    r'boulevard|blvd\.?|court|ct\.?|place|pl\.?)\b'
+    r'(?:\s+[\w\s.\'-]{0,40})?',
+    re.IGNORECASE,
+)
+DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION = (
+    'You improve lost-cat report descriptions. Use only facts present in the '
+    'user text. Do not invent details, diagnoses, locations, contact details, '
+    'reward terms, or sightings. Keep the result concise, factual, and suitable '
+    'for a public lost-cat report. Return only the rewritten description.'
+)
+AI_PRIVACY_NOTICE = (
+    'Private contact details are removed before AI processing. Review the '
+    'suggestion before saving.'
+)
 
 
 class AIServiceDisabled(Exception):
@@ -143,3 +165,42 @@ def generate_gemma_text(*, prompt, fallback_text='', system_instruction='', clie
             generated_by_ai=False,
             error='Gemma generation failed.',
         )
+
+
+def _replace_phone_like_values(text):
+    def replace_match(match):
+        digits = [char for char in match.group(0) if char.isdigit()]
+        if len(digits) < 9:
+            return match.group(0)
+        return '[phone removed]'
+
+    return PHONE_PATTERN.sub(replace_match, text)
+
+
+def sanitize_text_for_ai(text):
+    sanitized = EMAIL_PATTERN.sub('[email removed]', text)
+    sanitized = _replace_phone_like_values(sanitized)
+    sanitized = STREET_ADDRESS_PATTERN.sub('[address removed]', sanitized)
+    return sanitized.strip()
+
+
+def improve_lost_cat_description(*, description, client=None):
+    sanitized_description = sanitize_text_for_ai(description)
+    prompt = (
+        'Rewrite this lost-cat report description using only the facts below. '
+        'Do not add facts. Do not include contact details.\n\n'
+        f'{sanitized_description}'
+    )
+    result = generate_gemma_text(
+        prompt=prompt,
+        fallback_text=description.strip(),
+        system_instruction=DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION,
+        client=client,
+    )
+    return {
+        'suggestion': result.text,
+        'generated_by_ai': result.generated_by_ai,
+        'requires_review': True,
+        'fallback_reason': result.error,
+        'privacy_notice': AI_PRIVACY_NOTICE,
+    }
