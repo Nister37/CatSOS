@@ -2,7 +2,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from reports.models import LostCatReportTimelineEvent
-from .models import Sighting, SightingPhoto
+
+from .models import Sighting, SightingPhoto, VolunteerSearch
 
 
 def build_sighting_location_summary(sighting):
@@ -31,6 +32,33 @@ def create_sighting(*, report, submitted_by, validated_data, photo=None):
         location_summary=build_sighting_location_summary(sighting),
     )
     return sighting
+
+
+def build_report_location_summary(report):
+    if report.last_seen_landmark:
+        return report.last_seen_landmark
+    if report.last_seen_lat is not None and report.last_seen_lng is not None:
+        return f'{report.last_seen_lat:.3f}, {report.last_seen_lng:.3f}'
+    return ''
+
+
+@transaction.atomic
+def mark_volunteer_searching(*, report, volunteer):
+    volunteer_search, created = VolunteerSearch.objects.get_or_create(
+        report=report,
+        volunteer=volunteer,
+    )
+    if created:
+        LostCatReportTimelineEvent.objects.create(
+            report=report,
+            actor=volunteer,
+            event_type=LostCatReportTimelineEvent.EventType.VOLUNTEER_SEARCH_STARTED,
+            location_summary=build_report_location_summary(report),
+        )
+    else:
+        volunteer_search.save(update_fields=('updated_at',))
+
+    return volunteer_search, created
 
 
 @transaction.atomic

@@ -6,6 +6,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from reports.models import LostCatReport
+
 from .validators import validate_sighting_photo_upload
 
 
@@ -111,4 +112,36 @@ class SightingPhoto(models.Model):
     def __str__(self):
         return f'Photo for sighting {self.sighting_id}'
 
-# Create your models here.
+
+class VolunteerSearch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    report = models.ForeignKey(
+        LostCatReport,
+        on_delete=models.CASCADE,
+        related_name='volunteer_searches',
+    )
+    volunteer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='volunteer_searches',
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-updated_at', '-created_at')
+        indexes = [
+            models.Index(fields=('report', '-updated_at')),
+            models.Index(fields=('volunteer', '-updated_at')),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=('report', 'volunteer'),
+                name='unique_volunteer_search_per_report',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Volunteer search for {self.report_id} by {self.volunteer_id}'

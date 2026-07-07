@@ -58,9 +58,11 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
 | `GET` | [`/api/reports/{id}/sightings/`](#get-apireportsidsightings) | JWT | `200` | List sightings for one owned report. |
 | `PATCH` | [`/api/reports/{id}/sightings/{sighting_id}/verification/`](#patch-apireportsidsightingssightingidverification) | JWT | `200` | Mark one sighting as pending, useful, or false. |
+| `GET` | [`/api/reports/{id}/volunteer-searches/`](#get-apireportsidvolunteer-searches) | JWT | `200` | List helpers searching near one owned report. |
 | `GET` | [`/api/public/reports/`](#get-apipublicreports) | Public | `200` | Browse public-safe lost cat report cards. |
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
 | `POST` | [`/api/public/reports/{public_id}/sightings/`](#post-apipublicreportspublicidsightings) | JWT | `201` | Submit an authenticated sighting for a public report. |
+| `POST` | [`/api/public/reports/{public_id}/volunteer-searches/`](#post-apipublicreportspublicidvolunteer-searches) | JWT | `201` | Mark that the authenticated user is searching nearby. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -498,6 +500,7 @@ SIGHTING_CREATED
 SIGHTING_MARKED_FALSE
 SIGHTING_MARKED_USEFUL
 STATUS_CHANGED
+VOLUNTEER_SEARCH_STARTED
 ```
 
 <a id="get-apireportsidsimilar"></a>
@@ -959,6 +962,75 @@ Success response:
 ```
 
 Changing a sighting to `USEFUL` creates a `SIGHTING_MARKED_USEFUL` timeline event and makes it eligible for the public `latest_sighting` summary. Changing a sighting to `FALSE` creates a `SIGHTING_MARKED_FALSE` timeline event and excludes it from `latest_sighting`. Setting `verification_status` back to `PENDING` clears `verified_by` and `verified_at`.
+
+<a id="post-apipublicreportspublicidvolunteer-searches"></a>
+### Mark Searching Nearby For Public Report
+
+`POST /api/public/reports/{public_id}/volunteer-searches/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Marks the authenticated user as searching near a non-hidden active report. Guests cannot create volunteer-search records. Hidden reports return `404 Not Found`; `FOUND` and `CLOSED` reports return `400 Bad Request`.
+
+The request body is empty:
+
+```json
+{}
+```
+
+Success response:
+
+```json
+{
+  "id": "aefeb565-c654-469b-9db9-fb2de37f679f",
+  "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "volunteer": {
+    "display_name": "Helpful Neighbor",
+    "avatar_fallback": "HN"
+  },
+  "created_at": "2026-07-07T09:20:00Z",
+  "updated_at": "2026-07-07T09:20:00Z"
+}
+```
+
+The first request by a user for a report returns `201 Created` and creates a `VOLUNTEER_SEARCH_STARTED` timeline event. Repeating the same request refreshes `updated_at`, returns `200 OK`, and does not create a duplicate timeline event.
+
+Volunteer responses expose only safe display data. They do not expose account email, private phone, direct contact fields, or internal user IDs.
+
+<a id="get-apireportsidvolunteer-searches"></a>
+### List Report Volunteer Searches
+
+`GET /api/reports/{id}/volunteer-searches/`
+
+Returns helpers who marked that they are searching near one report. The report owner can list helpers for their own report. Staff users can list helpers for any report. Other users receive `404 Not Found`.
+
+The response is paginated:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "aefeb565-c654-469b-9db9-fb2de37f679f",
+      "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+      "volunteer": {
+        "display_name": "Helpful Neighbor",
+        "avatar_fallback": "HN"
+      },
+      "created_at": "2026-07-07T09:20:00Z",
+      "updated_at": "2026-07-07T09:20:00Z"
+    }
+  ]
+}
+```
+
+Volunteer list responses are owner/admin visibility only and use `Cache-Control: no-store`. They do not expose helper email, phone, private profile fields, or report owner private data.
 
 ## Auth Payloads
 
