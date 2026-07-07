@@ -41,12 +41,14 @@ from .serializers import (
 )
 from .services import VerificationCodeCooldownError
 from .services import (
+    EMAIL_DELIVERY_UNAVAILABLE_DETAIL,
     PASSWORD_CHANGE_SUCCESS_DETAIL,
     PASSWORD_RESET_INVALID_DETAIL,
     PASSWORD_RESET_RATE_LIMIT_DETAIL,
     PASSWORD_RESET_REQUEST_DETAIL,
     PASSWORD_RESET_SUCCESS_DETAIL,
     PASSWORD_RESET_TOTP_INVALID_DETAIL,
+    EmailDeliveryError,
     TOTP_DISABLED_DETAIL,
     TOTP_ENABLED_DETAIL,
     InvalidTOTPCodeError,
@@ -69,6 +71,13 @@ def set_no_store_headers(response):
 def no_store_response(data, *, status_code=status.HTTP_200_OK, headers=None):
     response = Response(data, status=status_code, headers=headers)
     return set_no_store_headers(response)
+
+
+def email_delivery_unavailable_response():
+    return no_store_response(
+        {'detail': EMAIL_DELIVERY_UNAVAILABLE_DETAIL},
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
 
 
 def get_client_ip(request):
@@ -226,7 +235,10 @@ class RegisterView(NoStoreAPIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        try:
+            user = serializer.save()
+        except EmailDeliveryError:
+            return email_delivery_unavailable_response()
 
         return no_store_response(
             build_verification_pending_response(user),
@@ -282,6 +294,8 @@ class ResendVerificationView(NoStoreAPIView):
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 headers={'Retry-After': str(exc.seconds_remaining)},
             )
+        except EmailDeliveryError:
+            return email_delivery_unavailable_response()
 
         return no_store_response(build_verification_pending_response(user))
 
@@ -302,7 +316,10 @@ class ChangeVerificationEmailView(NoStoreAPIView):
     def post(self, request):
         serializer = ChangeVerificationEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        try:
+            user = serializer.save()
+        except EmailDeliveryError:
+            return email_delivery_unavailable_response()
 
         return no_store_response(build_verification_pending_response(user))
 
@@ -404,6 +421,8 @@ class PasswordResetRequestView(NoStoreAPIView):
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 headers={'Retry-After': str(60 * 60)},
             )
+        except EmailDeliveryError:
+            return no_store_response({'detail': PASSWORD_RESET_REQUEST_DETAIL})
 
         return no_store_response({'detail': PASSWORD_RESET_REQUEST_DETAIL})
 

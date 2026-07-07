@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import { CircleMarker, MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
@@ -14,31 +14,15 @@ import {
   type OwnedSighting,
   type PublicReport,
 } from '../services/reportsApi';
-import { CatSighting, MOCK_SIGHTINGS, STATUS_LABELS, SightingStatus } from '../data/sightings';
 
-type MapMode = 'community' | 'all' | 'track';
+type MapMode = 'all' | 'track';
 
 type ActiveMarkerInfo =
-  | { type: 'community'; sighting: CatSighting }
   | { type: 'all'; cat: PublicReport }
   | { type: 'lastSeen'; cat: PublicReport }
   | { type: 'trackSighting'; sighting: OwnedSighting };
 
 const DEFAULT_CENTER: [number, number] = [51.2194, 4.4025];
-
-const STATUS_COLORS: Record<SightingStatus, string> = {
-  MISSING: '#b52330',
-  RECENTLY_SEEN: '#d97706',
-  FOUND: '#2D8C3C',
-  CLOSED: '#5f5e5e',
-};
-
-const STATUS_BADGE: Record<SightingStatus, { bg: string; text: string }> = {
-  MISSING: { bg: 'bg-primary', text: 'text-on-primary' },
-  RECENTLY_SEEN: { bg: 'bg-secondary-container', text: 'text-on-secondary-container' },
-  FOUND: { bg: 'bg-[#2D8C3C]', text: 'text-white' },
-  CLOSED: { bg: 'bg-surface-container-high', text: 'text-secondary' },
-};
 
 const CONFIDENCE_LABEL: Record<string, string> = {
   LOW: 'Low confidence',
@@ -53,46 +37,6 @@ function timeAgo(isoString: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function SightingCard({ sighting }: { sighting: CatSighting }) {
-  const badge = STATUS_BADGE[sighting.status];
-  return (
-    <div className="flex-shrink-0 w-80 group">
-      <div className="bg-surface-container-lowest rounded-[24px] overflow-hidden border border-outline-variant hover:shadow-lg transition-all duration-300">
-        <div className="h-48 overflow-hidden relative bg-surface-container">
-          {sighting._mockImageUrl ? (
-            <img
-              src={sighting._mockImageUrl}
-              alt={sighting.cat_name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="material-symbols-outlined text-[64px] text-secondary">pets</span>
-            </div>
-          )}
-          <div className={`absolute top-sm right-sm ${badge.bg} ${badge.text} px-sm py-xs rounded-full font-label-sm`}>
-            {STATUS_LABELS[sighting.status]}
-          </div>
-        </div>
-        <div className="p-md">
-          <div className="flex justify-between items-start mb-sm">
-            <h4 className="font-headline-md text-[18px] text-on-surface">{sighting.cat_name}</h4>
-            <span className="text-secondary font-label-sm uppercase shrink-0 ml-sm">{timeAgo(sighting.created_at)}</span>
-          </div>
-          <p className="text-secondary font-body-md text-sm mb-md line-clamp-2">{sighting.description}</p>
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-xs text-on-surface-variant text-sm font-medium">
-              <span className="material-symbols-outlined text-[18px]">location_on</span>
-              {sighting.last_seen_address.split(',')[0]}
-            </span>
-            <button type="button" className="text-primary font-label-md hover:underline">View Details</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── Unified inner map component (lives inside a single MapContainer) ─────────
@@ -135,9 +79,7 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
   );
 
   useEffect(() => {
-    if (mode === 'community') {
-      map.flyTo(geocodedCenter, 13, { duration: 1 });
-    } else if (mode === 'all') {
+    if (mode === 'all') {
       const first = publicReports.find((c) => c.approximate_location !== null);
       if (first?.approximate_location) {
         map.flyTo([first.approximate_location.latitude, first.approximate_location.longitude], 12, { duration: 1 });
@@ -151,31 +93,6 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selectedCat, geocodedCenter]);
-
-  // ── Community mode ──────────────────────────────────────────────────────────
-  if (mode === 'community') {
-    return (
-      <>
-        {MOCK_SIGHTINGS.map((s) => {
-          const color = STATUS_COLORS[s.status];
-          return (
-            <CircleMarker
-              key={s.id}
-              center={[s.last_seen_lat, s.last_seen_lng]}
-              radius={12}
-              pathOptions={{ color, fillColor: color, fillOpacity: 0.85 }}
-              eventHandlers={{
-                click: (e) => {
-                  e.originalEvent.stopPropagation();
-                  onMarkerClick({ type: 'community', sighting: s });
-                },
-              }}
-            />
-          );
-        })}
-      </>
-    );
-  }
 
   // ── All Missing Cats mode ───────────────────────────────────────────────────
   if (mode === 'all') {
@@ -247,17 +164,9 @@ function MarkerPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-4 left-4 right-4 z-[1000] p-4 bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/40">
+    <div className="absolute bottom-4 left-4 right-4 md:right-auto md:left-4 md:max-w-sm z-[1000] p-4 bg-white rounded-xl shadow-lg border border-surface-container">
       <div className="flex justify-between items-start gap-md">
         <div className="min-w-0">
-          {info.type === 'community' && (
-            <>
-              <p className="font-bold text-on-background text-sm">{info.sighting.cat_name}</p>
-              <p className="text-secondary text-xs">{STATUS_LABELS[info.sighting.status]}</p>
-              <p className="text-secondary text-xs mt-1">{info.sighting.last_seen_address}</p>
-            </>
-          )}
-
           {info.type === 'all' && (
             <>
               <p className="font-bold text-on-background text-sm">{info.cat.cat_name}</p>
@@ -323,10 +232,9 @@ export function SightingsMapResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') ?? '';
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(query ? null : DEFAULT_CENTER);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
-  const [mapMode, setMapMode] = useState<MapMode>('community');
+  const [mapMode, setMapMode] = useState<MapMode>('all');
   const [publicReports, setPublicReports] = useState<PublicReport[]>([]);
   const [trackPublicId, setTrackPublicId] = useState('');
   const [trackSightings, setTrackSightings] = useState<OwnedSighting[]>([]);
@@ -373,19 +281,14 @@ export function SightingsMapResultsPage() {
       .finally(() => setLoadingTrack(false));
   }, [mapMode, trackPublicId, accessToken, user]);
 
-  function scrollFeed(direction: 'left' | 'right') {
-    scrollRef.current?.scrollBy({ left: direction === 'left' ? -300 : 300, behavior: 'smooth' });
-  }
-
   const locationLabel = query || 'your area';
   const resolvedCenter = mapCenter ?? DEFAULT_CENTER;
-  // Derive effective mode — if user logs out, fall back to community without a setState effect
-  const effectiveMode: MapMode = (!user && mapMode === 'track') ? 'community' : mapMode;
+  // Derive effective mode — if user logs out, fall back to all without a setState effect
+  const effectiveMode: MapMode = (!user && mapMode === 'track') ? 'all' : mapMode;
   const selectedCat = publicReports.find((r) => r.public_id === trackPublicId) ?? null;
   const effectiveSightings = user ? trackSightings : [];
 
   const MODE_OPTIONS: { id: MapMode; icon: string; label: string; desc: string }[] = [
-    { id: 'community', icon: 'share_location', label: 'Community Sightings', desc: 'Recent sighting activity' },
     { id: 'all', icon: 'pets', label: 'All Missing Cats', desc: 'Every cat & where they went missing' },
     { id: 'track', icon: 'manage_search', label: 'Track a Cat', desc: 'Pick a cat to see location & sightings' },
   ];
@@ -419,7 +322,7 @@ export function SightingsMapResultsPage() {
                 type="button"
                 onClick={() => setFilterOpen((o) => !o)}
                 className={`flex items-center gap-xs px-md py-sm rounded-xl border font-label-md transition-colors ${
-                  filterOpen || effectiveMode !== 'community'
+                  filterOpen || effectiveMode !== 'all'
                     ? 'bg-primary-container text-on-primary border-primary-container'
                     : 'bg-surface-container border-outline-variant text-on-surface hover:bg-secondary-container'
                 }`}
@@ -430,31 +333,12 @@ export function SightingsMapResultsPage() {
                   {filterOpen ? 'expand_less' : 'expand_more'}
                 </span>
               </button>
-
-              <button
-                type="button"
-                className="flex items-center gap-xs px-md py-sm rounded-xl bg-on-background text-on-primary font-label-md hover:opacity-90 transition-opacity"
-              >
-                <span className="material-symbols-outlined text-[20px]">share</span>
-                Share Map
-              </button>
             </div>
           </div>
 
           {/* Active mode info strip */}
-          {effectiveMode !== 'community' && (
+          {effectiveMode === 'track' && (
             <div className="mt-md flex items-center gap-sm flex-wrap">
-              {effectiveMode === 'all' && (
-                <>
-                  <span className="inline-flex items-center gap-xs bg-primary/10 text-primary px-md py-xs rounded-full font-label-sm">
-                    <span className="w-2 h-2 rounded-full bg-[#ff5a5f]" />
-                    All missing cats
-                  </span>
-                  <span className="font-body-sm text-secondary">
-                    {publicReports.filter((c) => c.approximate_location !== null).length} with known location
-                  </span>
-                </>
-              )}
               {effectiveMode === 'track' && selectedCat && (
                 <>
                   <span className="inline-flex items-center gap-xs bg-[#b52330]/10 text-[#b52330] px-md py-xs rounded-full font-label-sm">
@@ -517,42 +401,6 @@ export function SightingsMapResultsPage() {
           </div>
         </section>
 
-        {/* Recent community feed */}
-        <section className="bg-surface-container-low py-xl">
-          <div className="max-w-container-max mx-auto px-margin-mobile md:px-xl">
-            <div className="flex items-center justify-between mb-lg">
-              <h2 className="font-headline-lg text-headline-lg text-on-surface">Recent Community Feed</h2>
-              <div className="flex gap-xs">
-                <button
-                  type="button"
-                  aria-label="Scroll left"
-                  onClick={() => scrollFeed('left')}
-                  className="p-base rounded-full bg-surface-container-lowest border border-outline-variant hover:bg-surface-variant transition-colors"
-                >
-                  <span className="material-symbols-outlined">chevron_left</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Scroll right"
-                  onClick={() => scrollFeed('right')}
-                  className="p-base rounded-full bg-surface-container-lowest border border-outline-variant hover:bg-surface-variant transition-colors"
-                >
-                  <span className="material-symbols-outlined">chevron_right</span>
-                </button>
-              </div>
-            </div>
-            <div
-              ref={scrollRef}
-              className="flex gap-md overflow-x-auto pb-md -mx-margin-mobile px-margin-mobile md:mx-0 md:px-0"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {MOCK_SIGHTINGS.map((s) => (
-                <SightingCard key={s.id} sighting={s} />
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* CTA */}
         <section className="py-xl max-w-container-max mx-auto px-margin-mobile md:px-xl">
           <div className="bg-on-background rounded-[32px] p-lg md:p-xl flex flex-col md:flex-row items-center justify-between gap-lg overflow-hidden relative">
@@ -570,12 +418,6 @@ export function SightingsMapResultsPage() {
                 >
                   Post a Sighting
                 </Link>
-                <button
-                  type="button"
-                  className="border border-on-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-[18px] hover:bg-white/10 transition-colors duration-200"
-                >
-                  Download App
-                </button>
               </div>
             </div>
             <div className="relative w-full md:w-1/2 h-64 md:h-80 pointer-events-none select-none">
@@ -590,33 +432,33 @@ export function SightingsMapResultsPage() {
 
       <Footer />
 
-      {/* Filter Map bottom sheet */}
+      {/* Filter Map panel — responsive: bottom sheet on mobile, popover on desktop */}
       {filterOpen && (
         <div
           role="presentation"
-          className="fixed inset-0 z-[500] flex flex-col justify-end"
+          className="fixed inset-0 z-[500] flex items-end md:items-start md:justify-end"
           onClick={() => setFilterOpen(false)}
           onKeyDown={(e) => { if (e.key === 'Escape') setFilterOpen(false); }}
         >
           <div
             role="presentation"
-            className="mx-4 mb-4 p-4 bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/40"
+            className="w-full md:w-96 mx-0 mb-0 md:mt-36 md:mr-8 p-5 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl border border-surface-container"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-3">
-              <p className="font-bold text-on-background text-sm uppercase tracking-widest">Map View</p>
+            <div className="flex justify-between items-center mb-4">
+              <p className="font-headline-md text-headline-md text-on-background">Map View</p>
               <button
                 type="button"
                 aria-label="Close filter"
                 onClick={() => setFilterOpen(false)}
-                className="p-2 rounded-full bg-white text-on-background shadow-sm hover:scale-110 transition-transform"
+                className="p-2 rounded-full hover:bg-surface-container text-on-background transition-colors"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
 
-            <div className="space-y-[2px]">
+            <div className="space-y-1">
               {MODE_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
@@ -631,28 +473,28 @@ export function SightingsMapResultsPage() {
                     setActiveMarker(null);
                     if (opt.id !== 'track') setFilterOpen(false);
                   }}
-                  className={`w-full text-left flex items-center gap-md px-md py-sm rounded-xl transition-colors ${
+                  className={`w-full text-left flex items-center gap-md px-md py-md rounded-xl transition-colors ${
                     mapMode === opt.id
-                      ? 'bg-white/60 text-on-surface'
-                      : 'hover:bg-white/40 text-on-surface'
+                      ? 'bg-primary-container/10 border border-primary-container/30'
+                      : 'hover:bg-surface-container-low border border-transparent'
                   }`}
                 >
-                  <span className={`material-symbols-outlined text-[20px] ${mapMode === opt.id ? 'text-primary-container' : 'text-secondary'}`}>
+                  <span className={`material-symbols-outlined text-[22px] ${mapMode === opt.id ? 'text-primary-container' : 'text-secondary'}`}>
                     {opt.icon}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-label-md">{opt.label}</p>
-                    <p className="text-[12px] text-secondary truncate">{opt.desc}</p>
+                    <p className="font-label-md text-on-surface">{opt.label}</p>
+                    <p className="text-[12px] text-secondary">{opt.desc}</p>
                   </div>
                   {mapMode === opt.id && (
-                    <span className="material-symbols-outlined text-primary-container text-[18px] shrink-0">check</span>
+                    <span className="material-symbols-outlined text-primary-container text-[18px] shrink-0">check_circle</span>
                   )}
                 </button>
               ))}
 
               {/* Cat selector — only visible when logged in AND in track mode */}
               {user && mapMode === 'track' && (
-                <div className="pt-sm border-t border-white/40 mt-sm px-md pb-sm">
+                <div className="pt-sm border-t border-surface-container mt-sm px-md pb-sm">
                   <label
                     htmlFor="trackCatSelect"
                     className="block font-label-sm text-label-sm text-secondary uppercase tracking-widest mb-xs"
@@ -667,7 +509,7 @@ export function SightingsMapResultsPage() {
                       setActiveMarker(null);
                       if (e.target.value) setFilterOpen(false);
                     }}
-                    className="w-full bg-white/60 border-none rounded-xl px-md py-sm font-body-md text-on-surface focus:ring-2 focus:ring-primary-container"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm font-body-md text-on-surface focus:ring-2 focus:ring-primary-container"
                   >
                     <option value="">— choose a cat —</option>
                     {publicReports.map((r) => (

@@ -107,11 +107,15 @@ export function SettingsPage() {
           </div>
 
           {/* Tab bar */}
-          <div className="flex gap-xs border-b border-surface-container mb-lg">
+          <div role="tablist" aria-label="Settings sections" className="flex gap-xs border-b border-surface-container mb-lg">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                id={`tab-${tab.id}`}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`tabpanel-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative flex items-center gap-xs pb-sm px-sm font-label-md text-label-md transition-colors border-b-2 -mb-px ${
                   activeTab === tab.id
@@ -132,7 +136,7 @@ export function SettingsPage() {
 
           {/* Notifications tab */}
           {activeTab === 'notifications' && (
-            <div className="space-y-sm">
+            <div id="tabpanel-notifications" role="tabpanel" aria-labelledby="tab-notifications" className="space-y-sm">
               {notifications.length === 0 ? (
                 <div className="bg-surface-container-lowest rounded-xl border border-surface-container p-xl flex flex-col items-center text-center gap-md">
                   <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center">
@@ -198,7 +202,7 @@ export function SettingsPage() {
 
           {/* Settings tab */}
           {activeTab === 'settings' && (
-            <div className="space-y-md">
+            <div id="tabpanel-settings" role="tabpanel" aria-labelledby="tab-settings" className="space-y-md">
               {/* Profile section */}
               <div className="bg-surface-container-lowest rounded-xl border border-surface-container shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-lg">
                 <div className="flex items-center gap-xs mb-lg">

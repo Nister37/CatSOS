@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from accounts.services import create_token_pair
 from reports.models import LostCatReport
 from sightings.models import Sighting
+from test_constants import TEST_USER_PASSWORD
 
 from .models import InAppNotification
 from .services import (
@@ -32,12 +33,12 @@ class NotificationServiceTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             display_name='Helpful Anna',
             is_email_verified=True,
         )
@@ -429,18 +430,18 @@ class InAppNotificationApiTests(APITestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             display_name='Helpful Anna',
             is_email_verified=True,
         )
         self.other_user = get_user_model().objects.create_user(
             email='other@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -632,3 +633,72 @@ class InAppNotificationApiTests(APITestCase):
         self.assertEqual(notification['report']['public_id'], str(report.public_id))
         self.assertEqual(notification['sighting']['id'], str(sighting.id))
         self.assertEqual(notification['actor']['display_name'], 'CatSOS user')
+
+
+class NotificationApiAuthorizationTests(APITestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+        self.other_user = get_user_model().objects.create_user(
+            email='other@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _create_notification(self, recipient, **overrides):
+        defaults = {
+            'recipient': recipient,
+            'event_type': InAppNotification.EventType.REPORT_CREATED,
+            'title': 'Test notification',
+            'message': 'Test message',
+        }
+        defaults.update(overrides)
+        return InAppNotification.objects.create(**defaults)
+
+    def test_notification_list_requires_authentication(self):
+        response = self.client.get(reverse('notification-list'))
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    def test_user_cannot_read_other_users_notifications(self):
+        notification = self._create_notification(self.owner)
+        self._authenticate(self.other_user)
+
+        response = self.client.get(reverse('notification-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 0)
+
+    def test_mark_read_requires_authentication(self):
+        notification = self._create_notification(self.owner)
+
+        response = self.client.patch(
+            reverse('notification-read', args=[notification.id]),
+        )
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    def test_user_cannot_mark_other_users_notification_read(self):
+        notification = self._create_notification(self.owner)
+        self._authenticate(self.other_user)
+
+        response = self.client.patch(
+            reverse('notification-read', args=[notification.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)

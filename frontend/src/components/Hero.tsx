@@ -36,7 +36,7 @@ export function Hero() {
             <img
               className="w-full h-[500px] object-cover"
               alt="A beautiful domestic shorthair cat with intelligent amber eyes looking directly into the camera against a clean minimalist studio background"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEkSiLgyKukbO5azPwdaONXjeyMWOpE7bqhrdtKrzLcBnby7860kKBaaD4sqMKkhntFxOvybZmFWmRKg-bpjk7fcsbCFkMXspL1yaMEb4gJAbGpYAHsb93xbJP6WTcyge4c1IlAHTxY5p9MtfLdA7IoL5J9XwKwfFPmlyv_mVzC8MqrMcpyyFW7sL40GoDmUia11Fobhit53_KDO1aR6LtelSqZfOWVXILmJoQl_X6lq_snP2gBSKRmg"
+              src="https://images.unsplash.com/photo-1574158622682-e40e69881006?w=800&h=600&fit=crop"
             />
           </div>
         </div>

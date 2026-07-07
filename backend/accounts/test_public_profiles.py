@@ -6,13 +6,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from points.models import UserBadge
+from test_constants import TEST_USER_PASSWORD
 
 
 class PublicProfileApiTests(APITestCase):
     def _create_contributor(self, **overrides):
         defaults = {
             'email': 'contributor@example.com',
-            'password': 'StrongPass123!',
+            'password': TEST_USER_PASSWORD,
             'is_email_verified': True,
             'display_name': 'Trusted Helper',
             'contribution_points': 25,

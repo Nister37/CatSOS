@@ -18,6 +18,7 @@ from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 from sightings.models import Sighting
+from test_constants import TEST_USER_PASSWORD
 from sightings.services import create_sighting
 
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
@@ -34,12 +35,12 @@ class LostCatReportCreateApiTests(APITestCase):
 
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.other_user = get_user_model().objects.create_user(
             email='other@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -757,7 +758,7 @@ class LostCatReportCreateApiTests(APITestCase):
     def test_staff_cannot_edit_someone_elses_report_through_owner_api(self):
         staff_user = get_user_model().objects.create_user(
             email='staff@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
             is_staff=True,
         )
@@ -1856,3 +1857,103 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
         self.assertEqual(response.data['results'], [])
+
+
+
+class ReportPublicListPrivacyTests(APITestCase):
+    def setUp(self):
+        self.media_root = TemporaryDirectory()
+        self.addCleanup(self.media_root.cleanup)
+        media_override = override_settings(MEDIA_ROOT=self.media_root.name)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+        cache.clear()
+
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+
+    def _create_report(self, owner, **overrides):
+        defaults = {
+            'cat_name': 'Milo',
+            'coat_color': 'Ginger',
+            'description': 'Friendly outdoor cat.',
+            'last_seen_address': '4 Oak Street',
+            'contact_name': 'Milo Owner',
+            'contact_phone': '+48 600 000 000',
+            'contact_email': 'milo@example.com',
+        }
+        defaults.update(overrides)
+        return LostCatReport.objects.create(owner=owner, **defaults)
+
+    def _public_list_url(self):
+        return reverse('lost-report-public-list')
+
+    def test_public_report_list_does_not_include_hidden_reports(self):
+        visible_report = self._create_report(
+            self.owner,
+            cat_name='Visible Cat',
+            status=LostCatReport.Status.MISSING,
+            moderation_status=LostCatReport.ModerationStatus.PENDING,
+        )
+        self._create_report(
+            self.owner,
+            cat_name='Hidden Cat',
+            status=LostCatReport.Status.MISSING,
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(
+            response.data['results'][0]['public_id'],
+            str(visible_report.public_id),
+        )
+        cat_names = [r['cat_name'] for r in response.data['results']]
+        self.assertNotIn('Hidden Cat', cat_names)
+
+    def test_public_report_list_hides_private_contact_fields(self):
+        self._create_report(
+            self.owner,
+            cat_name='Luna',
+            status=LostCatReport.Status.MISSING,
+            contact_name='Private Owner Name',
+            contact_phone='+48 600 999 888',
+            contact_email='private-owner@example.com',
+            contact_visibility=LostCatReport.ContactVisibility.PRIVATE,
+            last_seen_address='123 Secret Home Street',
+            has_microchip=True,
+            chip_number='985112003456789',
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        card = response.data['results'][0]
+        # Private contact fields must not appear in the public list serializer
+        self.assertNotIn('contact_name', card)
+        self.assertNotIn('contact_phone', card)
+        self.assertNotIn('contact_email', card)
+        self.assertNotIn('contact_visibility', card)
+        # Other private fields must also be hidden
+        self.assertNotIn('last_seen_address', card)
+        self.assertNotIn('chip_number', card)
+        self.assertNotIn('owner', card)
+        self.assertNotIn('moderation_status', card)
+        self.assertNotIn('moderation_notes', card)
+        self.assertNotIn('notify_push', card)
+        self.assertNotIn('notify_sms', card)
+        self.assertNotIn('notify_email', card)
+        # Ensure private data does not leak anywhere in the serialized response
+        import json
+        serialized = json.dumps(response.data)
+        self.assertNotIn('+48 600 999 888', serialized)
+        self.assertNotIn('private-owner@example.com', serialized)
+        self.assertNotIn('Private Owner Name', serialized)
+        self.assertNotIn('123 Secret Home Street', serialized)
+        self.assertNotIn('985112003456789', serialized)

@@ -2,7 +2,6 @@ import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '../test/renderWithProviders';
-import { MOCK_SIGHTINGS } from '../data/sightings';
 import { SightingsMapResultsPage } from './SightingsMapResultsPage';
 
 const mockNavigate = jest.fn();
@@ -24,8 +23,6 @@ beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({
     json: jest.fn().mockResolvedValue([{ lat: '51.2194', lon: '4.4025' }]),
   }) as jest.Mock;
-  // jsdom does not implement scrollBy — stub it out so scroll-button tests don't throw
-  HTMLElement.prototype.scrollBy = jest.fn();
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -61,35 +58,10 @@ describe('SightingsMapResultsPage — rendering', () => {
     expect(screen.getByRole('button', { name: /filter map/i })).toBeInTheDocument();
   });
 
-  it('renders the Share Map button', async () => {
+  it('renders the map (no loading spinner after geocoding resolves)', async () => {
     await renderPage();
-    expect(screen.getByRole('button', { name: /share map/i })).toBeInTheDocument();
-  });
-
-  it(`renders a "View Details" button for each of the ${MOCK_SIGHTINGS.length} mock sightings`, async () => {
-    await renderPage();
-    expect(screen.getAllByRole('button', { name: /view details/i })).toHaveLength(
-      MOCK_SIGHTINGS.length,
-    );
-  });
-
-  it('renders all mock sighting cat names in the feed', async () => {
-    await renderPage();
-    // Each name appears at least once in the feed card (may also appear in the
-    // mocked Leaflet Popup, so we use getAllByText and check length >= 1).
-    MOCK_SIGHTINGS.forEach((s) => {
-      expect(screen.getAllByText(s.cat_name).length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  it('renders the scroll left button for the feed', async () => {
-    await renderPage();
-    expect(screen.getByRole('button', { name: /scroll left/i })).toBeInTheDocument();
-  });
-
-  it('renders the scroll right button for the feed', async () => {
-    await renderPage();
-    expect(screen.getByRole('button', { name: /scroll right/i })).toBeInTheDocument();
+    // After geocoding resolves, the map container renders instead of the loading spinner
+    expect(screen.queryByText(/progress_activity/)).not.toBeInTheDocument();
   });
 
   it('renders the CTA heading', async () => {
@@ -108,6 +80,24 @@ describe('SightingsMapResultsPage — rendering', () => {
   });
 });
 
+// ─── Map modes ────────────────────────────────────────────────────────────────
+
+describe('SightingsMapResultsPage — map modes', () => {
+  it('defaults to "all" mode (All Missing Cats)', async () => {
+    await renderPage();
+    // The filter panel is closed by default; open it to inspect mode options
+    await userEvent.click(screen.getByRole('button', { name: /filter map/i }));
+    // "All Missing Cats" option should be visible in the filter panel
+    expect(screen.getByText(/all missing cats/i)).toBeInTheDocument();
+  });
+
+  it('shows "Track a Cat" option in the filter panel', async () => {
+    await renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /filter map/i }));
+    expect(screen.getByText(/track a cat/i)).toBeInTheDocument();
+  });
+});
+
 // ─── Geocoding fetch ──────────────────────────────────────────────────────────
 
 describe('SightingsMapResultsPage — geocoding', () => {
@@ -119,17 +109,5 @@ describe('SightingsMapResultsPage — geocoding', () => {
   it('does not call fetch when no query is provided', async () => {
     await renderPage('/map/results');
     expect(global.fetch).not.toHaveBeenCalled();
-  });
-});
-
-// ─── Feed scroll ──────────────────────────────────────────────────────────────
-
-describe('SightingsMapResultsPage — feed scroll', () => {
-  it('scroll buttons are present and clickable without throwing', async () => {
-    const user = userEvent.setup();
-    await renderPage();
-
-    await user.click(screen.getByRole('button', { name: /scroll right/i }));
-    await user.click(screen.getByRole('button', { name: /scroll left/i }));
   });
 });

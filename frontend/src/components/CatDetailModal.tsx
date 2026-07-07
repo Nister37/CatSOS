@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, Marker } from 'react-leaflet';
 import { BaseTileLayer } from './BaseTileLayer';
@@ -38,6 +38,47 @@ export function CatDetailModal({ publicId, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const isLoggedIn = useAppSelector((state) => Boolean(state.auth.accessToken));
   const navigate = useNavigate();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    return () => {
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  const handleFocusTrap = useCallback((e: KeyboardEvent) => {
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleFocusTrap);
+    // Focus the modal dialog on open
+    const timer = setTimeout(() => {
+      const firstFocusable = modalRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }, 50);
+    return () => {
+      window.removeEventListener('keydown', handleFocusTrap);
+      clearTimeout(timer);
+    };
+  }, [handleFocusTrap]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -78,6 +119,7 @@ export function CatDetailModal({ publicId, onClose }: Props) {
       />
 
       <div
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-label={report ? `Details for ${report.cat_name}` : 'Cat details'}

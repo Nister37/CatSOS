@@ -81,3 +81,7 @@ export function confirmPasswordReset(
     new_password_confirm: newPasswordConfirm,
   });
 }
+
+export function ssoLogin(provider: 'google' | 'microsoft', token: string) {
+  return unauthPost<AuthResponse>('/api/auth/sso/login/', { provider, token });
+}

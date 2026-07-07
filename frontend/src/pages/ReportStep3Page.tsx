@@ -266,7 +266,7 @@ export function ReportStep3Page() {
                     className="absolute inset-0 bg-cover bg-center"
                     style={{
                       backgroundImage:
-                        'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDKG-Hn0SeqP6u6PPIutzB9uUyBylL_kXxs2lIPy1VpZjuCoGovnJqZpVXcaz42rOVEjW0I8k6A0T2Sxq-VdWS1WKNwGfBqgQ2fu--HF6KpZKilLqsXfG-JMpmnDhBdXMwuJG3xotlDVCS_Vi4OQmtCnBRUihjh4bnLCxCHJKrsvxGxqtqdsZ9fSsiK3FRedOOWHJtZ5UJmBtTXJErX1vS326xlfPM1LuKgQwf6mDMLAqHRbG9_4t_QpA")',
+                        'url("https://images.unsplash.com/photo-1526336024174-e58f5cdd8e13?w=800&h=600&fit=crop")',
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-on-surface/60 to-transparent" />

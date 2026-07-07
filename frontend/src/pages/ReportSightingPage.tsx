@@ -4,12 +4,9 @@ import L from 'leaflet';
 import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import { BaseTileLayer } from '../components/BaseTileLayer';
 
-import { useAppDispatch } from '../app/hooks';
+import { useAppSelector } from '../app/hooks';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
-import { addNotification } from '../features/notifications/notificationsSlice';
-import { fetchPublicReports, submitSighting, type PublicReport } from '../services/reportsApi';
-import { useAppSelector } from '../app/hooks';
 import { createSighting, fetchPublicReports, type PublicReport } from '../services/reportsApi';
 
 const DEFAULT_CENTER: [number, number] = [51.505, -0.09];
@@ -55,7 +52,6 @@ const UNKNOWN_ID = '__unknown__';
 
 export function ReportSightingPage() {
   const location = useLocation();
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const preSelectedId = (location.state as { preSelectedId?: string } | null)?.preSelectedId ?? null;
   const accessToken = useAppSelector((state) => state.auth.accessToken);
@@ -66,7 +62,6 @@ export function ReportSightingPage() {
   const [confidence, setConfidence] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [details, setDetails] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -147,26 +142,6 @@ export function ReportSightingPage() {
     e.preventDefault();
     setSubmitError(null);
 
-    if (!selectedCat || selectedCat === UNKNOWN_ID) {
-      setSubmitError('Please select a cat from the list above to submit a sighting.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await submitSighting(selectedCat, {
-        seen_at: new Date().toISOString(),
-        location_description: sightingAddress || undefined,
-        latitude: pinPosition?.[0] ?? null,
-        longitude: pinPosition?.[1] ?? null,
-        confidence: 'MEDIUM',
-        notes: details || undefined,
-        photo: photoFile,
-      });
-      setSubmitted(true);
-    } catch {
-      dispatch(addNotification('Failed to submit sighting. Please try again.', 'error'));
-      setSubmitError('Something went wrong. Please try again.');
     if (!accessToken) {
       navigate('/login', { state: { from: '/report-sighting' } });
       return;
@@ -179,7 +154,7 @@ export function ReportSightingPage() {
       setSubmitError('Please tap the map to mark where you spotted the cat.');
       return;
     }
-    setSubmitError(null);
+
     setSubmitting(true);
     try {
       await createSighting(selectedCat, {
@@ -208,7 +183,6 @@ export function ReportSightingPage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPhotoFile(null);
-    setDetails('');
     setSubmitError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setSubmitted(false);
@@ -434,8 +408,6 @@ export function ReportSightingPage() {
                   <textarea
                     id="details"
                     rows={5}
-                    value={details}
-                    onChange={(e) => setDetails(e.target.value)}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Where did you see them? Which direction were they heading? Did they look healthy?"
@@ -522,8 +494,6 @@ export function ReportSightingPage() {
 
                 {/* Submit */}
                 <div className="flex flex-col gap-sm pt-md">
-                  {submitError && (
-                    <p className="text-label-sm font-label-sm text-error text-center">
                   {!accessToken && (
                     <p className="text-center font-body-md text-secondary">
                       You must{' '}

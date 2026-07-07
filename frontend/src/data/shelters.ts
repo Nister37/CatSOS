@@ -36,7 +36,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.2215, 4.401],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCeh7FmFb4NrLEBj9De0Yj4bYjEqnvyDMJEBlTLHwzutvKhDlIlh2C5ht1EDnrYRzNUuvRxJyYzm6zt4Z3Kn6OWx5Zdb0y_Ek1gMzIuUchttmOfMyl7Cdpz26OxnVMXEc-OJXRd4vg6iuAyhWqzLuKN78HfiQHV9Y7NnN34VTnGDTIyEQoho0LNbUo5rsxr3G0eUwtYyxlD9SnWmLpbEwBox80z4WTmBVbOAJQwLushOoNTdTRnsnIcyg',
+      'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&h=400&fit=crop',
   },
   {
     id: '2',
@@ -52,7 +52,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: false,
     position: [51.217, 4.3985],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBhgjsRgkym71XiUW-l9HtgLZcr9woKo2u4fITAESDgCWYmX-HOgdg23uCGb7y3dYlkq21K-ZMC4DIr1mCuNr15Q3h4X_VlCTttQOJhdie-PZ9uCBh5TWjM8oDA2aC3Dd34n6L7NSsuz0UrMZkLPdX8MB8fwnhObUZ-VLyBLKu91Rv2QWXj5L8TEqry_Xej70hUdI3l5uiXy7S31S3pQJgOKZ7GK7y2fRGYPjqsEM41pt1Uz-ZRQKdbsA',
+      'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=600&h=400&fit=crop',
   },
   {
     id: '3',
@@ -68,7 +68,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.228, 4.439],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDC5BNTcMfqI5aOFRljJ--rAkgCh7EcLqXmQw19idvwO5OpwcueZreaKlS8OAu2RT4FM7okbPsDk3BUCxOBn_16_sUZALQvJPG_XSj0bPPo8kb61NIIPC-yr-aTyB4FJ5T5YIveqpWIdbnZrhrl_MzEuyz9k1iIMpOQsvQi58oggazyIVaVYo309Z4LiJJfGCskyJvROH87fQ8H3VQUkbdDAq6AFFMgfSwwFP5HeQeHBpLkPUGiIUg6zEA',
+      'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=600&h=400&fit=crop',
   },
   {
     id: '4',
@@ -84,7 +84,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.199, 4.419],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCeh7FmFb4NrLEBj9De0Yj4bYjEqnvyDMJEBlTLHwzutvKhDlIlh2C5ht1EDnrYRzNUuvRxJyYzm6zt4Z3Kn6OWx5Zdb0y_Ek1gMzIuUchttmOfMyl7Cdpz26OxnVMXEc-OJXRd4vg6iuAyhWqzLuKN78HfiQHV9Y7NnN34VTnGDTIyEQoho0LNbUo5rsxr3G0eUwtYyxlD9SnWmLpbEwBox80z4WTmBVbOAJQwLushOoNTdTRnsnIcyg',
+      'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&h=400&fit=crop',
   },
   {
     id: '5',
@@ -100,7 +100,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.185, 4.35],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBhgjsRgkym71XiUW-l9HtgLZcr9woKo2u4fITAESDgCWYmX-HOgdg23uCGb7y3dYlkq21K-ZMC4DIr1mCuNr15Q3h4X_VlCTttQOJhdie-PZ9uCBh5TWjM8oDA2aC3Dd34n6L7NSsuz0UrMZkLPdX8MB8fwnhObUZ-VLyBLKu91Rv2QWXj5L8TEqry_Xej70hUdI3l5uiXy7S31S3pQJgOKZ7GK7y2fRGYPjqsEM41pt1Uz-ZRQKdbsA',
+      'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=600&h=400&fit=crop',
   },
   {
     id: '6',
@@ -116,7 +116,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: false,
     position: [51.166, 4.458],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBhgjsRgkym71XiUW-l9HtgLZcr9woKo2u4fITAESDgCWYmX-HOgdg23uCGb7y3dYlkq21K-ZMC4DIr1mCuNr15Q3h4X_VlCTttQOJhdie-PZ9uCBh5TWjM8oDA2aC3Dd34n6L7NSsuz0UrMZkLPdX8MB8fwnhObUZ-VLyBLKu91Rv2QWXj5L8TEqry_Xej70hUdI3l5uiXy7S31S3pQJgOKZ7GK7y2fRGYPjqsEM41pt1Uz-ZRQKdbsA',
+      'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=600&h=400&fit=crop',
   },
   {
     id: '7',
@@ -132,7 +132,7 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.229, 4.478],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCeh7FmFb4NrLEBj9De0Yj4bYjEqnvyDMJEBlTLHwzutvKhDlIlh2C5ht1EDnrYRzNUuvRxJyYzm6zt4Z3Kn6OWx5Zdb0y_Ek1gMzIuUchttmOfMyl7Cdpz26OxnVMXEc-OJXRd4vg6iuAyhWqzLuKN78HfiQHV9Y7NnN34VTnGDTIyEQoho0LNbUo5rsxr3G0eUwtYyxlD9SnWmLpbEwBox80z4WTmBVbOAJQwLushOoNTdTRnsnIcyg',
+      'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&h=400&fit=crop',
   },
   {
     id: '8',
@@ -148,6 +148,6 @@ export const MOCK_LOCATIONS: ShelterLocation[] = [
     isOpen: true,
     position: [51.211, 4.33],
     imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBhgjsRgkym71XiUW-l9HtgLZcr9woKo2u4fITAESDgCWYmX-HOgdg23uCGb7y3dYlkq21K-ZMC4DIr1mCuNr15Q3h4X_VlCTttQOJhdie-PZ9uCBh5TWjM8oDA2aC3Dd34n6L7NSsuz0UrMZkLPdX8MB8fwnhObUZ-VLyBLKu91Rv2QWXj5L8TEqry_Xej70hUdI3l5uiXy7S31S3pQJgOKZ7GK7y2fRGYPjqsEM41pt1Uz-ZRQKdbsA',
+      'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=600&h=400&fit=crop',
   },
 ];

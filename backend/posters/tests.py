@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 from accounts.services import create_token_pair
 from reports.models import LostCatReport
 from reports.services import create_report_photo
+from test_constants import TEST_USER_PASSWORD
 
 from .services import (
     POSTER_CONTENT_TYPE,
@@ -26,12 +27,12 @@ class ReportArtifactApiTests(APITestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.other_user = get_user_model().objects.create_user(
             email='other@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.media_root = tempfile.TemporaryDirectory()
@@ -342,3 +343,63 @@ class ReportArtifactApiTests(APITestCase):
 
         self.assertTrue(pdf_bytes.startswith(b'%PDF-'))
         self.assertIn(b'/MediaBox', pdf_bytes)
+
+
+class PosterAIFallbackTests(APITestCase):
+    """Verify poster text suggestion fallback and QR URL safety."""
+
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+        self.media_root = tempfile.TemporaryDirectory()
+        self.override_settings = override_settings(MEDIA_ROOT=self.media_root.name)
+        self.override_settings.enable()
+        self.addCleanup(self.override_settings.disable)
+        self.addCleanup(self.media_root.cleanup)
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _create_report(self, **overrides):
+        defaults = {
+            'owner': self.owner,
+            'cat_name': 'Luna',
+            'coat_color': 'Black',
+            'description': 'Likely hiding near gardens.',
+            'last_seen_landmark': 'Near the playground',
+            'contact_name': 'Owner',
+            'contact_phone': '+48 600 111 222',
+            'contact_email': 'owner@example.com',
+        }
+        defaults.update(overrides)
+        return LostCatReport.objects.create(**defaults)
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_poster_text_suggestion_falls_back_when_ai_disabled(self, mock_post):
+        report = self._create_report()
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            reverse('report-poster-text-suggestion', args=[report.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['generated_by_ai'])
+        self.assertTrue(response.data['requires_review'])
+        self.assertIn('disabled', response.data['fallback_reason'])
+        self.assertIn('MISSING: Luna', response.data['suggestion'])
+        self.assertNotIn('+48 600 111 222', response.data['suggestion'])
+        self.assertNotIn('owner@example.com', response.data['suggestion'])
+        mock_post.assert_not_called()
+
+    def test_poster_qr_url_uses_public_id_not_internal_id(self):
+        report = self._create_report()
+        context = build_report_poster_context(report=report)
+
+        self.assertIn(str(report.public_id), context['public_url'])
+        self.assertNotIn(str(report.id), context['public_url'])

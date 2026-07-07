@@ -53,6 +53,7 @@ export function Navbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-[1000] bg-on-background glass-nav bg-opacity-95 shadow-sm">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:shadow-lg focus:text-primary">Skip to content</a>
       <nav className="flex justify-between items-center w-full px-margin-mobile md:px-xl max-w-container-max mx-auto h-20">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-base no-underline" onClick={closeMenu}>

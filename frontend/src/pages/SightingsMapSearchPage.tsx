@@ -63,7 +63,7 @@ export function SightingsMapSearchPage() {
             className="w-full h-full bg-cover bg-center"
             style={{
               backgroundImage:
-                "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAlfBZiDW75WU-PVj_Z76V8skgVaT7PViAKWoP_DvujB9P3NVJavEwBndGJls02v2Ra-8ttAeuFmCkvsIsZg-kuWpirw_nFMKClVxy1m6WXwaWJR7t1bhdo2Xtf4PrUhqcJXeZdOOT_OhUFRI8HeexBU_isonAIov0ckrrUhMJyuDX51q8jZZ1zQq5SD34z9QHBSX_lnwcudDrH8qIyhAZjLPzcYKmIwweWeVXzYkEDWSfvO1vV0HQVYA')",
+                "url('https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=1200&h=800&fit=crop')",
             }}
             aria-hidden="true"
           />
@@ -98,7 +98,7 @@ export function SightingsMapSearchPage() {
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 placeholder="San Francisco, CA or 94103"
-                aria-label="Search location"
+                aria-label="Search sightings by city, postcode, or area"
                 className="w-full py-md bg-transparent border-none focus:ring-0 text-body-lg font-body-lg text-on-background"
               />
             </div>

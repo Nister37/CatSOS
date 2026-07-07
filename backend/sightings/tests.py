@@ -24,6 +24,7 @@ from points.rules import (
     VOLUNTEER_SEARCH_STARTED,
 )
 from reports.models import LostCatReport, LostCatReportTimelineEvent
+from test_constants import TEST_USER_PASSWORD
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
 from .services import create_sighting
@@ -40,17 +41,17 @@ class SightingCreateApiTests(APITestCase):
 
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.staff = get_user_model().objects.create_user(
             email='staff@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
             is_staff=True,
         )
@@ -786,3 +787,84 @@ class SightingCreateApiTests(APITestCase):
         self.assertTrue(admin.site.is_registered(Sighting))
         self.assertTrue(admin.site.is_registered(SightingPhoto))
         self.assertTrue(admin.site.is_registered(VolunteerSearch))
+
+
+class SightingPrivacyTests(APITestCase):
+    """Verify that sighting public/owner responses do not expose helper private data."""
+
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@private.example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+        self.helper = get_user_model().objects.create_user(
+            email='helper@private.example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+            display_name='Helpful Anna',
+            public_phone='+48 600 000 002',
+        )
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _create_report(self):
+        return LostCatReport.objects.create(
+            owner=self.owner,
+            cat_name='Luna',
+            description='Black cat.',
+            contact_name='Owner',
+            contact_email='owner@private.example.com',
+        )
+
+    def _create_sighting(self, report):
+        return Sighting.objects.create(
+            report=report,
+            submitted_by=self.helper,
+            seen_at=timezone.now(),
+            latitude=51.0,
+            longitude=4.0,
+            confidence=Sighting.Confidence.HIGH,
+        )
+
+    def test_sighting_public_response_hides_helper_email(self):
+        report = self._create_report()
+        self._create_sighting(report)
+        self._authenticate(self.owner)
+
+        response = self.client.get(
+            reverse('report-sighting-list', args=[report.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_text = str(response.data)
+        self.assertNotIn('helper@private.example.com', response_text)
+
+    def test_sighting_public_response_hides_helper_phone(self):
+        report = self._create_report()
+        self._create_sighting(report)
+        self._authenticate(self.owner)
+
+        response = self.client.get(
+            reverse('report-sighting-list', args=[report.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_text = str(response.data)
+        self.assertNotIn('+48 600 000 002', response_text)
+
+    def test_sighting_owner_response_shows_helper_display_name_only(self):
+        report = self._create_report()
+        self._create_sighting(report)
+        self._authenticate(self.owner)
+
+        response = self.client.get(
+            reverse('report-sighting-list', args=[report.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sighting_data = response.data['results'][0]
+        self.assertIn('submitted_by', sighting_data)
+        self.assertEqual(sighting_data['submitted_by']['display_name'], 'Helpful Anna')

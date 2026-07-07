@@ -1288,8 +1288,8 @@ Request:
 ```json
 {
   "email": "visitor@example.com",
-  "password": "StrongPass123!",
-  "password_confirm": "StrongPass123!"
+  "password": "YourSecurePassword123!",
+  "password_confirm": "YourSecurePassword123!"
 }
 ```
 
@@ -1405,7 +1405,7 @@ Request:
 ```json
 {
   "email": "visitor@example.com",
-  "password": "StrongPass123!",
+  "password": "YourSecurePassword123!",
   "new_email": "changed@example.com"
 }
 ```
@@ -1437,7 +1437,7 @@ Request:
 ```json
 {
   "email": "visitor@example.com",
-  "password": "StrongPass123!",
+  "password": "YourSecurePassword123!",
   "totp_code": "123456"
 }
 ```
@@ -1624,7 +1624,7 @@ Request:
 
 ```json
 {
-  "current_password": "StrongPass123!",
+  "current_password": "YourSecurePassword123!",
   "new_password": "NewPassword123!",
   "new_password_confirm": "NewPassword123!",
   "totp_code": "123456"
@@ -1668,7 +1668,7 @@ Request:
 
 ```json
 {
-  "current_password": "StrongPass123!"
+  "current_password": "YourSecurePassword123!"
 }
 ```
 
@@ -1726,7 +1726,7 @@ Request:
 
 ```json
 {
-  "current_password": "StrongPass123!",
+  "current_password": "YourSecurePassword123!",
   "totp_code": "123456"
 }
 ```
@@ -1877,8 +1877,8 @@ Register:
 ```powershell
 $registerBody = @{
   email = "visitor@example.com"
-  password = "StrongPass123!"
-  password_confirm = "StrongPass123!"
+  password = "YourSecurePassword123!"
+  password_confirm = "YourSecurePassword123!"
 } | ConvertTo-Json
 
 $session = Invoke-RestMethod `
@@ -1928,7 +1928,7 @@ Change the pending verification email:
 ```powershell
 $changeEmailBody = @{
   email = "visitor@example.com"
-  password = "StrongPass123!"
+  password = "YourSecurePassword123!"
   new_email = "changed@example.com"
 } | ConvertTo-Json
 
@@ -1944,7 +1944,7 @@ Login:
 ```powershell
 $loginBody = @{
   email = "visitor@example.com"
-  password = "StrongPass123!"
+  password = "YourSecurePassword123!"
 } | ConvertTo-Json
 
 $session = Invoke-RestMethod `
@@ -2018,7 +2018,7 @@ Change the current user's password:
 
 ```powershell
 $passwordChangeBody = @{
-  current_password = "StrongPass123!"
+  current_password = "YourSecurePassword123!"
   new_password = "NewPassword123!"
   new_password_confirm = "NewPassword123!"
 } | ConvertTo-Json
@@ -2035,7 +2035,7 @@ Start TOTP setup:
 
 ```powershell
 $totpSetupBody = @{
-  current_password = "StrongPass123!"
+  current_password = "YourSecurePassword123!"
 } | ConvertTo-Json
 
 $totpSetup = Invoke-RestMethod `

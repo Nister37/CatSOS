@@ -13,6 +13,8 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from test_constants import TEST_USER_PASSWORD
+
 from .services import create_token_pair, delete_profile_picture, replace_profile_picture
 from .validators import (
     PROFILE_PICTURE_CORRUPT_ERROR,
@@ -74,7 +76,7 @@ class ProfilePictureServiceTests(TestCase):
         self.settings_override.enable()
         self.user = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -132,7 +134,7 @@ class ProfilePictureApiTests(APITestCase):
         self.settings_override.enable()
         self.user = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             first_name='Owner',
             last_name='Helper',
             is_email_verified=True,

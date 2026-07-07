@@ -102,6 +102,7 @@ INSTALLED_APPS = [
     'notifications',
     'posters',
     'points',
+    'maps',
 ]
 
 MIDDLEWARE = [
@@ -223,6 +224,12 @@ GEMMA_TIMEOUT_SECONDS = env_float('DJANGO_GEMMA_TIMEOUT_SECONDS', 5.0)
 GEMMA_TEMPERATURE = env_float('DJANGO_GEMMA_TEMPERATURE', 0.2)
 GEMMA_MAX_OUTPUT_TOKENS = env_int('DJANGO_GEMMA_MAX_OUTPUT_TOKENS', 512)
 
+# --- Maps / Nearby Help (Overpass API) ---
+OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
+NEARBY_HELP_CACHE_TTL_SECONDS = env_int('NEARBY_HELP_CACHE_TTL_SECONDS', 86400)
+NEARBY_HELP_DEFAULT_RADIUS_KM = env_int('NEARBY_HELP_DEFAULT_RADIUS_KM', 10)
+NEARBY_HELP_MAX_RADIUS_KM = env_int('NEARBY_HELP_MAX_RADIUS_KM', 30)
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -287,6 +294,7 @@ REST_FRAMEWORK = {
         'lost_report_read': os.getenv('DJANGO_LOST_REPORT_READ_RATE', '120/minute'),
         'lost_report_write': os.getenv('DJANGO_LOST_REPORT_WRITE_RATE', '30/minute'),
         'sighting_write': os.getenv('DJANGO_SIGHTING_WRITE_RATE', '30/minute'),
+        'nearby_help': os.getenv('DJANGO_NEARBY_HELP_RATE', '60/minute'),
     },
 }
 
@@ -296,3 +304,19 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+# --- Production security hardening (active when DEBUG is False) ---
+if not DEBUG:
+    if SECRET_KEY.startswith('django-insecure-'):
+        import sys
+        sys.exit('DJANGO_SECRET_KEY must be set to a secure value in production.')
+
+    SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+    SECURE_HSTS_SECONDS = env_int('DJANGO_SECURE_HSTS_SECONDS', 31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    REFERRER_POLICY = 'same-origin'

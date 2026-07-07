@@ -106,7 +106,7 @@ export function AboutPage() {
             >
               <img
                 className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdgILg5FNMeX457wsI-Wg0xxkOBjE3hQ5iPWvRnvF-kY8flWKu3n1msxv9mXrasGzsfbcVk5E9sjkmwXjbJOyCCj9_hwcnYnZaAgzbhUIAuPxPmKDIr7hZPdPTBPEBS_GEfRjrU1bE5gNdXum2Rz9zgKVTl60-gf_ETgkl6KLo7IzdM6t-xvBPtg104xaoD5x7XPp0g6Tw8ETDbyHooq5sYg7tTI08OlShKfj3Zc29hIPcc0LFjmImGA"
+                src="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&h=400&fit=crop"
                 alt="A majestic ginger cat sitting calmly on a clean white surface"
               />
             </div>
@@ -183,7 +183,7 @@ export function AboutPage() {
               <div className="aspect-square bg-surface-container rounded-3xl overflow-hidden shadow-xl border-8 border-white">
                 <img
                   className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDrMTSU7TLypHekSY87g2Lc8ruKbRuaKQRGtmSZtRoucpUdKEcjrWuBueogQCmDL9fzE7kWZRUs4SAVnrFm6mFWcuZS28izdNQxQy3-tKy32Kd4BtcChyH64_L53nXf7YswQVGOnnpL0jG3M_VXCTUFCKb6E5gED05sX3YPb2Lco6FBop7104L3bCn_MTdVUDP0bSPg5OE8yZno5D3Iv6x4LNEhUyk5T923qiYOWSqng0pSithUFukVQ"
+                  src="https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600&h=400&fit=crop"
                   alt="CatSOS app interface showing a missing cat alert"
                 />
               </div>

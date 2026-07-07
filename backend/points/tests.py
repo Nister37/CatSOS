@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from reports.models import LostCatReport
 from sightings.models import Sighting
+from test_constants import TEST_USER_PASSWORD
 
 from .models import PointTransaction, UserBadge
 from .rules import (
@@ -77,7 +78,7 @@ class PointModelTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
             email='helper@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -150,12 +151,12 @@ class PointAwardServiceTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
             public_badges=['Manual community badge'],
         )
@@ -338,7 +339,7 @@ class LeaderboardApiTests(APITestCase):
     def _create_user(self, **overrides):
         defaults = {
             'email': f'user-{get_user_model().objects.count()}@example.com',
-            'password': 'StrongPass123!',
+            'password': TEST_USER_PASSWORD,
             'is_email_verified': True,
             'display_name': 'Helpful Neighbor',
             'contribution_points': 10,
@@ -433,3 +434,41 @@ class LeaderboardApiTests(APITestCase):
         self.assertEqual(response.data['count'], 3)
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['rank'], 3)
+
+
+class LeaderboardPrivacyTests(APITestCase):
+    """Verify leaderboard does not expose private user data."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            email='helper@private.example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+            display_name='Top Helper',
+            public_phone='+48 600 000 999',
+            contribution_points=100,
+        )
+
+    def test_leaderboard_does_not_expose_private_email(self):
+        response = self.client.get(reverse('points-leaderboard'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_text = str(response.data)
+        self.assertNotIn('helper@private.example.com', response_text)
+
+    def test_leaderboard_does_not_expose_private_phone(self):
+        response = self.client.get(reverse('points-leaderboard'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_text = str(response.data)
+        self.assertNotIn('+48 600 000 999', response_text)
+
+    def test_leaderboard_shows_display_name_and_points(self):
+        response = self.client.get(reverse('points-leaderboard'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['display_name'], 'Top Helper')
+        self.assertEqual(results[0]['points'], 100)

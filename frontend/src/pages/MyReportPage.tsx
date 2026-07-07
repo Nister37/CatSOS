@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAppDispatch } from '../app/hooks';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { NearbyHelpSection } from '../components/NearbyHelpSection';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import {
   fetchOwnedReport,
@@ -440,6 +441,11 @@ export function MyReportPage() {
                     </h2>
                     <Timeline events={timeline} />
                   </div>
+
+                  {/* Nearby Help */}
+                  {report.last_seen_lat != null && report.last_seen_lng != null && (
+                    <NearbyHelpSection lat={report.last_seen_lat} lng={report.last_seen_lng} />
+                  )}
                 </div>
 
                 {/* Right column — map + sightings */}

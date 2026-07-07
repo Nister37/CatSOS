@@ -34,6 +34,8 @@ import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { ContactPage } from './pages/ContactPage';
 import { GeneratePosterPage } from './pages/GeneratePosterPage';
+import { GoogleSsoCallbackPage } from './pages/GoogleSsoCallbackPage';
+import { MicrosoftSsoCallbackPage } from './pages/MicrosoftSsoCallbackPage';
 import { RequireAuth } from './components/RequireAuth';
 
 export function App() {
@@ -70,6 +72,8 @@ export function App() {
       <Route path="terms" element={<TermsPage />} />
       <Route path="contact" element={<ContactPage />} />
       <Route path="generate-poster" element={<RequireAuth><GeneratePosterPage /></RequireAuth>} />
+      <Route path="sso/google/callback" element={<GoogleSsoCallbackPage />} />
+      <Route path="sso/microsoft/callback" element={<MicrosoftSsoCallbackPage />} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>

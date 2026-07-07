@@ -1,9 +1,11 @@
 import base64
 import hashlib
 import hmac
+import logging
 import secrets
 import struct
 import time
+from smtplib import SMTPException
 from urllib.parse import quote, urlencode
 
 from django.conf import settings
@@ -13,6 +15,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.core.files.storage import default_storage
+from django.core.mail import BadHeaderError
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
@@ -34,8 +37,11 @@ PASSWORD_RESET_INVALID_DETAIL = 'Invalid or expired reset link.'
 PASSWORD_RESET_TOTP_INVALID_DETAIL = 'Invalid email or TOTP code.'
 PASSWORD_RESET_RATE_LIMIT_DETAIL = 'Too many password reset requests. Try again later.'
 PASSWORD_CHANGE_SUCCESS_DETAIL = 'Password has been changed successfully.'
+EMAIL_DELIVERY_UNAVAILABLE_DETAIL = 'Email delivery is temporarily unavailable. Try again later.'
 TOTP_ENABLED_DETAIL = 'Authenticator app verification has been enabled.'
 TOTP_DISABLED_DETAIL = 'Authenticator app verification has been disabled.'
+
+logger = logging.getLogger(__name__)
 
 
 def replace_profile_picture(*, user, image):
@@ -98,6 +104,10 @@ class TOTPSetupRequiredError(Exception):
     pass
 
 
+class EmailDeliveryError(Exception):
+    pass
+
+
 def normalize_email(email):
     return get_user_model().objects.normalize_email(email).strip().lower()
 
@@ -108,6 +118,7 @@ def email_exists(email):
     return User.objects.filter(email__iexact=normalized_email).exists()
 
 
+@transaction.atomic
 def register_account(*, email, password, preferred_language=DEFAULT_PREFERRED_LANGUAGE):
     normalized_email = normalize_email(email)
     User = get_user_model()
@@ -118,6 +129,32 @@ def register_account(*, email, password, preferred_language=DEFAULT_PREFERRED_LA
     )
     send_verification_code(user)
     return user
+
+
+def _send_account_email(*, purpose, subject, message, recipient_list, raise_on_error=True):
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=recipient_list,
+            fail_silently=False,
+        )
+    except (BadHeaderError, OSError, SMTPException) as exc:
+        logger.warning(
+            'Account email delivery failed.',
+            extra={
+                'email_purpose': purpose,
+                'recipient_count': len(recipient_list),
+                'error_type': exc.__class__.__name__,
+            },
+            exc_info=True,
+        )
+        if raise_on_error:
+            raise EmailDeliveryError from exc
+        return False
+
+    return True
 
 
 def authenticate_account(*, request, email, password):
@@ -302,12 +339,11 @@ def send_password_reset_link(user):
         user=user,
         reset_link=reset_link,
     )
-    send_mail(
+    return _send_account_email(
+        purpose='password_reset_link',
         subject=subject,
         message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=False,
     )
 
 
@@ -316,12 +352,12 @@ def send_password_reset_confirmation(user):
         'password_reset_confirmation',
         user=user,
     )
-    send_mail(
+    return _send_account_email(
+        purpose='password_reset_confirmation',
         subject=subject,
         message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=False,
+        raise_on_error=False,
     )
 
 
@@ -330,12 +366,12 @@ def send_password_change_confirmation(user):
         'password_change_confirmation',
         user=user,
     )
-    send_mail(
+    return _send_account_email(
+        purpose='password_change_confirmation',
         subject=subject,
         message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=False,
+        raise_on_error=False,
     )
 
 
@@ -399,6 +435,7 @@ def generate_verification_code():
     return f'{secrets.randbelow(100_000_000):08d}'
 
 
+@transaction.atomic
 def send_verification_code(user):
     code = generate_verification_code()
     user.email_verification_code_hash = make_password(code)
@@ -419,12 +456,12 @@ def send_verification_code(user):
         user=user,
         code=code,
     )
-    send_mail(
+    _send_account_email(
+        purpose='verification_code',
         subject=subject,
         message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=False,
+        raise_on_error=False,
     )
     return user
 
@@ -447,6 +484,7 @@ def seconds_until_resend_available(user):
     return max(seconds_remaining, 0)
 
 
+@transaction.atomic
 def resend_verification_code(*, email):
     user = get_unverified_user_by_email(email)
     if user is None:
@@ -483,6 +521,7 @@ def verify_email_code(*, email, code):
     return user
 
 
+@transaction.atomic
 def change_unverified_email(*, email, password, new_email):
     user = get_unverified_user_by_email(email)
     if user is None or not user.check_password(password):

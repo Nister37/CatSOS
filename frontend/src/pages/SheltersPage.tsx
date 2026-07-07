@@ -71,7 +71,7 @@ export function SheltersPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search shelters and vets"
+              aria-label="Search shelters and veterinary clinics"
             />
           </div>
           <div

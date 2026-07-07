@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 from reports.models import LostCatReport
+from test_constants import TEST_USER_PASSWORD
 
 from .services import (
     GemmaClient,
@@ -468,7 +469,7 @@ class DescriptionImproveApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -714,12 +715,12 @@ class ReportTranslationSuggestionApiTests(APITestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self.other_user = get_user_model().objects.create_user(
             email='other@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 

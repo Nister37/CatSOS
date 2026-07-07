@@ -1,6 +1,7 @@
 import re
 import time
 from datetime import timedelta
+from smtplib import SMTPAuthenticationError
 from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
@@ -17,9 +18,11 @@ from rest_framework.test import APITestCase
 from rest_framework.throttling import ScopedRateThrottle
 
 from points.models import UserBadge
+from test_constants import TEST_USER_PASSWORD
 
 from .models import SocialAccount
 from .services import (
+    EMAIL_DELIVERY_UNAVAILABLE_DETAIL,
     PASSWORD_CHANGE_SUCCESS_DETAIL,
     PASSWORD_RESET_INVALID_DETAIL,
     PASSWORD_RESET_RATE_LIMIT_DETAIL,
@@ -73,8 +76,8 @@ class AccountAuthApiTests(APITestCase):
     def _register(self, email='visitor@example.com', **overrides):
         payload = {
             'email': email,
-            'password': 'StrongPass123!',
-            'password_confirm': 'StrongPass123!',
+            'password': TEST_USER_PASSWORD,
+            'password_confirm': TEST_USER_PASSWORD,
         }
         payload.update(overrides)
         response = self.client.post(
@@ -84,7 +87,7 @@ class AccountAuthApiTests(APITestCase):
         )
         return response
 
-    def _create_verified_user(self, email='visitor@example.com', password='StrongPass123!'):
+    def _create_verified_user(self, email='visitor@example.com', password=TEST_USER_PASSWORD):
         return get_user_model().objects.create_user(
             email=email,
             password=password,
@@ -116,7 +119,7 @@ class AccountAuthApiTests(APITestCase):
         self._authenticate(user)
         setup_response = self.client.post(
             reverse('account-totp-setup'),
-            {'current_password': 'StrongPass123!'},
+            {'current_password': TEST_USER_PASSWORD},
             format='json',
         )
         self.assertEqual(setup_response.status_code, status.HTTP_200_OK)
@@ -143,12 +146,24 @@ class AccountAuthApiTests(APITestCase):
         self.assertNotIn('password', response.data)
 
         user = get_user_model().objects.get(email='visitor@example.com')
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
         self.assertEqual(user.preferred_language, 'en')
         self.assertFalse(user.is_email_verified)
         self.assertTrue(user.email_verification_code_hash)
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(check_password(self._extract_latest_code(), user.email_verification_code_hash))
+
+    @patch('accounts.services.send_mail')
+    def test_register_email_delivery_failure_returns_503_without_creating_account(self, send_mail_mock):
+        send_mail_mock.side_effect = SMTPAuthenticationError(535, b'Invalid username')
+
+        response = self._register(email='smtp-fail@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data, {'detail': EMAIL_DELIVERY_UNAVAILABLE_DETAIL})
+        self.assertFalse(
+            get_user_model().objects.filter(email='smtp-fail@example.com').exists()
+        )
 
     def test_register_accepts_preferred_language_and_localizes_verification_email(self):
         response = self._register(
@@ -183,7 +198,7 @@ class AccountAuthApiTests(APITestCase):
     def test_register_rejects_duplicate_email_case_insensitively(self):
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -203,13 +218,13 @@ class AccountAuthApiTests(APITestCase):
     def test_login_returns_existing_verified_user_token(self):
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
         response = self.client.post(
             reverse('account-token'),
-            {'email': 'visitor@example.com', 'password': 'StrongPass123!'},
+            {'email': 'visitor@example.com', 'password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -321,7 +336,7 @@ class AccountAuthApiTests(APITestCase):
 
         response = self.client.post(
             reverse('account-token'),
-            {'email': 'visitor@example.com', 'password': 'StrongPass123!'},
+            {'email': 'visitor@example.com', 'password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -331,7 +346,7 @@ class AccountAuthApiTests(APITestCase):
     def test_login_rejects_invalid_credentials_with_clear_error(self):
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -414,7 +429,7 @@ class AccountAuthApiTests(APITestCase):
             reverse('account-verification-change-email'),
             {
                 'email': 'visitor@example.com',
-                'password': 'StrongPass123!',
+                'password': TEST_USER_PASSWORD,
                 'new_email': 'changed@example.com',
             },
             format='json',
@@ -446,12 +461,12 @@ class AccountAuthApiTests(APITestCase):
     def test_refresh_token_returns_new_access_token(self):
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         login_response = self.client.post(
             reverse('account-token'),
-            {'email': 'visitor@example.com', 'password': 'StrongPass123!'},
+            {'email': 'visitor@example.com', 'password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -469,7 +484,7 @@ class AccountAuthApiTests(APITestCase):
     def test_totp_setup_requires_authentication(self):
         response = self.client.post(
             reverse('account-totp-setup'),
-            {'current_password': 'StrongPass123!'},
+            {'current_password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -482,7 +497,7 @@ class AccountAuthApiTests(APITestCase):
 
         response = self.client.post(
             reverse('account-totp-setup'),
-            {'current_password': 'StrongPass123!'},
+            {'current_password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -515,7 +530,7 @@ class AccountAuthApiTests(APITestCase):
         self._authenticate(user)
         self.client.post(
             reverse('account-totp-setup'),
-            {'current_password': 'StrongPass123!'},
+            {'current_password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -535,7 +550,7 @@ class AccountAuthApiTests(APITestCase):
         self._authenticate(user)
         self.client.post(
             reverse('account-totp-setup'),
-            {'current_password': 'StrongPass123!'},
+            {'current_password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -558,7 +573,7 @@ class AccountAuthApiTests(APITestCase):
 
         response = self.client.post(
             reverse('account-token'),
-            {'email': 'visitor@example.com', 'password': 'StrongPass123!'},
+            {'email': 'visitor@example.com', 'password': TEST_USER_PASSWORD},
             format='json',
         )
 
@@ -576,7 +591,7 @@ class AccountAuthApiTests(APITestCase):
             reverse('account-token'),
             {
                 'email': 'visitor@example.com',
-                'password': 'StrongPass123!',
+                'password': TEST_USER_PASSWORD,
                 'totp_code': '000000',
             },
             format='json',
@@ -595,7 +610,7 @@ class AccountAuthApiTests(APITestCase):
             reverse('account-token'),
             {
                 'email': 'visitor@example.com',
-                'password': 'StrongPass123!',
+                'password': TEST_USER_PASSWORD,
                 'totp_code': self._totp_code(user),
             },
             format='json',
@@ -648,7 +663,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL})
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_totp_password_reset_rejects_account_without_totp(self):
         user = self._create_verified_user()
@@ -667,7 +682,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL})
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_totp_disable_requires_current_password_and_code(self):
         user = self._create_verified_user()
@@ -676,7 +691,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-totp-disable'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'totp_code': self._totp_code(user),
             },
             format='json',
@@ -754,6 +769,21 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
+
+    @patch('accounts.services.send_mail')
+    def test_password_reset_email_delivery_failure_keeps_generic_response(self, send_mail_mock):
+        self._create_verified_user()
+        send_mail_mock.side_effect = SMTPAuthenticationError(535, b'Invalid username')
+
+        response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'visitor@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_REQUEST_DETAIL})
+        self.assertEqual(response['Cache-Control'], 'no-store')
 
     def test_password_reset_email_is_not_sent_for_inactive_user(self):
         self._create_verified_user()
@@ -867,7 +897,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'detail': PASSWORD_RESET_INVALID_DETAIL})
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_password_reset_confirm_rejects_mismatched_passwords(self):
         self._create_verified_user()
@@ -923,7 +953,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-password-change'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
             },
@@ -953,7 +983,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_password_change_requires_totp_when_enabled(self):
         user = self._create_verified_user()
@@ -962,7 +992,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-password-change'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
             },
@@ -972,7 +1002,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'totp_code': ['TOTP code is required.']})
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_password_change_rejects_invalid_totp_when_enabled(self):
         user = self._create_verified_user()
@@ -981,7 +1011,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-password-change'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
                 'totp_code': '000000',
@@ -992,7 +1022,7 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {'totp_code': ['Enter a valid TOTP code.']})
         user.refresh_from_db()
-        self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
 
     def test_password_change_with_valid_totp_changes_password(self):
         user = self._create_verified_user()
@@ -1002,7 +1032,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-password-change'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
                 'totp_code': self._totp_code(user),
@@ -1023,7 +1053,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.post(
             reverse('account-password-change'),
             {
-                'current_password': 'StrongPass123!',
+                'current_password': TEST_USER_PASSWORD,
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
             },
@@ -1101,7 +1131,7 @@ class AccountAuthApiTests(APITestCase):
     def test_sso_login_existing_email_requires_authenticated_link(self, verify_sso_token):
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         verify_sso_token.return_value = SSOIdentity(
@@ -1148,7 +1178,7 @@ class AccountAuthApiTests(APITestCase):
     def test_sso_link_adds_provider_to_existing_user(self, verify_sso_token):
         user = get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         self._authenticate(user)
@@ -1179,12 +1209,12 @@ class AccountAuthApiTests(APITestCase):
     def test_sso_link_rejects_provider_account_linked_to_another_user(self, verify_sso_token):
         current_user = get_user_model().objects.create_user(
             email='current@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         other_user = get_user_model().objects.create_user(
             email='other@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
         SocialAccount.objects.create(
@@ -1213,7 +1243,7 @@ class AccountAuthApiTests(APITestCase):
     def test_sso_link_marks_matching_unverified_email_as_verified(self, verify_sso_token):
         user = get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=False,
         )
         self._authenticate(user)
@@ -1245,7 +1275,7 @@ class AccountPasswordResetRateLimitTests(APITestCase):
         cache.clear()
         get_user_model().objects.create_user(
             email='visitor@example.com',
-            password='StrongPass123!',
+            password=TEST_USER_PASSWORD,
             is_email_verified=True,
         )
 
@@ -1322,8 +1352,8 @@ class AccountThrottleTests(APITestCase):
             reverse('account-register'),
             {
                 'email': 'first@example.com',
-                'password': 'StrongPass123!',
-                'password_confirm': 'StrongPass123!',
+                'password': TEST_USER_PASSWORD,
+                'password_confirm': TEST_USER_PASSWORD,
             },
             format='json',
         )
@@ -1331,11 +1361,67 @@ class AccountThrottleTests(APITestCase):
             reverse('account-register'),
             {
                 'email': 'second@example.com',
-                'password': 'StrongPass123!',
-                'password_confirm': 'StrongPass123!',
+                'password': TEST_USER_PASSWORD,
+                'password_confirm': TEST_USER_PASSWORD,
             },
             format='json',
         )
 
         self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class PublicProfilePrivacyApiTests(APITestCase):
+    def _create_contributor(self, **overrides):
+        defaults = {
+            'email': 'contributor@example.com',
+            'password': TEST_USER_PASSWORD,
+            'is_email_verified': True,
+            'display_name': 'Trusted Helper',
+            'contribution_points': 25,
+            'public_badges': ['Verified helper'],
+        }
+        defaults.update(overrides)
+        return get_user_model().objects.create_user(**defaults)
+
+    def test_public_profile_does_not_expose_email(self):
+        user = self._create_contributor(
+            email='secret-account@example.com',
+            display_name='Public Helper',
+            contribution_points=50,
+            public_email='',
+        )
+
+        response = self.client.get(
+            reverse('account-public-profile', kwargs={'pk': user.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        import json
+        serialized = json.dumps(response.data)
+        self.assertNotIn('secret-account@example.com', serialized)
+        self.assertNotIn('secret-account', serialized)
+        # Ensure the private email field is not present at the top level
+        self.assertNotIn('email', response.data)
+
+    def test_public_profile_does_not_expose_private_phone(self):
+        user = self._create_contributor(
+            email='phone-owner@example.com',
+            display_name='Phone Owner',
+            contribution_points=30,
+            public_phone='',
+        )
+        # Simulate a user with no public phone set but possibly having a private phone
+        # The public profile should not leak any phone data when public_phone is empty
+
+        response = self.client.get(
+            reverse('account-public-profile', kwargs={'pk': user.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        import json
+        serialized = json.dumps(response.data)
+        self.assertNotIn('phone-owner@example.com', serialized)
+        # When public_phone is empty, no phone info should appear
+        public_info = response.data.get('public_info', {})
+        self.assertNotIn('phone', public_info)

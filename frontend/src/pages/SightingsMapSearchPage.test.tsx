@@ -31,7 +31,7 @@ describe('SightingsMapSearchPage — rendering', () => {
 
   it('renders the search input', () => {
     renderWithProviders(<SightingsMapSearchPage />);
-    expect(screen.getByRole('textbox', { name: /search location/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /search sightings/i })).toBeInTheDocument();
   });
 
   it('renders the "Search Map" submit button', () => {
@@ -70,7 +70,7 @@ describe('SightingsMapSearchPage — search', () => {
     const user = userEvent.setup();
     renderWithProviders(<SightingsMapSearchPage />);
 
-    await user.type(screen.getByRole('textbox', { name: /search location/i }), 'Antwerp');
+    await user.type(screen.getByRole('textbox', { name: /search sightings/i }), 'Antwerp');
     await user.click(screen.getByRole('button', { name: /search map/i }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/map/results?q=Antwerp');
@@ -80,7 +80,7 @@ describe('SightingsMapSearchPage — search', () => {
     const user = userEvent.setup();
     renderWithProviders(<SightingsMapSearchPage />);
 
-    await user.type(screen.getByRole('textbox', { name: /search location/i }), 'London{Enter}');
+    await user.type(screen.getByRole('textbox', { name: /search sightings/i }), 'London{Enter}');
 
     expect(mockNavigate).toHaveBeenCalledWith('/map/results?q=London');
   });
@@ -107,7 +107,7 @@ describe('SightingsMapSearchPage — search', () => {
     const user = userEvent.setup();
     renderWithProviders(<SightingsMapSearchPage />);
 
-    await user.type(screen.getByRole('textbox', { name: /search location/i }), 'Austin, TX');
+    await user.type(screen.getByRole('textbox', { name: /search sightings/i }), 'Austin, TX');
     await user.click(screen.getByRole('button', { name: /search map/i }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/map/results?q=Austin%2C%20TX');
