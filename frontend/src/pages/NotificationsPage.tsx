@@ -54,7 +54,7 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
     notification.event_type === 'SIGHTING_CREATED' &&
     notification.sighting?.verification_status === 'PENDING' &&
     notification.sighting?.id &&
-    notification.report?.id;
+    notification.report?.id != null;
 
   const isVerifying = verifyingId === notification.sighting?.id;
 
@@ -192,7 +192,7 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
             <div className="flex items-center justify-between w-full">
               {notification.report && (
                 <Link
-                  to={notification.action_url || `/my-reports/${notification.report.id ?? ''}`}
+                  to={notification.action_url || `/my-reports/${notification.report.id}`}
                   onClick={handleClick}
                   className="text-primary font-label-md text-label-md hover:underline"
                 >

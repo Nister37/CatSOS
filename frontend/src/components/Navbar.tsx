@@ -52,7 +52,7 @@ export function Navbar() {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-on-background glass-nav bg-opacity-95 shadow-sm">
+    <header className="fixed top-0 left-0 right-0 z-[1000] bg-on-background glass-nav bg-opacity-95 shadow-sm">
       <nav className="flex justify-between items-center w-full px-margin-mobile md:px-xl max-w-container-max mx-auto h-20">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-base no-underline" onClick={closeMenu}>
@@ -143,6 +143,14 @@ export function Navbar() {
                     >
                       <span className="material-symbols-outlined text-[18px]">pets</span>
                       My Reports
+                    </Link>
+                    <Link
+                      to="/generate-poster"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                      Generate Poster
                     </Link>
                     <Link
                       to="/settings"
@@ -236,6 +244,14 @@ export function Navbar() {
               >
                 <span className="material-symbols-outlined text-[18px]">pets</span>
                 My Reports
+              </Link>
+              <Link
+                to="/generate-poster"
+                onClick={closeMenu}
+                className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                Generate Poster
               </Link>
               <Link
                 to="/settings"

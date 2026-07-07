@@ -12,11 +12,10 @@ export type BackendNotification = {
   message: string;
   action_url: string;
   report: {
+    id: string;
     public_id: string;
     cat_name: string;
-    id?: string;
   } | null;
-  // Fields added once backend serializer is updated:
   sighting?: {
     id: string;
     seen_at: string;
