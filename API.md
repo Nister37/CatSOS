@@ -691,7 +691,8 @@ Success response:
         "location_description": "Behind the bakery",
         "latitude": 52.2297,
         "longitude": 21.0122,
-        "confidence": "HIGH"
+        "confidence": "HIGH",
+        "verification_status": "USEFUL"
       },
       "main_photo": {
         "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
@@ -702,7 +703,7 @@ Success response:
 }
 ```
 
-`main_photo` is `null` when the report has no main photo. When present, it contains only a `url` key with an absolute media URL. `latest_sighting` is `null` until an owner or staff user marks a sighting as `USEFUL`; when present, it contains public-safe sighting time, location, coordinates, and confidence only. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, direct contact fields, notification preferences, moderation fields, sighting notes, sighting photos, helper identity, and timeline data. Hidden moderated reports are excluded.
+`main_photo` is `null` when the report has no main photo. When present, it contains only a `url` key with an absolute media URL. `latest_sighting` is `null` until a non-false sighting exists; confirmed `USEFUL` sightings are preferred, and the latest `PENDING` sighting is used as a fallback when no confirmed sighting exists. When present, `latest_sighting` contains public-safe sighting time, location, coordinates, confidence, and verification status only. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, direct contact fields, notification preferences, moderation fields, sighting notes, sighting photos, helper identity, and timeline data. Hidden moderated reports are excluded.
 
 <a id="get-apipublicreportspublicid"></a>
 ### Public Lost Cat Report Detail
@@ -748,7 +749,8 @@ Success response:
     "location_description": "Behind the bakery",
     "latitude": 52.2297,
     "longitude": 21.0122,
-    "confidence": "HIGH"
+    "confidence": "HIGH",
+    "verification_status": "USEFUL"
   },
   "main_photo": {
     "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
@@ -781,7 +783,7 @@ Privacy behavior:
 - The response does not include internal report `id`, owner ID, owner email, exact `last_seen_address`, `chip_number`, notification preferences, or moderation fields.
 - Coordinates are rounded and marked approximate.
 - Timeline entries are chronological and do not expose actor private data or location summaries.
-- `latest_sighting` is based only on sightings marked `USEFUL` and does not expose helper identity, notes, or photos.
+- `latest_sighting` prefers sightings marked `USEFUL`, falls back to the latest `PENDING` sighting when none are confirmed, excludes `FALSE` sightings, and does not expose helper identity, notes, or photos.
 - `main_photo` is `null` when no main photo exists. When present, it contains only `url`.
 - `photos` contains URL-only photo objects and does not expose internal IDs, storage paths, original filenames, or owner data.
 

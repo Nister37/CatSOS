@@ -2,6 +2,7 @@ import re
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import Case, IntegerField, Value, When
 from rest_framework import serializers
 
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
@@ -66,14 +67,27 @@ def get_report_main_photo(report):
     return next(iter(photos), None)
 
 
-def get_latest_confirmed_sighting(report):
+def get_latest_relevant_sighting(report):
     from sightings.models import Sighting
 
     return (
         report.sightings.filter(
-            verification_status=Sighting.VerificationStatus.USEFUL,
+            verification_status__in=(
+                Sighting.VerificationStatus.USEFUL,
+                Sighting.VerificationStatus.PENDING,
+            ),
         )
-        .order_by('-seen_at', '-created_at')
+        .annotate(
+            latest_sighting_rank=Case(
+                When(
+                    verification_status=Sighting.VerificationStatus.USEFUL,
+                    then=Value(0),
+                ),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by('latest_sighting_rank', '-seen_at', '-created_at')
         .first()
     )
 
@@ -84,10 +98,11 @@ class LostCatReportLatestSightingSerializer(serializers.Serializer):
     latitude = serializers.FloatField(read_only=True)
     longitude = serializers.FloatField(read_only=True)
     confidence = serializers.CharField(read_only=True)
+    verification_status = serializers.CharField(read_only=True)
 
 
-def serialize_latest_confirmed_sighting(report) -> dict | None:
-    sighting = get_latest_confirmed_sighting(report)
+def serialize_latest_relevant_sighting(report) -> dict | None:
+    sighting = get_latest_relevant_sighting(report)
     if sighting is None:
         return None
     return LostCatReportLatestSightingSerializer(sighting).data
@@ -416,7 +431,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
         }
 
     def get_latest_sighting(self, report) -> dict | None:
-        return serialize_latest_confirmed_sighting(report)
+        return serialize_latest_relevant_sighting(report)
 
     def get_main_photo(self, report) -> dict | None:
         return serialize_report_photo(
@@ -482,7 +497,7 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
         return f'/api/public/reports/{report.public_id}/'
 
     def get_latest_sighting(self, report) -> dict | None:
-        return serialize_latest_confirmed_sighting(report)
+        return serialize_latest_relevant_sighting(report)
 
     def get_location_summary(self, report) -> str:
         if report.last_seen_landmark:
