@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'accounts',
     'reports',
     'sightings',
+    'notifications',
     'posters',
 ]
 

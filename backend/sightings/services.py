@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
+from notifications.services import enqueue_sighting_created_notification
 from reports.models import LostCatReportTimelineEvent
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
@@ -31,6 +32,7 @@ def create_sighting(*, report, submitted_by, validated_data, photo=None):
         event_type=LostCatReportTimelineEvent.EventType.SIGHTING_CREATED,
         location_summary=build_sighting_location_summary(sighting),
     )
+    enqueue_sighting_created_notification(sighting=sighting)
     return sighting
 
 
