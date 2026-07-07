@@ -161,8 +161,8 @@ describe('ReportStep3Page — submission', () => {
     });
   });
 
-  it('navigates to the home page after submission completes', async () => {
-    (createReport as jest.Mock).mockResolvedValue({});
+  it('navigates to the report page after submission completes', async () => {
+    (createReport as jest.Mock).mockResolvedValue({ id: 'test-report-id' });
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime.bind(jest) });
     renderWithProviders(<ReportStep3Page />);
@@ -171,7 +171,7 @@ describe('ReportStep3Page — submission', () => {
     await waitFor(() => expect(screen.getByText(/alert posted/i)).toBeInTheDocument());
     await act(async () => { jest.advanceTimersByTime(800); });
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/my-reports/test-report-id'));
   });
 
   it('dispatches an error notification and re-enables the submit button when the API fails', async () => {

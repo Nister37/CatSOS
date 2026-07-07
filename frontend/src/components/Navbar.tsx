@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { signOut } from '../features/auth/authSlice';
+import { fetchUnreadCount } from '../services/notificationsApi';
 
 const NAV_LINKS = [
   { label: 'Report Missing', to: '/report-missing' },
@@ -14,10 +15,18 @@ const NAV_LINKS = [
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchUnreadCount()
+      .then(setUnreadCount)
+      .catch(() => {});
+  }, [user]);
 
   const { pathname } = useLocation();
   const isActive = (to: string) => pathname === to || pathname.startsWith(to + '/');
@@ -70,6 +79,20 @@ export function Navbar() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-md">
+          {user && (
+            <Link
+              to="/notifications"
+              aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+              className="relative flex items-center justify-center w-9 h-9 rounded-full hover:bg-on-primary/10 transition-colors"
+            >
+              <span className="material-symbols-outlined text-on-primary text-[20px]">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-[3px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+          )}
           {user ? (
             <div ref={userMenuRef} className="relative">
               {/* Avatar button */}
@@ -100,6 +123,27 @@ export function Navbar() {
 
                   {/* Menu items */}
                   <div className="py-xs">
+                    <Link
+                      to="/notifications"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">notifications</span>
+                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="ml-auto min-w-[18px] h-[18px] px-[4px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                    <Link
+                      to="/my-reports"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">pets</span>
+                      My Reports
+                    </Link>
                     <Link
                       to="/settings"
                       onClick={() => setUserMenuOpen(false)}
@@ -173,9 +217,30 @@ export function Navbar() {
           {user ? (
             <>
               <Link
-                to="/settings"
+                to="/notifications"
                 onClick={closeMenu}
                 className="mt-md flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">notifications</span>
+                Notifications
+                {unreadCount > 0 && (
+                  <span className="ml-1 min-w-[18px] h-[18px] px-[4px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link
+                to="/my-reports"
+                onClick={closeMenu}
+                className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">pets</span>
+                My Reports
+              </Link>
+              <Link
+                to="/settings"
+                onClick={closeMenu}
+                className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">settings</span>
                 Settings

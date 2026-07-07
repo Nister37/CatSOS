@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { BaseTileLayer } from '../components/BaseTileLayer';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
@@ -196,10 +197,7 @@ export function ReportStep2Page() {
                   style={{ height: 500, cursor: 'crosshair' }}
                   aria-label="Map – click to mark last seen location"
                 >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
+                  <BaseTileLayer />
                   <LocationPicker onPick={handleMapClick} />
                   <FlyToUserOnce target={userPosition} />
                   {pinPosition && <Marker position={pinPosition} icon={pinIcon} />}

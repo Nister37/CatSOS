@@ -59,3 +59,25 @@ export function refreshToken(refresh: string) {
 export function getMe() {
   return apiRequest<CurrentUser>('/api/me/');
 }
+
+export function resendVerification(email: string) {
+  return unauthPost<VerificationPendingResponse>('/api/auth/verification/resend/', { email });
+}
+
+export function requestPasswordReset(email: string) {
+  return unauthPost<{ detail: string }>('/api/auth/password-reset/', { email });
+}
+
+export function confirmPasswordReset(
+  uid: string,
+  token: string,
+  newPassword: string,
+  newPasswordConfirm: string,
+) {
+  return unauthPost<{ detail: string }>('/api/auth/password-reset/confirm/', {
+    uid,
+    token,
+    new_password: newPassword,
+    new_password_confirm: newPasswordConfirm,
+  });
+}
