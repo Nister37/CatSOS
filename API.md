@@ -45,6 +45,8 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
 | `GET` | [`/api/me/`](#get-apime) | JWT | `200` | Return the authenticated user's private account summary and notification preferences. |
 | `PATCH` | [`/api/me/`](#patch-apime) | JWT | `200` | Update the authenticated user's email notification preferences. |
+| `GET` | [`/api/notifications/`](#get-apinotifications) | JWT | `200` | List the authenticated user's recent in-app notifications. |
+| `PATCH` | [`/api/notifications/{id}/read/`](#patch-apinotificationsidread) | JWT | `200` | Mark one authenticated user's in-app notification as read. |
 | `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
 | `GET` | [`/api/reports/`](#get-apireports) | JWT | `200` | List the authenticated owner's lost cat reports. |
 | `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report with an optional main photo. |
@@ -173,6 +175,96 @@ Success response:
 
 These preferences apply to product notification emails only. Email verification, password reset, password change, and other security-critical account emails are not disabled by these settings.
 
+<a id="get-apinotifications"></a>
+### List In-App Notifications
+
+`GET /api/notifications/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Optional query parameters:
+
+```text
+unread=true
+unread=false
+page=1
+page_size=20
+```
+
+Success response:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "ad6a7a70-f474-4d2a-9a25-dbb1a394e61c",
+      "event_type": "SIGHTING_CREATED",
+      "title": "New sighting for Luna",
+      "message": "A logged-in helper submitted a new sighting.",
+      "action_url": "/reports/835ff646-2a82-4073-8f1c-f759dfcb9a32",
+      "report": {
+        "public_id": "835ff646-2a82-4073-8f1c-f759dfcb9a32",
+        "cat_name": "Luna"
+      },
+      "is_read": false,
+      "read_at": null,
+      "created_at": "2026-07-07T10:10:00Z"
+    }
+  ]
+}
+```
+
+Supported event types:
+
+```text
+REPORT_CREATED
+REPORT_STATUS_CHANGED
+SIGHTING_CREATED
+SIGHTING_MARKED_USEFUL
+SIGHTING_MARKED_FALSE
+```
+
+The endpoint returns only notifications where the authenticated user is the recipient. Notification payloads do not include account email addresses, phone numbers, exact last-seen addresses, chip numbers, sighting notes, helper private details, or internal user IDs. Responses return `Cache-Control: no-store`.
+
+<a id="patch-apinotificationsidread"></a>
+### Mark In-App Notification Read
+
+`PATCH /api/notifications/{id}/read/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+The request body is empty. Notifications owned by another user return `404 Not Found`.
+
+Success response:
+
+```json
+{
+  "id": "ad6a7a70-f474-4d2a-9a25-dbb1a394e61c",
+  "event_type": "SIGHTING_CREATED",
+  "title": "New sighting for Luna",
+  "message": "A logged-in helper submitted a new sighting.",
+  "action_url": "/reports/835ff646-2a82-4073-8f1c-f759dfcb9a32",
+  "report": {
+    "public_id": "835ff646-2a82-4073-8f1c-f759dfcb9a32",
+    "cat_name": "Luna"
+  },
+  "is_read": true,
+  "read_at": "2026-07-07T10:11:00Z",
+  "created_at": "2026-07-07T10:10:00Z"
+}
+```
+
 <a id="get-apiprofilesid"></a>
 ### Public Contributor Profile
 
@@ -264,7 +356,7 @@ active=true
 
 Accepts either `application/json` for text-only report creation or `multipart/form-data` when uploading the first report photo. For multipart requests, send the existing report fields as form fields and the image file under the field name `photo`.
 
-When creation succeeds and the owner has `notify_report_created_email=true`, the backend sends a transactional confirmation email to the report owner's account email after the report transaction commits. The email includes the cat name and public report link. It does not include exact address, chip number, contact phone, or contact email. This creation confirmation is controlled by the owner account preference rather than the per-report `notify_email` sighting/status preference.
+When creation succeeds and the owner has `notify_report_created_email=true`, the backend sends a transactional confirmation email to the report owner's account email after the report transaction commits. The email includes the cat name and public report link. It does not include exact address, chip number, contact phone, or contact email. This creation confirmation is controlled by the owner account preference rather than the per-report `notify_email` sighting/status preference. When the report has `notify_push=true`, creation also records an in-app `REPORT_CREATED` notification for the owner.
 
 JSON request:
 
@@ -502,7 +594,7 @@ HTTP 200 OK
 
 The response body uses the same owner report shape returned by `POST /api/reports/`, with the updated `status`. A real status change also creates a `STATUS_CHANGED` timeline event with the previous status, new status, actor, location summary, and timestamp. Sending the current status again is treated as a successful no-op and does not create a duplicate timeline event.
 
-When `notify_email=true` on the report, `notify_report_status_changed_email=true` on the owner account, and the status actually changes, the backend sends the owner a status-change email after the transaction commits. The email includes the cat name, previous status, new status, and public report link. It does not include exact address, chip number, contact phone, or contact email. No email is sent for same-status no-op updates.
+When `notify_email=true` on the report, `notify_report_status_changed_email=true` on the owner account, and the status actually changes, the backend sends the owner a status-change email after the transaction commits. The email includes the cat name, previous status, new status, and public report link. It does not include exact address, chip number, contact phone, or contact email. When `notify_push=true`, the backend also records an in-app `REPORT_STATUS_CHANGED` notification for the owner. No email or in-app notification is created for same-status no-op updates.
 
 Resolved status behavior:
 
@@ -955,7 +1047,7 @@ Creates a pending sighting for a non-hidden active report. Guests cannot submit 
 
 Accepts either `application/json` for text-only sightings or `multipart/form-data` when attaching a photo. For multipart requests, send the existing sighting fields as form fields and the image file under the field name `photo`.
 
-When the report has `notify_email=true` and the owner account has `notify_sighting_created_email=true`, the backend sends the report owner an email after the sighting transaction commits. The email includes cat name, seen time, public-safe sighting location, confidence, and the public report link. It does not include helper email, phone, internal user ID, or private notes. Owner-submitted sightings do not send an owner notification.
+When the report has `notify_email=true` and the owner account has `notify_sighting_created_email=true`, the backend sends the report owner an email after the sighting transaction commits. The email includes cat name, seen time, public-safe sighting location, confidence, and the public report link. It does not include helper email, phone, internal user ID, or private notes. When `notify_push=true`, the backend also records an in-app `SIGHTING_CREATED` notification for the owner. Owner-submitted sightings do not send an owner notification.
 
 Request:
 
@@ -1113,7 +1205,7 @@ Success response:
 }
 ```
 
-Changing a sighting to `USEFUL` creates a `SIGHTING_MARKED_USEFUL` timeline event and makes it eligible for the public `latest_sighting` summary. Changing a sighting to `FALSE` creates a `SIGHTING_MARKED_FALSE` timeline event and excludes it from `latest_sighting`. Setting `verification_status` back to `PENDING` clears `verified_by` and `verified_at`.
+Changing a sighting to `USEFUL` creates a `SIGHTING_MARKED_USEFUL` timeline event, records an in-app `SIGHTING_MARKED_USEFUL` notification for the helper who submitted the sighting, and makes it eligible for the public `latest_sighting` summary. Changing a sighting to `FALSE` creates a `SIGHTING_MARKED_FALSE` timeline event, records an in-app `SIGHTING_MARKED_FALSE` notification for the helper, and excludes it from `latest_sighting`. Setting `verification_status` back to `PENDING` clears `verified_by` and `verified_at` and does not create an in-app notification.
 
 <a id="post-apipublicreportspublicidvolunteer-searches"></a>
 ### Mark Searching Nearby For Public Report
@@ -2209,6 +2301,7 @@ Default local rates:
 | SSO login | `20/minute` |
 | SSO link | `20/minute` |
 | Public profile | `120/minute` |
+| Notification read | `120/minute` |
 | Lost report read | `120/minute` |
 | Lost report write | `30/minute` |
 | Sighting write | `30/minute` |
@@ -2227,6 +2320,7 @@ DJANGO_AUTH_TOKEN_REFRESH_RATE=60/minute
 DJANGO_AUTH_SSO_LOGIN_RATE=20/minute
 DJANGO_AUTH_SSO_LINK_RATE=20/minute
 DJANGO_PUBLIC_PROFILE_RATE=120/minute
+DJANGO_NOTIFICATION_READ_RATE=120/minute
 DJANGO_LOST_REPORT_READ_RATE=120/minute
 DJANGO_LOST_REPORT_WRITE_RATE=30/minute
 DJANGO_SIGHTING_WRITE_RATE=30/minute
