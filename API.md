@@ -878,6 +878,8 @@ Creates a pending sighting for a non-hidden active report. Guests cannot submit 
 
 Accepts either `application/json` for text-only sightings or `multipart/form-data` when attaching a photo. For multipart requests, send the existing sighting fields as form fields and the image file under the field name `photo`.
 
+When the report has `notify_email=true`, the backend sends the report owner an email after the sighting transaction commits. The email includes cat name, seen time, public-safe sighting location, confidence, and the public report link. It does not include helper email, phone, internal user ID, or private notes. Owner-submitted sightings do not send an owner notification.
+
 Request:
 
 ```json
