@@ -58,11 +58,14 @@ out center;
 
 def _fetch_overpass(query):
     """Send query to Overpass API and return parsed JSON."""
+    from urllib.parse import urlencode
     url = getattr(settings, 'OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
-    data = f'data={query}'.encode('utf-8')
+    data = urlencode({'data': query}).encode('utf-8')
     request = Request(url, data=data, method='POST')
     request.add_header('Content-Type', 'application/x-www-form-urlencoded')
-    with urlopen(request, timeout=20) as response:
+    request.add_header('User-Agent', 'CatSOS/1.0 (lost-cat-recovery-app)')
+    request.add_header('Accept', 'application/json')
+    with urlopen(request, timeout=25) as response:
         return json.loads(response.read().decode('utf-8'))
 
 
