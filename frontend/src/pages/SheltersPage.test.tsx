@@ -38,6 +38,13 @@ describe('SheltersPage — rendering', () => {
     expect(screen.getByRole('textbox', { name: /search/i })).toBeInTheDocument();
   });
 
+  it('renders the call-before-visiting warning', () => {
+    renderWithProviders(<SheltersPage />);
+    expect(screen.getByRole('note', { name: /nearby help data warning/i })).toHaveTextContent(
+      /data may be incomplete\. call before visiting\./i,
+    );
+  });
+
   it('renders All, Shelters, and Vets filter buttons', () => {
     renderWithProviders(<SheltersPage />);
     expect(screen.getByRole('button', { name: /^all$/i })).toBeInTheDocument();
@@ -60,9 +67,10 @@ describe('SheltersPage — rendering', () => {
     expect(screen.getByText(/emergency protocols/i)).toBeInTheDocument();
   });
 
-  it('renders the Verified Partners info card', () => {
+  it('renders the call-ahead info card', () => {
     renderWithProviders(<SheltersPage />);
-    expect(screen.getByText(/verified partners/i)).toBeInTheDocument();
+    expect(screen.getByText(/call ahead/i)).toBeInTheDocument();
+    expect(screen.queryByText(/manually verified/i)).not.toBeInTheDocument();
   });
 
   it('renders the mobile map toggle button', () => {
