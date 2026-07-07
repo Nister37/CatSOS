@@ -27,7 +27,7 @@ class NearbyHelpPlaceSerializer(serializers.Serializer):
     osm_id = serializers.IntegerField()
     osm_type = serializers.CharField()
     name = serializers.CharField(allow_blank=True)
-    category = serializers.ChoiceField(choices=['vet', 'shelter', 'pet_help'])
+    type = serializers.ChoiceField(choices=['vet', 'shelter', 'pet_help'])
     lat = serializers.FloatField()
     lng = serializers.FloatField()
     distance_km = serializers.FloatField()

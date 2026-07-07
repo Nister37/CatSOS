@@ -145,7 +145,7 @@ class NearbyHelpAPITests(TestCase):
         place = data['places'][0]
         self.assertIn('osm_id', place)
         self.assertIn('name', place)
-        self.assertIn('category', place)
+        self.assertIn('type', place)
         self.assertIn('lat', place)
         self.assertIn('lng', place)
         self.assertIn('distance_km', place)
@@ -211,7 +211,7 @@ class OverpassParsingTests(TestCase):
         self.assertEqual(result['osm_id'], 1001)
         self.assertEqual(result['osm_type'], 'node')
         self.assertEqual(result['name'], 'Cat Clinic')
-        self.assertEqual(result['category'], 'vet')
+        self.assertEqual(result['type'], 'vet')
         self.assertEqual(result['lat'], 51.05)
         self.assertEqual(result['lng'], 3.72)
         self.assertEqual(result['phone'], '+32 9 123 4567')
@@ -227,7 +227,7 @@ class OverpassParsingTests(TestCase):
         self.assertEqual(result['osm_type'], 'way')
         self.assertEqual(result['lat'], 51.06)
         self.assertEqual(result['lng'], 3.73)
-        self.assertEqual(result['category'], 'shelter')
+        self.assertEqual(result['type'], 'shelter')
 
     def test_vet_tags_classify_as_vet(self):
         self.assertEqual(_classify_element({'amenity': 'veterinary'}), 'vet')
@@ -251,7 +251,7 @@ class OverpassParsingTests(TestCase):
         ]
         sorted_places = _sort_places(places)
         # Vets and shelters come first (category order 0)
-        categories = [p['category'] for p in sorted_places]
+        categories = [p['type'] for p in sorted_places]
         vet_shelter_idx = [
             i for i, c in enumerate(categories) if c in ('vet', 'shelter')
         ]

@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
-import { ShelterCard } from '../components/ShelterCard';
-import { SheltersMap } from '../components/SheltersMap';
-import { MOCK_LOCATIONS, ShelterType } from '../data/shelters';
+import { fetchNearbyHelp, type NearbyHelpPlace } from '../services/nearbyHelpApi';
 
-type FilterType = 'all' | ShelterType;
+type FilterType = 'all' | 'shelter' | 'vet';
 
 const FILTER_LABELS: Record<FilterType, string> = {
   all: 'All',
@@ -15,22 +13,57 @@ const FILTER_LABELS: Record<FilterType, string> = {
   vet: 'Vets',
 };
 
+const TYPE_ICON: Record<string, string> = {
+  vet: 'medical_services',
+  shelter: 'home',
+  pet_help: 'pets',
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  vet: 'Veterinary',
+  shelter: 'Shelter',
+  pet_help: 'Pet-related',
+};
+
 export function SheltersPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
-  const [mobileMapOpen, setMobileMapOpen] = useState(false);
+  const [places, setPlaces] = useState<NearbyHelpPlace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+  // Get user location
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
+      () => setUserLocation([51.2194, 4.4025]), // Default: Antwerp
+      { timeout: 5000 },
+    );
+  }, []);
+
+  // Fetch real data from Overpass API
+  useEffect(() => {
+    if (!userLocation) return;
+    setLoading(true);
+    setError(false);
+    fetchNearbyHelp(userLocation[0], userLocation[1], 15)
+      .then((response) => setPlaces(response.places))
+      .catch(() => { setError(true); setPlaces([]); })
+      .finally(() => setLoading(false));
+  }, [userLocation]);
 
   const filtered = useMemo(() => {
     const query = search.toLowerCase();
-    return MOCK_LOCATIONS.filter((loc) => {
-      const matchesType = filter === 'all' || loc.type === filter;
+    return places.filter((place) => {
+      const matchesType = filter === 'all' || place.type === filter;
       const matchesSearch =
         query === '' ||
-        loc.name.toLowerCase().includes(query) ||
-        loc.address.toLowerCase().includes(query);
+        (place.name ?? '').toLowerCase().includes(query) ||
+        (place.address ?? '').toLowerCase().includes(query);
       return matchesType && matchesSearch;
     });
-  }, [search, filter]);
+  }, [search, filter, places]);
 
   return (
     <div className="bg-background text-on-background font-body-md scroll-smooth">
@@ -101,74 +134,123 @@ export function SheltersPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-md">
           {/* Card list column */}
           <div className="lg:col-span-7 flex flex-col gap-md">
-            {/* Scrollable cards */}
             <div className="space-y-md overflow-y-auto lg:max-h-[800px] pr-1 custom-scrollbar">
-              {filtered.length > 0 ? (
-                filtered.map((loc) => <ShelterCard key={loc.id} location={loc} />)
+              {loading ? (
+                <div className="py-xl text-center">
+                  <span className="material-symbols-outlined text-[48px] text-secondary animate-spin">progress_activity</span>
+                  <p className="mt-md text-secondary font-body-md">Loading nearby places...</p>
+                </div>
+              ) : error ? (
+                <div className="py-xl text-center text-secondary font-body-lg">
+                  Could not load nearby places. Please try again later.
+                </div>
+              ) : filtered.length > 0 ? (
+                filtered.map((place) => (
+                  <div key={place.id} className="bg-white rounded-2xl overflow-hidden border border-surface-container hover:shadow-md transition-shadow">
+                    <div className="p-md flex gap-md">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                        place.type === 'vet' ? 'bg-green-100 text-green-700' :
+                        place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        <span className="material-symbols-outlined">{TYPE_ICON[place.type] ?? 'pets'}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-sm mb-xs">
+                          <h3 className="font-headline-md text-on-background truncate">
+                            {place.name || 'Unnamed place'}
+                          </h3>
+                          <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                            place.type === 'vet' ? 'bg-green-100 text-green-700' :
+                            place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
+                            'bg-orange-100 text-orange-700'
+                          }`}>
+                            {TYPE_LABEL[place.type] ?? 'Place'}
+                          </span>
+                        </div>
+                        {place.address && (
+                          <p className="text-secondary font-body-md text-sm flex items-center gap-xs">
+                            <span className="material-symbols-outlined text-[16px]">location_on</span>
+                            {place.address}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-md mt-sm flex-wrap">
+                          <span className="text-secondary text-sm">{place.distance_km} km away</span>
+                          {place.phone && (
+                            <a href={`tel:${place.phone}`} className="text-primary text-sm flex items-center gap-xs hover:underline">
+                              <span className="material-symbols-outlined text-[16px]">call</span>
+                              {place.phone}
+                            </a>
+                          )}
+                          {place.opening_hours && (
+                            <span className="text-secondary text-sm flex items-center gap-xs">
+                              <span className="material-symbols-outlined text-[16px]">schedule</span>
+                              {place.opening_hours}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-sm mt-sm">
+                          {place.website && (
+                            <a
+                              href={place.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline flex items-center gap-xs"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">language</span>
+                              Website
+                            </a>
+                          )}
+                          <a
+                            href={`https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=16/${place.lat}/${place.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline flex items-center gap-xs"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">map</span>
+                            Open in maps
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
               ) : (
                 <div className="py-xl text-center text-secondary font-body-lg text-body-lg">
                   No results match your search.
                 </div>
               )}
             </div>
-
-            {/* Mobile map toggle — below the card list, not inside the scroll area */}
-            <div className="lg:hidden">
-              <button
-                type="button"
-                onClick={() => setMobileMapOpen((prev) => !prev)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-on-background text-on-background font-bold font-label-md text-label-md hover:bg-on-background hover:text-white transition-all"
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  {mobileMapOpen ? 'close' : 'map'}
-                </span>
-                {mobileMapOpen ? 'Hide map' : 'View on map'}
-              </button>
-
-              {mobileMapOpen && (
-                <div className="mt-md h-[350px] rounded-2xl overflow-hidden shadow-sm border border-outline-variant/20 relative">
-                  <SheltersMap locations={filtered} />
-                  <div className="absolute bottom-4 left-4 right-4 p-3 bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/40 z-[1000]">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-on-background text-sm">
-                          {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-                        </p>
-                        <p className="text-secondary text-xs">within 10 km</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="p-2 rounded-full bg-white text-on-background shadow-sm"
-                        aria-label="Center map on my location"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">my_location</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
-          {/* Desktop map */}
-          <div className="hidden lg:block lg:col-span-5 sticky top-24 h-[600px] rounded-2xl overflow-hidden shadow-sm border border-outline-variant/20 relative">
-            <SheltersMap locations={filtered} />
-            <div className="absolute bottom-6 left-6 right-6 p-4 bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/40 z-[1000]">
-              <div className="flex justify-between items-center">
+          {/* Desktop info panel */}
+          <div className="hidden lg:block lg:col-span-5 sticky top-24">
+            <div className="bg-surface-container-low rounded-2xl p-lg border border-outline-variant/20">
+              <div className="flex justify-between items-center mb-md">
                 <div>
                   <h4 className="font-bold text-on-background">
-                    Showing {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+                    {loading ? 'Loading...' : `${filtered.length} places found`}
                   </h4>
-                  <p className="text-secondary text-sm">within 10 km of your location</p>
+                  <p className="text-secondary text-sm">within 15 km of your location</p>
                 </div>
-                <button
-                  type="button"
-                  className="p-2 rounded-full bg-white text-on-background shadow-sm hover:scale-110 transition-transform"
-                  aria-label="Center map on my location"
-                >
-                  <span className="material-symbols-outlined">my_location</span>
-                </button>
               </div>
+              <div className="space-y-sm text-sm text-secondary">
+                <div className="flex items-center gap-sm">
+                  <span className="w-3 h-3 rounded-full bg-green-500" />
+                  <span>{places.filter(p => p.type === 'vet').length} Veterinary clinics</span>
+                </div>
+                <div className="flex items-center gap-sm">
+                  <span className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span>{places.filter(p => p.type === 'shelter').length} Animal shelters</span>
+                </div>
+                <div className="flex items-center gap-sm">
+                  <span className="w-3 h-3 rounded-full bg-orange-500" />
+                  <span>{places.filter(p => p.type === 'pet_help').length} Pet-related places</span>
+                </div>
+              </div>
+              <p className="mt-md text-xs text-secondary border-t border-outline-variant/30 pt-md">
+                Data © OpenStreetMap contributors. Call before visiting.
+              </p>
             </div>
           </div>
         </div>

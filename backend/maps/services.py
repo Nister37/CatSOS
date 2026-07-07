@@ -142,7 +142,7 @@ def _normalize_element(element, origin_lat, origin_lng):
         'osm_id': element.get('id'),
         'osm_type': element.get('type'),
         'name': tags.get('name', ''),
-        'category': category,
+        'type': category,
         'lat': lat,
         'lng': lng,
         'distance_km': round(distance_km, 2),
@@ -173,7 +173,7 @@ def _sort_places(places):
     return sorted(
         places,
         key=lambda p: (
-            category_order.get(p['category'], 2),
+            category_order.get(p['type'], 2),
             p['distance_km'],
             -p['quality_score'],
         ),
