@@ -262,6 +262,7 @@ REST_FRAMEWORK = {
         'auth_sso_link': os.getenv('DJANGO_AUTH_SSO_LINK_RATE', '20/minute'),
         'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
         'notification_read': os.getenv('DJANGO_NOTIFICATION_READ_RATE', '120/minute'),
+        'points_read': os.getenv('DJANGO_POINTS_READ_RATE', '120/minute'),
         'lost_report_read': os.getenv('DJANGO_LOST_REPORT_READ_RATE', '120/minute'),
         'lost_report_write': os.getenv('DJANGO_LOST_REPORT_WRITE_RATE', '30/minute'),
         'sighting_write': os.getenv('DJANGO_SIGHTING_WRITE_RATE', '30/minute'),
