@@ -4,6 +4,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from points.models import UserBadge
+from points.rules import BADGE_RULES
+
 from .models import SocialAccount
 from .services import (
     AccountNotVerifiedError,
@@ -78,11 +81,8 @@ def build_public_avatar_fallback(user):
 
 
 def build_public_badges(user):
-    if not isinstance(user.public_badges, list):
-        return []
-
     badges = []
-    for badge in user.public_badges:
+    for badge in _iter_safe_public_badges(user):
         if not isinstance(badge, str):
             continue
 
@@ -98,6 +98,21 @@ def build_public_badges(user):
             break
 
     return badges
+
+
+def _iter_safe_public_badges(user):
+    existing_public_badges = user.public_badges
+    if isinstance(existing_public_badges, list):
+        yield from existing_public_badges
+
+    earned_badges = {
+        badge.code: badge.label
+        for badge in UserBadge.objects.filter(user=user)
+    }
+    for rule in BADGE_RULES:
+        label = earned_badges.get(rule.code)
+        if label:
+            yield label
 
 
 def user_has_public_activity(user):
@@ -117,6 +132,8 @@ class CurrentUserSerializer(serializers.Serializer):
     notify_report_created_email = serializers.BooleanField(read_only=True)
     notify_sighting_created_email = serializers.BooleanField(read_only=True)
     notify_report_status_changed_email = serializers.BooleanField(read_only=True)
+    points = serializers.IntegerField(source='contribution_points', read_only=True)
+    badges = serializers.SerializerMethodField()
     profile_picture_url = serializers.SerializerMethodField()
     avatar_fallback = serializers.SerializerMethodField()
 
@@ -128,6 +145,9 @@ class CurrentUserSerializer(serializers.Serializer):
 
     def get_avatar_fallback(self, user) -> str:
         return build_avatar_fallback(user)
+
+    def get_badges(self, user) -> list[str]:
+        return build_public_badges(user)
 
 
 class CurrentUserUpdateSerializer(serializers.Serializer):
