@@ -5,6 +5,11 @@ from notifications.services import (
     enqueue_sighting_created_notification,
     enqueue_sighting_verification_notification,
 )
+from points.services import (
+    award_sighting_marked_useful_points,
+    award_sighting_submitted_points,
+    award_volunteer_search_started_points,
+)
 from reports.models import LostCatReportTimelineEvent
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
@@ -35,6 +40,7 @@ def create_sighting(*, report, submitted_by, validated_data, photo=None):
         event_type=LostCatReportTimelineEvent.EventType.SIGHTING_CREATED,
         location_summary=build_sighting_location_summary(sighting),
     )
+    award_sighting_submitted_points(sighting=sighting)
     enqueue_sighting_created_notification(sighting=sighting)
     return sighting
 
@@ -60,6 +66,7 @@ def mark_volunteer_searching(*, report, volunteer):
             event_type=LostCatReportTimelineEvent.EventType.VOLUNTEER_SEARCH_STARTED,
             location_summary=build_report_location_summary(report),
         )
+        award_volunteer_search_started_points(volunteer_search=volunteer_search)
     else:
         volunteer_search.save(update_fields=('updated_at',))
 
@@ -98,6 +105,8 @@ def update_sighting_verification(*, sighting, actor, verification_status):
                 event_type=event_type,
                 location_summary=build_sighting_location_summary(sighting),
             )
+            if verification_status == Sighting.VerificationStatus.USEFUL:
+                award_sighting_marked_useful_points(sighting=sighting)
             enqueue_sighting_verification_notification(
                 sighting=sighting,
                 actor=actor,
