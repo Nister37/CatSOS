@@ -6,6 +6,8 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from .languages import DEFAULT_PREFERRED_LANGUAGE, PreferredLanguage
+
 
 PROFILE_PICTURE_UPLOAD_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 
@@ -60,6 +62,11 @@ class User(AbstractUser):
     public_location = models.CharField(max_length=120, blank=True)
     public_email = models.EmailField(blank=True)
     public_phone = models.CharField(max_length=32, blank=True)
+    preferred_language = models.CharField(
+        max_length=8,
+        choices=PreferredLanguage.choices,
+        default=DEFAULT_PREFERRED_LANGUAGE,
+    )
     contribution_points = models.PositiveIntegerField(default=0)
     public_badges = models.JSONField(default=list, blank=True)
     notify_report_created_email = models.BooleanField(default=True)
