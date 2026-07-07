@@ -2,8 +2,10 @@ from django.urls import path
 
 from .views import (
     PublicReportSightingCreateView,
+    PublicReportVolunteerSearchCreateView,
     ReportSightingListView,
     ReportSightingVerificationView,
+    ReportVolunteerSearchListView,
 )
 
 urlpatterns = [
@@ -18,8 +20,18 @@ urlpatterns = [
         name='report-sighting-verification',
     ),
     path(
+        'reports/<uuid:pk>/volunteer-searches/',
+        ReportVolunteerSearchListView.as_view(),
+        name='report-volunteer-search-list',
+    ),
+    path(
         'public/reports/<uuid:public_id>/sightings/',
         PublicReportSightingCreateView.as_view(),
         name='public-report-sighting-create',
+    ),
+    path(
+        'public/reports/<uuid:public_id>/volunteer-searches/',
+        PublicReportVolunteerSearchCreateView.as_view(),
+        name='public-report-volunteer-search-create',
     ),
 ]

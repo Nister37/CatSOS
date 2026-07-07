@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Sighting, SightingPhoto
+from .models import Sighting, SightingPhoto, VolunteerSearch
 
 
 class SightingPhotoInline(admin.TabularInline):
@@ -38,4 +38,10 @@ class SightingPhotoAdmin(admin.ModelAdmin):
     search_fields = ('sighting__report__cat_name', 'uploaded_by__email')
     readonly_fields = ('id', 'sighting', 'uploaded_by', 'created_at')
 
-# Register your models here.
+
+@admin.register(VolunteerSearch)
+class VolunteerSearchAdmin(admin.ModelAdmin):
+    list_display = ('report', 'volunteer', 'created_at', 'updated_at')
+    list_filter = ('created_at', 'updated_at')
+    search_fields = ('report__cat_name', 'volunteer__email', 'volunteer__display_name')
+    readonly_fields = ('id', 'report', 'volunteer', 'created_at', 'updated_at')
