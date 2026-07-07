@@ -10,6 +10,7 @@ class AccountUserAdmin(UserAdmin):
     list_display = (
         'email',
         'display_name',
+        'preferred_language',
         'contribution_points',
         'is_email_verified',
         'is_staff',
@@ -25,6 +26,7 @@ class AccountUserAdmin(UserAdmin):
             'Public profile',
             {
                 'fields': (
+                    'preferred_language',
                     'display_name',
                     'public_bio',
                     'public_location',

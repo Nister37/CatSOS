@@ -5,6 +5,11 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from .email_templates import (
+    get_report_status_label as get_localized_report_status_label,
+    get_sighting_confidence_label,
+    render_notification_email,
+)
 from .models import InAppNotification
 
 logger = logging.getLogger(__name__)
@@ -24,25 +29,28 @@ def build_sighting_location_summary(sighting) -> str:
     return f'{sighting.latitude:.3f}, {sighting.longitude:.3f}'
 
 
-def build_report_created_email(*, report) -> tuple[str, str]:
+def build_report_created_email(*, report, language=None) -> tuple[str, str]:
     report_url = build_public_report_url(report)
-    subject = f'CatSOS report published for {report.cat_name}'
-    message = (
-        f'Your lost-cat report for {report.cat_name} is published on CatSOS.\n\n'
-        f'Public report link:\n{report_url}\n\n'
-        'Share this link or use it on QR posters so helpers can view the public '
-        'report and submit accountable sightings.\n\n'
-        'For privacy, this confirmation does not include exact address, chip '
-        'number, contact phone, or contact email.'
+    return render_notification_email(
+        'report_created',
+        user=report.owner,
+        language=language,
+        cat_name=report.cat_name,
+        report_url=report_url,
     )
-    return subject, message
 
 
-def get_report_status_label(report, status) -> str:
+def get_report_status_label(report, status, *, language='en') -> str:
     try:
-        return report.Status(status).label
+        fallback = report.Status(status).label
     except ValueError:
-        return status
+        fallback = status
+
+    return get_localized_report_status_label(
+        status,
+        fallback=fallback,
+        language=language,
+    )
 
 
 def build_report_status_changed_email(
@@ -50,39 +58,58 @@ def build_report_status_changed_email(
     report,
     old_status,
     new_status,
+    language=None,
 ) -> tuple[str, str]:
-    old_status_label = get_report_status_label(report, old_status)
-    new_status_label = get_report_status_label(report, new_status)
-    report_url = build_public_report_url(report)
-    subject = f'CatSOS report status changed for {report.cat_name}'
-    message = (
-        f'The status for {report.cat_name} changed from '
-        f'{old_status_label} to {new_status_label}.\n\n'
-        f'Public report link:\n{report_url}\n\n'
-        'For privacy, this notification does not include exact address, chip '
-        'number, contact phone, or contact email.'
+    if language is None:
+        language = getattr(report.owner, 'preferred_language', 'en')
+
+    old_status_label = get_report_status_label(
+        report,
+        old_status,
+        language=language,
     )
-    return subject, message
+    new_status_label = get_report_status_label(
+        report,
+        new_status,
+        language=language,
+    )
+    report_url = build_public_report_url(report)
+    return render_notification_email(
+        'report_status_changed',
+        user=report.owner,
+        language=language,
+        cat_name=report.cat_name,
+        old_status_label=old_status_label,
+        new_status_label=new_status_label,
+        report_url=report_url,
+    )
 
 
-def build_sighting_created_email(*, sighting) -> tuple[str, str]:
+def build_sighting_created_email(*, sighting, language=None) -> tuple[str, str]:
     report = sighting.report
+    if language is None:
+        language = getattr(report.owner, 'preferred_language', 'en')
+
     seen_at = sighting.seen_at
     if timezone.is_aware(seen_at):
         seen_at = timezone.localtime(seen_at)
     seen_at_text = seen_at.strftime('%Y-%m-%d %H:%M')
     report_url = build_public_report_url(report)
-    subject = f'New sighting for {report.cat_name}'
-    message = (
-        f'A logged-in CatSOS helper submitted a sighting for {report.cat_name}.\n\n'
-        f'Seen at: {seen_at_text}\n'
-        f'Location: {build_sighting_location_summary(sighting)}\n'
-        f'Confidence: {sighting.get_confidence_display()}\n\n'
-        f'Review the report and sighting details here:\n{report_url}\n\n'
-        'For privacy, this email does not include helper email, phone, '
-        'internal user ID, or private notes.'
+    confidence_label = get_sighting_confidence_label(
+        sighting.confidence,
+        fallback=sighting.get_confidence_display(),
+        language=language,
     )
-    return subject, message
+    return render_notification_email(
+        'sighting_created',
+        user=report.owner,
+        language=language,
+        cat_name=report.cat_name,
+        seen_at_text=seen_at_text,
+        location_summary=build_sighting_location_summary(sighting),
+        confidence_label=confidence_label,
+        report_url=report_url,
+    )
 
 
 def user_allows_email_notification(*, user, preference_field) -> bool:

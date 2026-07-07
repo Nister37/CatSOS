@@ -20,6 +20,8 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .email_templates import render_account_email
+from .languages import DEFAULT_PREFERRED_LANGUAGE, normalize_preferred_language
 from .models import SocialAccount
 from .sso import verify_sso_token
 
@@ -106,10 +108,14 @@ def email_exists(email):
     return User.objects.filter(email__iexact=normalized_email).exists()
 
 
-def register_account(*, email, password):
+def register_account(*, email, password, preferred_language=DEFAULT_PREFERRED_LANGUAGE):
     normalized_email = normalize_email(email)
     User = get_user_model()
-    user = User.objects.create_user(email=normalized_email, password=password)
+    user = User.objects.create_user(
+        email=normalized_email,
+        password=password,
+        preferred_language=normalize_preferred_language(preferred_language),
+    )
     send_verification_code(user)
     return user
 
@@ -291,13 +297,14 @@ def build_password_reset_link(user):
 
 def send_password_reset_link(user):
     reset_link = build_password_reset_link(user)
+    subject, message = render_account_email(
+        'password_reset_link',
+        user=user,
+        reset_link=reset_link,
+    )
     send_mail(
-        subject='Reset your CatSOS password',
-        message=(
-            'Use this link to reset your CatSOS password:\n\n'
-            f'{reset_link}\n\n'
-            'If you did not request this, you can ignore this email.'
-        ),
+        subject=subject,
+        message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,
@@ -305,12 +312,13 @@ def send_password_reset_link(user):
 
 
 def send_password_reset_confirmation(user):
+    subject, message = render_account_email(
+        'password_reset_confirmation',
+        user=user,
+    )
     send_mail(
-        subject='Your CatSOS password was reset',
-        message=(
-            'Your CatSOS password was reset successfully. '
-            'If this was not you, contact support immediately.'
-        ),
+        subject=subject,
+        message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,
@@ -318,12 +326,13 @@ def send_password_reset_confirmation(user):
 
 
 def send_password_change_confirmation(user):
+    subject, message = render_account_email(
+        'password_change_confirmation',
+        user=user,
+    )
     send_mail(
-        subject='Your CatSOS password was changed',
-        message=(
-            'Your CatSOS password was changed successfully. '
-            'If this was not you, contact support immediately.'
-        ),
+        subject=subject,
+        message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,
@@ -405,9 +414,14 @@ def send_verification_code(user):
         ]
     )
 
+    subject, message = render_account_email(
+        'verification_code',
+        user=user,
+        code=code,
+    )
     send_mail(
-        subject='Your CatSOS verification code',
-        message=f'Your CatSOS verification code is {code}.',
+        subject=subject,
+        message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,
