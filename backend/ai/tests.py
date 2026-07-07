@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
+from reports.models import LostCatReport
 
 from .services import (
     GemmaClient,
@@ -15,6 +16,7 @@ from .services import (
     generate_public_report_summary,
     improve_lost_cat_description,
     sanitize_text_for_ai,
+    suggest_report_translation,
 )
 
 
@@ -301,6 +303,73 @@ class DescriptionImproveServiceTests(TestCase):
         mock_post.assert_not_called()
 
 
+class ReportTranslationServiceTests(TestCase):
+    def test_translate_report_sends_sanitized_prompt_only(self):
+        class CaptureClient:
+            prompt = ''
+            system_instruction = ''
+
+            def generate_text(self, *, prompt, system_instruction=''):
+                self.prompt = prompt
+                self.system_instruction = system_instruction
+                return 'Mila jest plochliwym czarnym kotem.'
+
+        client = CaptureClient()
+
+        result = suggest_report_translation(
+            target_language='pl',
+            cat_name='Mila',
+            breed='Domestic shorthair',
+            coat_color='Black',
+            description=(
+                'Mila is shy. Call +48 600 111 222 or owner@example.com. '
+                'She disappeared from 123 Private Street.'
+            ),
+            last_seen_landmark='Near the playground',
+            client=client,
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertTrue(result['requires_review'])
+        self.assertEqual(result['target_language'], 'pl')
+        self.assertEqual(result['target_language_label'], 'Polish')
+        self.assertEqual(result['suggestion'], 'Mila jest plochliwym czarnym kotem.')
+        self.assertIn('translate public lost-cat report text', client.system_instruction.lower())
+        self.assertNotIn('+48 600 111 222', client.prompt)
+        self.assertNotIn('owner@example.com', client.prompt)
+        self.assertNotIn('123 Private Street', client.prompt)
+        self.assertIn('[phone removed]', client.prompt)
+        self.assertIn('[email removed]', client.prompt)
+        self.assertIn('[address removed]', client.prompt)
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_translate_report_falls_back_to_sanitized_source_when_disabled(
+            self,
+            mock_post,
+    ):
+        result = suggest_report_translation(
+            target_language='nl',
+            cat_name='Mila',
+            description=(
+                'Mila is shy. Call +48 600 111 222 or owner@example.com. '
+                'She disappeared from 123 Private Street.'
+            ),
+        )
+
+        self.assertFalse(result['generated_by_ai'])
+        self.assertEqual(result['target_language'], 'nl')
+        self.assertEqual(result['target_language_label'], 'Dutch')
+        self.assertIn('disabled', result['fallback_reason'])
+        self.assertIn('[phone removed]', result['suggestion'])
+        self.assertIn('[email removed]', result['suggestion'])
+        self.assertIn('[address removed]', result['suggestion'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('owner@example.com', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+        mock_post.assert_not_called()
+
+
 class DescriptionImproveApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -544,4 +613,165 @@ class DescriptionImproveApiTests(APITestCase):
         self.assertNotIn('+48 600 111 222', response.data['suggestion'])
         self.assertFalse(response.data['generated_by_ai'])
         self.assertTrue(response.data['requires_review'])
+        mock_post.assert_not_called()
+
+
+class ReportTranslationSuggestionApiTests(APITestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        self.other_user = get_user_model().objects.create_user(
+            email='other@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _create_report(self, **overrides):
+        defaults = {
+            'owner': self.owner,
+            'cat_name': 'Mila',
+            'breed': 'Domestic shorthair',
+            'coat_color': 'Black',
+            'description': (
+                'Mila is shy. Call +48 600 111 222 or owner@example.com. '
+                'Last seen at 123 Private Street.'
+            ),
+            'last_seen_address': '123 Private Street',
+            'last_seen_landmark': 'Near the playground',
+            'contact_name': 'Marta Owner',
+            'contact_phone': '+48 600 111 222',
+            'contact_email': 'owner@example.com',
+        }
+        defaults.update(overrides)
+        return LostCatReport.objects.create(**defaults)
+
+    def _url(self, report):
+        return reverse('lost-report-translation-suggestion', args=[report.id])
+
+    def test_translation_suggestion_requires_authentication(self):
+        report = self._create_report()
+
+        response = self.client.post(
+            self._url(report),
+            {'target_language': 'pl'},
+            format='json',
+        )
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    @override_settings(
+        GEMMA_ENABLED=True,
+        GEMMA_API_KEY='test-api-key',
+        GEMMA_API_BASE_URL='https://gemma.example.test/v1beta',
+        GEMMA_MODEL='gemma-test',
+    )
+    @patch('ai.services.requests.post')
+    def test_owner_can_get_reviewable_translation_without_private_prompt_data(
+            self,
+            mock_post,
+    ):
+        report = self._create_report()
+        response = Mock()
+        response.json.return_value = {
+            'candidates': [
+                {
+                    'content': {
+                        'parts': [
+                            {'text': 'Mila jest plochliwym czarnym kotem.'},
+                        ],
+                    },
+                },
+            ],
+        }
+        mock_post.return_value = response
+        self._authenticate(self.owner)
+
+        api_response = self.client.post(
+            self._url(report),
+            {'target_language': 'pl'},
+            format='json',
+        )
+
+        self.assertEqual(api_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(api_response['Cache-Control'], 'no-store')
+        self.assertEqual(
+            api_response.data['suggestion'],
+            'Mila jest plochliwym czarnym kotem.',
+        )
+        self.assertEqual(api_response.data['target_language'], 'pl')
+        self.assertEqual(api_response.data['target_language_label'], 'Polish')
+        self.assertTrue(api_response.data['generated_by_ai'])
+        self.assertTrue(api_response.data['requires_review'])
+        self.assertEqual(api_response.data['fallback_reason'], '')
+        self.assertIn('Review the suggestion', api_response.data['privacy_notice'])
+        report.refresh_from_db()
+        self.assertIn('Call +48 600 111 222', report.description)
+
+        prompt = mock_post.call_args.kwargs['json']['contents'][0]['parts'][0]['text']
+        self.assertNotIn(report.contact_phone, prompt)
+        self.assertNotIn(report.contact_email, prompt)
+        self.assertNotIn(report.last_seen_address, prompt)
+        self.assertIn('[phone removed]', prompt)
+        self.assertIn('[email removed]', prompt)
+        self.assertIn('[address removed]', prompt)
+
+    def test_translation_suggestion_rejects_unsupported_language(self):
+        report = self._create_report()
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            self._url(report),
+            {'target_language': 'de'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('target_language', response.data)
+
+    @patch('ai.services.requests.post')
+    def test_other_user_cannot_translate_someone_elses_report(self, mock_post):
+        report = self._create_report()
+        self._authenticate(self.other_user)
+
+        response = self.client.post(
+            self._url(report),
+            {'target_language': 'pl'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        mock_post.assert_not_called()
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_translation_suggestion_falls_back_without_provider_call(self, mock_post):
+        report = self._create_report()
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            self._url(report),
+            {'target_language': 'nl'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['generated_by_ai'])
+        self.assertEqual(response.data['target_language'], 'nl')
+        self.assertIn('disabled', response.data['fallback_reason'])
+        self.assertIn('[phone removed]', response.data['suggestion'])
+        self.assertIn('[email removed]', response.data['suggestion'])
+        self.assertIn('[address removed]', response.data['suggestion'])
+        self.assertNotIn('+48 600 111 222', response.data['suggestion'])
+        self.assertNotIn('owner@example.com', response.data['suggestion'])
+        self.assertNotIn('123 Private Street', response.data['suggestion'])
         mock_post.assert_not_called()
