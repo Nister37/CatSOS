@@ -9,7 +9,7 @@ services:
       - ./backend/.env
     environment:
       DJANGO_DEBUG: "true"
-      DJANGO_SECRET_KEY: local-docker-secret
+      DJANGO_SECRET_KEY: local-docker-development-secret-key-32-bytes
       DJANGO_ALLOWED_HOSTS: localhost,backend
       DJANGO_CORS_ALLOWED_ORIGINS: http://localhost:5173
       DJANGO_CSRF_TRUSTED_ORIGINS: http://localhost:5173

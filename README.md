@@ -14,7 +14,9 @@ jenkins/   Jenkins image and setup docs for the shared CI server
 
 - Backend entry point: [backend/README.md](backend/README.md)
 - Frontend entry point: [frontend/README.md](frontend/README.md)
+- Full API reference: [API.md](API.md)
 - Git and pull request workflow: [GIT.md](GIT.md)
+- Postman collection: [postman/POSTMAN.md](postman/POSTMAN.md)
 - Jenkins setup and usage: [jenkins/README.md](jenkins/README.md)
 
 ## Docker Entry Points

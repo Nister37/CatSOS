@@ -7,7 +7,7 @@ Django backend for the CatSOS API.
 - Setup: [docs/SETUP.md](docs/SETUP.md)
 - Backend tutorial and structure: [docs/TUTORIAL.md](docs/TUTORIAL.md)
 - Django project settings: [config/settings.py](config/settings.py)
-- API routes: [api/urls.py](api/urls.py)
+- API routes: [config/urls.py](config/urls.py)
 
 ## Local URLs
 
@@ -44,11 +44,16 @@ Django backend for the CatSOS API.
 - Logged-in password change: `http://localhost:8000/api/auth/password-change/`
 - AI description cleaner: `http://localhost:8000/api/ai/improve-description/`
 - AI public summary suggestion: `http://localhost:8000/api/ai/public-summary/`
+- AI poster text suggestion: `http://localhost:8000/api/reports/<id>/poster-text-suggestion/`
+- AI translation suggestion: `http://localhost:8000/api/reports/<id>/translation-suggestion/`
 - SSO login/signup: `http://localhost:8000/api/auth/sso/login/`
 - Link SSO provider: `http://localhost:8000/api/auth/sso/link/`
 - TOTP setup: `http://localhost:8000/api/auth/totp/setup/`
 - TOTP confirm: `http://localhost:8000/api/auth/totp/confirm/`
 - TOTP disable: `http://localhost:8000/api/auth/totp/disable/`
+- Found cat decision tree: `http://localhost:8000/api/assistant/found-cat/decision-tree/`
+- Nearby vets/shelters: `http://localhost:8000/api/maps/nearby-help/`
+- Points leaderboard: `http://localhost:8000/api/points/leaderboard/`
 - OpenAPI schema: `http://localhost:8000/api/schema/`
 - Swagger UI: `http://localhost:8000/api/docs/`
 
@@ -99,3 +104,9 @@ Authenticated helpers can also mark that they are searching nearby through `/api
 Report owners can review all sightings for their own reports through `/api/reports/<id>/sightings/`, including sightings marked false. Owners and staff can set a sighting verification status through `/api/reports/<id>/sightings/<sighting_id>/verification/` using `PENDING`, `USEFUL`, or `FALSE`. Useful and false decisions create sighting review timeline events and in-app notifications for the helper who submitted the sighting; useful sightings also drive the public `latest_sighting` summary. These owner/admin responses expose safe submitter and verifier summaries only, without account email or phone fields.
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.
+
+The public maps endpoint `/api/maps/nearby-help/` returns nearby veterinary clinics, animal shelters, and pet-related places via the Overpass API. It validates latitude, longitude, and radius, caps the search radius, caches responses, handles Overpass timeout/failure gracefully, and includes OpenStreetMap attribution with a "call before visiting" warning. See `backend/.env.example` for Overpass configuration.
+
+The public assistant endpoint `/api/assistant/found-cat/decision-tree/` returns a static decision tree for the "I found a cat" guidance flow. See [docs/ASSISTANT.md](docs/ASSISTANT.md).
+
+The public leaderboard endpoint `/api/points/leaderboard/` returns a paginated public-safe list of active contributors with points and badges. See [docs/POINTS.md](docs/POINTS.md).

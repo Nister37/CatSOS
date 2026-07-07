@@ -43,9 +43,12 @@ The main sections are:
 - Frontend and browser integration: frontend URL, CORS, CSRF trusted origins.
 - Email delivery: console email or real SMTP.
 - Account verification and password recovery: resend cooldowns and reset limits.
+- Account profile media: max upload sizes for profile pictures, report photos, sighting photos.
 - TOTP authenticator app settings: issuer name, code length, time window.
 - Single sign-on providers: Google, Microsoft, and GitHub token verification.
+- Optional AI assistance with Gemma: enable/disable, API key, model, timeout, temperature.
 - Auth endpoint throttles: rate limits for sensitive auth endpoints.
+- Maps / Nearby Help (Overpass API): Overpass URL, cache TTL, default and max radius, rate limit.
 
 ## Run The Backend
 

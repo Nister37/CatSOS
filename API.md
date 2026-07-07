@@ -62,6 +62,8 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
 | `POST` | [`/api/reports/{id}/qr-code/`](#post-apireportsidqr-code) | JWT | `200` | Generate a QR code for one owned report's public page. |
 | `POST` | [`/api/reports/{id}/poster/`](#post-apireportsidposter) | JWT | `200` | Generate a printable PDF poster for one owned report. |
+| `POST` | [`/api/reports/{id}/poster-text-suggestion/`](#post-apireportsidposter-text-suggestion) | JWT | `200` | AI-suggested poster text for one owned report. |
+| `POST` | [`/api/reports/{id}/translation-suggestion/`](#post-apireportsidtranslation-suggestion) | JWT | `200` | AI-suggested translation for one owned report. |
 | `GET` | [`/api/reports/{id}/sightings/`](#get-apireportsidsightings) | JWT | `200` | List sightings for one owned report. |
 | `PATCH` | [`/api/reports/{id}/sightings/{sighting_id}/verification/`](#patch-apireportsidsightingssightingidverification) | JWT | `200` | Mark one sighting as pending, useful, or false. |
 | `GET` | [`/api/reports/{id}/volunteer-searches/`](#get-apireportsidvolunteer-searches) | JWT | `200` | List helpers searching near one owned report. |
@@ -69,6 +71,13 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
 | `POST` | [`/api/public/reports/{public_id}/sightings/`](#post-apipublicreportspublicidsightings) | JWT | `201` | Submit an authenticated sighting for a public report. |
 | `POST` | [`/api/public/reports/{public_id}/volunteer-searches/`](#post-apipublicreportspublicidvolunteer-searches) | JWT | `201` | Mark that the authenticated user is searching nearby. |
+| `POST` | [`/api/ai/improve-description/`](#post-apiaiimprove-description) | JWT | `200` | AI-suggested cleanup of a lost-cat description. |
+| `POST` | [`/api/ai/public-summary/`](#post-apiaipublic-summary) | JWT | `200` | AI-suggested short public summary for a report. |
+| `GET` | [`/api/assistant/found-cat/decision-tree/`](#get-apiassistantfound-catdecision-tree) | Public | `200` | Static decision tree for the "I found a cat" assistant. |
+| `GET` | [`/api/maps/nearby-help/`](#get-apimapsnearby-help) | Public | `200` | Nearby vets, shelters, and pet-related places via Overpass. |
+| `GET` | [`/api/points/leaderboard/`](#get-apipointsleaderboard) | Public | `200` | Paginated public-safe contributor leaderboard. |
+| `POST` | [`/api/me/profile-picture/`](#post-apimeprofile-picture) | JWT | `200` | Upload or replace the authenticated user's profile picture. |
+| `DELETE` | [`/api/me/profile-picture/`](#delete-apimeprofile-picture) | JWT | `204` | Delete the authenticated user's profile picture. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |

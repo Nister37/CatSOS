@@ -127,12 +127,7 @@ def register_account(*, email, password, preferred_language=DEFAULT_PREFERRED_LA
         password=password,
         preferred_language=normalize_preferred_language(preferred_language),
     )
-    if settings.DEBUG:
-        user.is_email_verified = True
-        user.email_verified_at = timezone.now()
-        user.save(update_fields=['is_email_verified', 'email_verified_at'])
-    else:
-        send_verification_code(user)
+    send_verification_code(user)
     return user
 
 

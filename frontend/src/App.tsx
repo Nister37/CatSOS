@@ -44,7 +44,7 @@ export function App() {
   return (
     <>
       <ScrollToTop />
-      <div key={location.pathname} className="route-motion">
+      <div key={location.pathname} className="page-motion">
         <Routes>
           <Route index element={<HomePage />} />
           <Route path="report-missing">

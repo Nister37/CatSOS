@@ -4,10 +4,12 @@ from django.http import Http404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .serializers import (
@@ -386,7 +388,19 @@ class SSOLinkView(NoStoreAPIView):
         return no_store_response(build_sso_link_response(social_account))
 
 
+class SafeTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        try:
+            return super().validate(attrs)
+        except get_user_model().DoesNotExist as exc:
+            raise AuthenticationFailed(
+                self.error_messages['no_active_account'],
+                'no_active_account',
+            ) from exc
+
+
 class NoStoreTokenRefreshView(TokenRefreshView):
+    serializer_class = SafeTokenRefreshSerializer
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'auth_token_refresh'
 

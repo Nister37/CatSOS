@@ -27,16 +27,22 @@ flowchart LR
 
 ```text
 backend/
-  accounts/         Custom user model, registration, login, JWT issuance
-  api/              Shared API endpoints until domain apps are introduced
+  accounts/         Custom user model, registration, login, JWT issuance, SSO, TOTP
+  ai/               AI-assisted description cleanup and summary suggestions
+  api/              Shared API endpoints (health check)
+  assistant/        Found-cat decision tree guidance
   config/           Django settings, ASGI/WSGI, root URLs
   docs/             Backend setup and tutorial
+  maps/             Nearby vets/shelters via Overpass API
+  notifications/    Email and in-app notification delivery
+  points/           Community points, badges, and leaderboard
+  posters/          QR code and PDF poster generation
+  reports/          Lost-cat reports, photos, timeline, similar reports
+  sightings/        Sighting submission, verification, volunteer searches
   Dockerfile        Backend development and test images
   manage.py
   requirements.txt
 ```
-
-As the project grows, create domain apps beside `api/`, for example `cats/`, `rescues/`, or `shelters/`. Keep app-local serializers, views, URLs, permissions, and tests inside that app.
 
 ## API Conventions
 

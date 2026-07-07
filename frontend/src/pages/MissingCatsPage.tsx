@@ -3,14 +3,16 @@ import L from 'leaflet';
 import { MapContainer, Marker, Popup } from 'react-leaflet';
 
 import { BaseTileLayer } from '../components/BaseTileLayer';
+import { AccordionSection } from '../components/AccordionSection';
 import { CatDetailModal } from '../components/CatDetailModal';
 import { Footer } from '../components/Footer';
+import { LoadMoreButton } from '../components/LoadMoreButton';
 import { MissingCatCard } from '../components/MissingCatCard';
 import { Navbar } from '../components/Navbar';
-import { fetchMissingCatsPage, fetchPublicReports, type PublicReport } from '../services/reportsApi';
+import { fetchMissingCatsPage, type PublicReport } from '../services/reportsApi';
 
 const PAGE_SIZE = 12;
-const MAP_PREFETCH = 100;
+const MAP_PAGE_SIZE = 24;
 
 function formatDate(iso: string | null) {
   if (!iso) return 'Unknown';
@@ -19,6 +21,11 @@ function formatDate(iso: string | null) {
 
 export function MissingCatsPage() {
   const [mapCats, setMapCats] = useState<PublicReport[]>([]);
+  const [mapPage, setMapPage] = useState(1);
+  const [mapTotalCount, setMapTotalCount] = useState(0);
+  const [mapHasNext, setMapHasNext] = useState(false);
+  const [loadingMap, setLoadingMap] = useState(true);
+  const [loadingMoreMap, setLoadingMoreMap] = useState(false);
   const [cards, setCards] = useState<PublicReport[]>([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -28,9 +35,17 @@ export function MissingCatsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
-  // Fetch map pins (large batch, one-off)
+  // Fetch first page of map pins.
   useEffect(() => {
-    fetchPublicReports(MAP_PREFETCH).then(setMapCats).catch(() => {});
+    fetchMissingCatsPage(1, MAP_PAGE_SIZE)
+      .then(({ results, count, hasNext: hn }) => {
+        setMapCats(results);
+        setMapTotalCount(count);
+        setMapHasNext(hn);
+        setMapPage(1);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMap(false));
   }, []);
 
   // Fetch first page of cards
@@ -56,6 +71,20 @@ export function MissingCatsPage() {
       setHasNext(hn);
     } finally {
       setLoadingMore(false);
+    }
+  }
+
+  async function loadMoreMapPins() {
+    const nextPage = mapPage + 1;
+    setLoadingMoreMap(true);
+    try {
+      const { results, count, hasNext: hn } = await fetchMissingCatsPage(nextPage, MAP_PAGE_SIZE);
+      setMapCats((prev) => [...prev, ...results]);
+      setMapTotalCount(count);
+      setMapPage(nextPage);
+      setMapHasNext(hn);
+    } finally {
+      setLoadingMoreMap(false);
     }
   }
 
@@ -86,7 +115,7 @@ export function MissingCatsPage() {
 
       <main className="flex-grow pt-20">
         {/* Page header */}
-        <div className="px-margin-mobile md:px-xl max-w-container-max mx-auto pt-xl pb-lg">
+        <div className="motion-reveal px-margin-mobile md:px-xl max-w-container-max mx-auto pt-xl pb-lg">
           <p className="font-label-md text-label-md text-primary uppercase tracking-widest mb-sm">
             Community search
           </p>
@@ -101,65 +130,91 @@ export function MissingCatsPage() {
         </div>
 
         {/* Map */}
-        <div className="px-margin-mobile md:px-xl max-w-container-max mx-auto mb-xl">
-          <div className="rounded-2xl overflow-hidden border border-surface-container shadow-sm isolate" style={{ height: 380 }}>
-          <MapContainer
-            ref={mapRef}
-            center={mapCenter}
-            zoom={catsWithCoords.length > 0 ? 12 : 5}
-            scrollWheelZoom
-            zoomControl={false}
-            style={{ height: '100%', width: '100%' }}
+        <div className="motion-reveal px-margin-mobile md:px-xl max-w-container-max mx-auto mb-xl">
+          <AccordionSection
+            title="Map coverage"
+            count={catsWithCoords.length}
+            summary={
+              loadingMap
+                ? 'Loading active map pins'
+                : `Showing ${mapCats.length} of ${mapTotalCount} reports with public-safe approximate locations`
+            }
           >
-            <BaseTileLayer />
-            {catsWithCoords.map((cat) => (
-              <Marker
-                key={cat.public_id}
-                position={[
-                  cat.approximate_location!.latitude,
-                  cat.approximate_location!.longitude,
-                ]}
-                icon={pinIcon}
-              >
-                <Popup closeButton={false} className="cat-map-popup">
-                  <div className="w-48 font-body-md">
-                    {cat.main_photo?.url && (
-                      <div className="h-28 -mx-[11px] -mt-[11px] mb-sm overflow-hidden rounded-t-lg">
-                        <img
-                          src={cat.main_photo.url}
-                          alt={cat.cat_name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <p className="font-label-md text-label-md font-bold text-on-surface leading-snug">
-                      {cat.cat_name}
-                    </p>
-                    {cat.last_seen_landmark && (
-                      <p className="text-secondary text-[12px] mt-[2px] leading-snug">{cat.last_seen_landmark}</p>
-                    )}
-                    {cat.disappeared_at && (
-                      <p className="text-secondary text-[12px] leading-snug">
-                        Missing since {formatDate(cat.disappeared_at)}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => openModal(cat.public_id)}
-                      className="mt-sm w-full bg-primary text-on-primary text-[12px] font-bold py-[6px] rounded-lg hover:brightness-110 transition-all"
+            <div className="rounded-2xl overflow-hidden border border-surface-container shadow-sm isolate" style={{ height: 380 }}>
+              {loadingMap ? (
+                <div className="w-full h-full flex items-center justify-center bg-surface-container">
+                  <span className="material-symbols-outlined text-[36px] text-secondary animate-spin">progress_activity</span>
+                </div>
+              ) : (
+                <MapContainer
+                  ref={mapRef}
+                  center={mapCenter}
+                  zoom={catsWithCoords.length > 0 ? 12 : 5}
+                  scrollWheelZoom
+                  zoomControl={false}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <BaseTileLayer />
+                  {catsWithCoords.map((cat) => (
+                    <Marker
+                      key={cat.public_id}
+                      position={[
+                        cat.approximate_location!.latitude,
+                        cat.approximate_location!.longitude,
+                      ]}
+                      icon={pinIcon}
                     >
-                      View details
-                    </button>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-          </div>
+                      <Popup closeButton={false} className="cat-map-popup">
+                        <div className="w-48 font-body-md">
+                          {cat.main_photo?.url && (
+                            <div className="h-28 -mx-[11px] -mt-[11px] mb-sm overflow-hidden rounded-t-lg">
+                              <img
+                                src={cat.main_photo.url}
+                                alt={cat.cat_name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          <p className="font-label-md text-label-md font-bold text-on-surface leading-snug">
+                            {cat.cat_name}
+                          </p>
+                          {cat.last_seen_landmark && (
+                            <p className="text-secondary text-[12px] mt-[2px] leading-snug">{cat.last_seen_landmark}</p>
+                          )}
+                          {cat.disappeared_at && (
+                            <p className="text-secondary text-[12px] leading-snug">
+                              Missing since {formatDate(cat.disappeared_at)}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => openModal(cat.public_id)}
+                            className="mt-sm w-full bg-primary text-on-primary text-[12px] font-bold py-[6px] rounded-lg hover:brightness-110 transition-all"
+                          >
+                            View details
+                          </button>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
+              )}
+            </div>
+            {mapHasNext && (
+              <div className="flex justify-center mt-md">
+                <LoadMoreButton
+                  onClick={loadMoreMapPins}
+                  loading={loadingMoreMap}
+                  label="Load more map pins"
+                  loadingLabel="Loading pins..."
+                />
+              </div>
+            )}
+          </AccordionSection>
         </div>
 
         {/* Cards grid */}
-        <div className="px-margin-mobile md:px-xl max-w-container-max mx-auto pb-xl">
+        <div className="motion-reveal px-margin-mobile md:px-xl max-w-container-max mx-auto pb-xl">
           {loadingCards ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -176,7 +231,7 @@ export function MissingCatsPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
+              <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
                 {cards.map((cat) => (
                   <button
                     key={cat.public_id}

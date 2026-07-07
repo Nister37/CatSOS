@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { AccordionSection } from '../components/AccordionSection';
 import { Footer } from '../components/Footer';
+import { LoadMoreButton } from '../components/LoadMoreButton';
 import { Navbar } from '../components/Navbar';
 import { fetchNearbyHelp, type NearbyHelpPlace } from '../services/nearbyHelpApi';
 
@@ -25,6 +27,8 @@ const TYPE_LABEL: Record<string, string> = {
   pet_help: 'Pet-related',
 };
 
+const VISIBLE_STEP = 6;
+
 export function SheltersPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -32,6 +36,7 @@ export function SheltersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
 
   // Get user location
   useEffect(() => {
@@ -65,12 +70,19 @@ export function SheltersPage() {
     });
   }, [search, filter, places]);
 
+  useEffect(() => {
+    setVisibleCount(VISIBLE_STEP);
+  }, [search, filter, places]);
+
+  const visiblePlaces = filtered.slice(0, visibleCount);
+  const canLoadMore = visibleCount < filtered.length;
+
   return (
     <div className="bg-background text-on-background font-body-md scroll-smooth">
       <Navbar />
       <main className="pt-24 pb-xl min-h-screen max-w-container-max mx-auto px-margin-mobile md:px-lg">
         {/* Hero */}
-        <section className="mb-lg">
+        <section className="motion-reveal mb-lg">
           <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background mb-base">
             Find Professional Help Nearby
           </h1>
@@ -93,7 +105,7 @@ export function SheltersPage() {
         </section>
 
         {/* Search & Filter */}
-        <div className="flex flex-col md:flex-row gap-md items-center mb-xl">
+        <div className="motion-reveal flex flex-col md:flex-row gap-md items-center mb-xl">
           <div className="relative w-full md:w-96 group">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary pointer-events-none group-focus-within:text-on-background transition-colors">
               search
@@ -134,93 +146,111 @@ export function SheltersPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-md">
           {/* Card list column */}
           <div className="lg:col-span-7 flex flex-col gap-md">
-            <div className="space-y-md overflow-y-auto lg:max-h-[800px] pr-1 custom-scrollbar">
-              {loading ? (
-                <div className="py-xl text-center">
-                  <span className="material-symbols-outlined text-[48px] text-secondary animate-spin">progress_activity</span>
-                  <p className="mt-md text-secondary font-body-md">Loading nearby places...</p>
-                </div>
-              ) : error ? (
-                <div className="py-xl text-center text-secondary font-body-lg">
-                  Could not load nearby places. Please try again later.
-                </div>
-              ) : filtered.length > 0 ? (
-                filtered.map((place) => (
-                  <div key={place.id} className="bg-white rounded-2xl overflow-hidden border border-surface-container hover:shadow-md transition-shadow">
-                    <div className="p-md flex gap-md">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                        place.type === 'vet' ? 'bg-green-100 text-green-700' :
-                        place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        <span className="material-symbols-outlined">{TYPE_ICON[place.type] ?? 'pets'}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-sm mb-xs">
-                          <h3 className="font-headline-md text-on-background truncate">
-                            {place.name || 'Unnamed place'}
-                          </h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                            place.type === 'vet' ? 'bg-green-100 text-green-700' :
-                            place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
-                            'bg-orange-100 text-orange-700'
-                          }`}>
-                            {TYPE_LABEL[place.type] ?? 'Place'}
-                          </span>
+            <AccordionSection
+              title="Places"
+              count={filtered.length}
+              summary={
+                loading
+                  ? 'Loading nearby places.'
+                  : `Showing ${visiblePlaces.length} of ${filtered.length} matching places.`
+              }
+            >
+              <div className="motion-stagger space-y-md overflow-y-auto lg:max-h-[800px] pr-1 custom-scrollbar">
+                {loading ? (
+                  <div className="py-xl text-center">
+                    <span className="material-symbols-outlined text-[48px] text-secondary animate-spin">progress_activity</span>
+                    <p className="mt-md text-secondary font-body-md">Loading nearby places...</p>
+                  </div>
+                ) : error ? (
+                  <div className="py-xl text-center text-secondary font-body-lg">
+                    Could not load nearby places. Please try again later.
+                  </div>
+                ) : filtered.length > 0 ? (
+                  visiblePlaces.map((place) => (
+                    <div key={place.id} className="bg-white rounded-2xl overflow-hidden border border-surface-container hover:shadow-md transition-shadow">
+                      <div className="p-md flex gap-md">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                          place.type === 'vet' ? 'bg-green-100 text-green-700' :
+                          place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          <span className="material-symbols-outlined">{TYPE_ICON[place.type] ?? 'pets'}</span>
                         </div>
-                        {place.address && (
-                          <p className="text-secondary font-body-md text-sm flex items-center gap-xs">
-                            <span className="material-symbols-outlined text-[16px]">location_on</span>
-                            {place.address}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-md mt-sm flex-wrap">
-                          <span className="text-secondary text-sm">{place.distance_km} km away</span>
-                          {place.phone && (
-                            <a href={`tel:${place.phone}`} className="text-primary text-sm flex items-center gap-xs hover:underline">
-                              <span className="material-symbols-outlined text-[16px]">call</span>
-                              {place.phone}
-                            </a>
-                          )}
-                          {place.opening_hours && (
-                            <span className="text-secondary text-sm flex items-center gap-xs">
-                              <span className="material-symbols-outlined text-[16px]">schedule</span>
-                              {place.opening_hours}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-sm mb-xs">
+                            <h3 className="font-headline-md text-on-background truncate">
+                              {place.name || 'Unnamed place'}
+                            </h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                              place.type === 'vet' ? 'bg-green-100 text-green-700' :
+                              place.type === 'shelter' ? 'bg-blue-100 text-blue-700' :
+                              'bg-orange-100 text-orange-700'
+                            }`}>
+                              {TYPE_LABEL[place.type] ?? 'Place'}
                             </span>
+                          </div>
+                          {place.address && (
+                            <p className="text-secondary font-body-md text-sm flex items-center gap-xs">
+                              <span className="material-symbols-outlined text-[16px]">location_on</span>
+                              {place.address}
+                            </p>
                           )}
-                        </div>
-                        <div className="flex gap-sm mt-sm">
-                          {place.website && (
+                          <div className="flex items-center gap-md mt-sm flex-wrap">
+                            <span className="text-secondary text-sm">{place.distance_km} km away</span>
+                            {place.phone && (
+                              <a href={`tel:${place.phone}`} className="text-primary text-sm flex items-center gap-xs hover:underline">
+                                <span className="material-symbols-outlined text-[16px]">call</span>
+                                {place.phone}
+                              </a>
+                            )}
+                            {place.opening_hours && (
+                              <span className="text-secondary text-sm flex items-center gap-xs">
+                                <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                {place.opening_hours}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-sm mt-sm">
+                            {place.website && (
+                              <a
+                                href={place.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline flex items-center gap-xs"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">language</span>
+                                Website
+                              </a>
+                            )}
                             <a
-                              href={place.website}
+                              href={`https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=16/${place.lat}/${place.lng}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm text-primary hover:underline flex items-center gap-xs"
                             >
-                              <span className="material-symbols-outlined text-[16px]">language</span>
-                              Website
+                              <span className="material-symbols-outlined text-[16px]">map</span>
+                              Open in maps
                             </a>
-                          )}
-                          <a
-                            href={`https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=16/${place.lat}/${place.lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary hover:underline flex items-center gap-xs"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">map</span>
-                            Open in maps
-                          </a>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="py-xl text-center text-secondary font-body-lg text-body-lg">
+                    No results match your search.
                   </div>
-                ))
-              ) : (
-                <div className="py-xl text-center text-secondary font-body-lg text-body-lg">
-                  No results match your search.
+                )}
+              </div>
+              {canLoadMore && !loading && !error && (
+                <div className="flex justify-center mt-md">
+                  <LoadMoreButton
+                    onClick={() => setVisibleCount((count) => count + VISIBLE_STEP)}
+                    label="Load more places"
+                  />
                 </div>
               )}
-            </div>
+            </AccordionSection>
           </div>
 
           {/* Desktop info panel */}

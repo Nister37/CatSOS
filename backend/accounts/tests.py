@@ -481,6 +481,26 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
 
+    def test_refresh_token_for_deleted_user_returns_401(self):
+        user = get_user_model().objects.create_user(
+            email='deleted@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+        tokens = create_token_pair(user)
+        user.delete()
+
+        response = self.client.post(
+            reverse('account-token-refresh'),
+            {'refresh': tokens['refresh']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
+        self.assertIn('detail', response.data)
+
     def test_totp_setup_requires_authentication(self):
         response = self.client.post(
             reverse('account-totp-setup'),
