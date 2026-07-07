@@ -78,6 +78,8 @@ function PreviewPanel({ report }: PreviewPanelProps) {
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
+    setQr(null);
+    setLoadingQr(true);
     generateQRCode(report.id)
       .then(setQr)
       .catch(() => dispatch(addNotification('Could not load QR code.', 'error')))
@@ -334,7 +336,7 @@ export function GeneratePosterPage() {
                     <p className="font-body-lg text-body-lg text-secondary">Select a cat on the left to preview the poster</p>
                   </div>
                 ) : (
-                  <PreviewPanel key={selectedReport.id} report={selectedReport} />
+                  <PreviewPanel report={selectedReport} />
                 )}
               </div>
             </div>
