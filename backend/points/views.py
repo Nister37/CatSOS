@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .serializers import LeaderboardEntrySerializer
+from .serializers import LeaderboardEntrySerializer, LeaderboardPageSerializer
 
 
 def set_no_store_headers(response):
@@ -41,7 +41,7 @@ class LeaderboardView(APIView):
 
     @extend_schema(
         responses={
-            200: LeaderboardEntrySerializer(many=True),
+            200: LeaderboardPageSerializer,
             429: OpenApiResponse(description='Leaderboard rate limit exceeded'),
         },
     )

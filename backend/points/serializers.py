@@ -31,3 +31,10 @@ class LeaderboardEntrySerializer(serializers.Serializer):
 
     def get_badges(self, user) -> list[str]:
         return build_public_badges(user)
+
+
+class LeaderboardPageSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = LeaderboardEntrySerializer(many=True)
