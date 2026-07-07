@@ -4,7 +4,10 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
-from notifications.services import enqueue_report_created_notification
+from notifications.services import (
+    enqueue_report_created_notification,
+    enqueue_report_status_changed_notification,
+)
 
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
@@ -224,6 +227,11 @@ def change_report_status(*, report, actor, new_status, found_message=None):
         from_status=old_status,
         to_status=new_status,
         location_summary=build_report_location_summary(report),
+    )
+    enqueue_report_status_changed_notification(
+        report=report,
+        old_status=old_status,
+        new_status=new_status,
     )
 
     return report, timeline_event

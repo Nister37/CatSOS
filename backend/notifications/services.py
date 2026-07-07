@@ -32,6 +32,33 @@ def build_report_created_email(*, report) -> tuple[str, str]:
     return subject, message
 
 
+def get_report_status_label(report, status) -> str:
+    try:
+        return report.Status(status).label
+    except ValueError:
+        return status
+
+
+def build_report_status_changed_email(
+    *,
+    report,
+    old_status,
+    new_status,
+) -> tuple[str, str]:
+    old_status_label = get_report_status_label(report, old_status)
+    new_status_label = get_report_status_label(report, new_status)
+    report_url = build_public_report_url(report)
+    subject = f'CatSOS report status changed for {report.cat_name}'
+    message = (
+        f'The status for {report.cat_name} changed from '
+        f'{old_status_label} to {new_status_label}.\n\n'
+        f'Public report link:\n{report_url}\n\n'
+        'For privacy, this notification does not include exact address, chip '
+        'number, contact phone, or contact email.'
+    )
+    return subject, message
+
+
 def build_sighting_created_email(*, sighting) -> tuple[str, str]:
     report = sighting.report
     seen_at = sighting.seen_at
@@ -62,6 +89,15 @@ def should_send_sighting_created_email(*, sighting) -> bool:
     return sighting.submitted_by_id != report.owner_id
 
 
+def should_send_report_status_changed_email(*, report) -> bool:
+    owner = report.owner
+    if not report.notify_email:
+        return False
+    if owner is None or not owner.email:
+        return False
+    return True
+
+
 def notify_owner_about_report_created(*, report) -> bool:
     owner = report.owner
     if owner is None or not owner.email:
@@ -80,6 +116,42 @@ def notify_owner_about_report_created(*, report) -> bool:
         logger.exception(
             'Failed to send report creation confirmation email.',
             extra={'report_id': str(report.id)},
+        )
+        return False
+
+    return True
+
+
+def notify_owner_about_report_status_changed(
+    *,
+    report,
+    old_status,
+    new_status,
+) -> bool:
+    if not should_send_report_status_changed_email(report=report):
+        return False
+
+    subject, message = build_report_status_changed_email(
+        report=report,
+        old_status=old_status,
+        new_status=new_status,
+    )
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[report.owner.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            'Failed to send report status change notification email.',
+            extra={
+                'report_id': str(report.id),
+                'old_status': old_status,
+                'new_status': new_status,
+            },
         )
         return False
 
@@ -115,6 +187,21 @@ def notify_owner_about_sighting_created(*, sighting) -> bool:
 
 def enqueue_report_created_notification(*, report) -> None:
     transaction.on_commit(lambda: notify_owner_about_report_created(report=report))
+
+
+def enqueue_report_status_changed_notification(
+    *,
+    report,
+    old_status,
+    new_status,
+) -> None:
+    transaction.on_commit(
+        lambda: notify_owner_about_report_status_changed(
+            report=report,
+            old_status=old_status,
+            new_status=new_status,
+        )
+    )
 
 
 def enqueue_sighting_created_notification(*, sighting) -> None:
