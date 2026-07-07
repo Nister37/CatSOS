@@ -2,6 +2,7 @@ import type { ReportStep1Data } from '../schemas/reportStep1Schema';
 import type { ReportStep2Data } from '../schemas/reportStep2Schema';
 import type { ReportStep3Data } from '../schemas/reportStep3Schema';
 import { apiRequest } from '../api/client';
+import { store } from '../app/store';
 
 type CreateReportPayload = {
   step1: ReportStep1Data;
@@ -96,6 +97,45 @@ type PaginatedResponse<T> = {
   previous: string | null;
   results: T[];
 };
+
+export function createSighting(
+  publicId: string,
+  data: {
+    seen_at: string;
+    latitude: number;
+    longitude: number;
+    location_description: string;
+    confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+    notes: string;
+    photo?: File | null;
+  },
+): Promise<void> {
+  if (data.photo) {
+    const form = new FormData();
+    form.append('seen_at', data.seen_at);
+    form.append('latitude', String(data.latitude));
+    form.append('longitude', String(data.longitude));
+    if (data.location_description) form.append('location_description', data.location_description);
+    form.append('confidence', data.confidence);
+    if (data.notes) form.append('notes', data.notes);
+    form.append('photo', data.photo);
+    return apiRequest<void>(`/api/public/reports/${publicId}/sightings/`, {
+      method: 'POST',
+      body: form,
+    });
+  }
+  return apiRequest<void>(`/api/public/reports/${publicId}/sightings/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      seen_at: data.seen_at,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      location_description: data.location_description,
+      confidence: data.confidence,
+      notes: data.notes,
+    }),
+  });
+}
 
 export function createReport({ step1, step2, step3, photo }: CreateReportPayload) {
   const fields: Record<string, string | number | boolean | null> = {
@@ -206,6 +246,35 @@ export async function fetchPublicReports(limit = 4): Promise<PublicReport[]> {
   if (!data.ok) throw await data.json().catch(() => ({ detail: 'Request failed' }));
   const json = (await data.json()) as { results: PublicReport[] };
   return json.results;
+}
+
+export type QRCodePayload = {
+  public_url: string;
+  qr_code: string;
+  content_type: string;
+};
+
+export function generateQRCode(reportId: string): Promise<QRCodePayload> {
+  return apiRequest<QRCodePayload>(`/api/reports/${reportId}/qr-code/`, { method: 'POST' });
+}
+
+export async function downloadReportPoster(reportId: string, filename: string): Promise<void> {
+  const token = store.getState().auth.accessToken;
+  const BASE = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+  const res = await fetch(`${BASE}/api/reports/${reportId}/poster/`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Failed to generate poster');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export async function fetchMissingCatsPage(

@@ -25,6 +25,7 @@ describe('ScrollToTop', () => {
 
 describe('App', () => {
   afterEach(() => {
+    window.localStorage.clear();
     document.documentElement.lang = 'en';
   });
 
@@ -86,7 +87,16 @@ describe('App', () => {
     const user = userEvent.setup();
     renderWithProviders(<App />, { route: '/dashboard' });
 
-    await user.selectOptions(screen.getByLabelText(/language/i), 'pl');
+    await user.selectOptions(screen.getByLabelText(/language/i), 'nl');
+    expect(document.documentElement.lang).toBe('nl');
+    expect(window.localStorage.getItem('catsos.language')).toBe('nl');
+  });
+
+  it('loads a stored language preference on app render', () => {
+    window.localStorage.setItem('catsos.language', 'pl');
+    renderWithProviders(<App />, { route: '/dashboard' });
+
+    expect(screen.getByLabelText(/language/i)).toHaveValue('pl');
     expect(document.documentElement.lang).toBe('pl');
   });
 

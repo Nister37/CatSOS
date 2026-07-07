@@ -61,6 +61,8 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
     notification.sighting?.verification_status === 'PENDING' &&
     notification.sighting?.id &&
     notification.report?.id;
+    notification.report?.id != null;
+
   const isVerifying = verifyingId === notification.sighting?.id;
 
   function handleClick() {
@@ -205,6 +207,30 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
             )}
           </div>
         )}
+            </>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              {notification.report && (
+                <Link
+                  to={notification.action_url || `/my-reports/${notification.report.id}`}
+                  onClick={handleClick}
+                  className="text-primary font-label-md text-label-md hover:underline"
+                >
+                  View report
+                </Link>
+              )}
+              {!notification.is_read && (
+                <button
+                  type="button"
+                  onClick={handleClick}
+                  className="ml-auto text-secondary font-label-sm text-label-sm hover:text-on-surface transition-colors"
+                >
+                  Mark as read
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

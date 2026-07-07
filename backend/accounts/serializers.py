@@ -7,6 +7,7 @@ from rest_framework import serializers
 from points.models import UserBadge
 from points.rules import BADGE_RULES
 
+from .languages import DEFAULT_PREFERRED_LANGUAGE, PreferredLanguage
 from .models import SocialAccount
 from .services import (
     AccountNotVerifiedError,
@@ -122,6 +123,10 @@ def user_has_public_activity(user):
 class AccountSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     email = serializers.EmailField(read_only=True)
+    preferred_language = serializers.ChoiceField(
+        choices=PreferredLanguage.choices,
+        read_only=True,
+    )
 
 
 class CurrentUserSerializer(serializers.Serializer):
@@ -129,6 +134,10 @@ class CurrentUserSerializer(serializers.Serializer):
     email = serializers.EmailField(read_only=True)
     first_name = serializers.CharField(read_only=True)
     last_name = serializers.CharField(read_only=True)
+    preferred_language = serializers.ChoiceField(
+        choices=PreferredLanguage.choices,
+        read_only=True,
+    )
     notify_report_created_email = serializers.BooleanField(read_only=True)
     notify_sighting_created_email = serializers.BooleanField(read_only=True)
     notify_report_status_changed_email = serializers.BooleanField(read_only=True)
@@ -151,6 +160,10 @@ class CurrentUserSerializer(serializers.Serializer):
 
 
 class CurrentUserUpdateSerializer(serializers.Serializer):
+    preferred_language = serializers.ChoiceField(
+        choices=PreferredLanguage.choices,
+        required=False,
+    )
     notify_report_created_email = serializers.BooleanField(required=False)
     notify_sighting_created_email = serializers.BooleanField(required=False)
     notify_report_status_changed_email = serializers.BooleanField(required=False)
@@ -272,6 +285,11 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
     password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+    preferred_language = serializers.ChoiceField(
+        choices=PreferredLanguage.choices,
+        default=DEFAULT_PREFERRED_LANGUAGE,
+        required=False,
+    )
 
     def validate_email(self, value):
         if email_exists(value):
@@ -299,6 +317,10 @@ class RegisterSerializer(serializers.Serializer):
         return register_account(
             email=validated_data['email'],
             password=validated_data['password'],
+            preferred_language=validated_data.get(
+                'preferred_language',
+                DEFAULT_PREFERRED_LANGUAGE,
+            ),
         )
 
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import logging
 import re
+from textwrap import shorten
 
 from django.conf import settings
 import requests
@@ -29,6 +30,24 @@ PUBLIC_SUMMARY_SYSTEM_INSTRUCTION = (
     'terms, exact addresses, or contact details. Keep the summary under 35 words '
     'and suitable for public report cards. Return only the summary.'
 )
+POSTER_TEXT_MAX_LENGTH = 180
+POSTER_TEXT_SYSTEM_INSTRUCTION = (
+    'You write concise missing-cat poster wording. Use only facts present in '
+    'the user text. Do not invent details, exact addresses, contact details, '
+    'reward terms, sightings, medical advice, or urgency claims. Keep the text '
+    f'under {POSTER_TEXT_MAX_LENGTH} characters and return only the poster text.'
+)
+TRANSLATION_LANGUAGE_LABELS = {
+    'en': 'English',
+    'pl': 'Polish',
+    'nl': 'Dutch',
+}
+REPORT_TRANSLATION_SYSTEM_INSTRUCTION = (
+    'You translate public lost-cat report text. Translate only facts present in '
+    'the user text. Do not invent details, exact addresses, contact details, '
+    'reward terms, sightings, medical advice, or certainty claims. Preserve a '
+    'clear public lost-cat report tone. Return only the translated text.'
+)
 AI_PRIVACY_NOTICE = (
     'Private contact details are removed before AI processing. Review the '
     'suggestion before saving.'
@@ -36,6 +55,10 @@ AI_PRIVACY_NOTICE = (
 PUBLIC_SUMMARY_MAX_LENGTH = 240
 REDACTION_MARKER_PATTERN = re.compile(
     r'\[(?:email|phone|address) removed\]',
+    re.IGNORECASE,
+)
+REMOVED_PLACEHOLDER_PATTERN = re.compile(
+    r'\s*\[(?:email|phone|address) removed\]\s*',
     re.IGNORECASE,
 )
 
@@ -195,6 +218,10 @@ def sanitize_text_for_ai(text):
     return sanitized.strip()
 
 
+def sanitize_ai_suggestion_text(text):
+    return sanitize_text_for_ai(str(text or ''))
+
+
 def _condense_text(text):
     return ' '.join(text.split())
 
@@ -218,6 +245,22 @@ def build_public_summary_fallback(description):
     return sanitize_public_summary_text(description)
 
 
+def clean_ai_suggestion_text(text, *, max_length):
+    sanitized = sanitize_text_for_ai(text)
+    sanitized = REMOVED_PLACEHOLDER_PATTERN.sub(' ', sanitized)
+    sanitized = _condense_text(sanitized)
+    if len(sanitized) <= max_length:
+        return sanitized
+    return shorten(sanitized, width=max_length, placeholder='...')
+
+
+def _safe_prompt_line(label, value):
+    sanitized = sanitize_text_for_ai(str(value or ''))
+    if not sanitized:
+        return ''
+    return f'{label}: {sanitized}'
+
+
 def improve_lost_cat_description(*, description, client=None):
     sanitized_description = sanitize_text_for_ai(description)
     prompt = (
@@ -227,12 +270,12 @@ def improve_lost_cat_description(*, description, client=None):
     )
     result = generate_gemma_text(
         prompt=prompt,
-        fallback_text=description.strip(),
+        fallback_text=sanitized_description,
         system_instruction=DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION,
         client=client,
     )
     return {
-        'suggestion': result.text,
+        'suggestion': sanitize_ai_suggestion_text(result.text),
         'generated_by_ai': result.generated_by_ai,
         'requires_review': True,
         'fallback_reason': result.error,
@@ -276,6 +319,159 @@ def generate_public_report_summary(
     suggestion = sanitize_public_summary_text(result.text) or fallback_summary
     return {
         'suggestion': suggestion,
+        'generated_by_ai': result.generated_by_ai,
+        'requires_review': True,
+        'fallback_reason': result.error,
+        'privacy_notice': AI_PRIVACY_NOTICE,
+    }
+
+
+def _build_poster_text_fallback(
+        *,
+        cat_name,
+        coat_color='',
+        breed='',
+        last_seen_landmark='',
+        has_reward=False,
+):
+    cat_name = clean_ai_suggestion_text(
+        cat_name or 'this cat',
+        max_length=60,
+    ) or 'this cat'
+    traits = [
+        clean_ai_suggestion_text(value, max_length=80)
+        for value in (breed, coat_color)
+    ]
+    traits = [value for value in traits if value]
+
+    parts = [f'MISSING: {cat_name}.']
+    if traits:
+        parts.append(f"{', '.join(traits)}.")
+
+    landmark = clean_ai_suggestion_text(last_seen_landmark, max_length=80)
+    if landmark:
+        parts.append(f'Last seen near {landmark}.')
+
+    if has_reward:
+        parts.append('Reward information is on the report.')
+
+    parts.append('Scan the QR code with any sightings.')
+    return clean_ai_suggestion_text(
+        ' '.join(parts),
+        max_length=POSTER_TEXT_MAX_LENGTH,
+    )
+
+
+def suggest_lost_cat_poster_text(
+        *,
+        cat_name,
+        description,
+        coat_color='',
+        breed='',
+        gender='',
+        collar_description='',
+        personality='',
+        last_seen_landmark='',
+        reward_note='',
+        has_reward=False,
+        client=None,
+):
+    prompt_lines = [
+        _safe_prompt_line('Cat name', cat_name),
+        _safe_prompt_line('Breed', breed),
+        _safe_prompt_line('Coat color', coat_color),
+        _safe_prompt_line('Gender', gender),
+        _safe_prompt_line('Collar', collar_description),
+        _safe_prompt_line('Personality', personality),
+        _safe_prompt_line('Description', description),
+        _safe_prompt_line('Public landmark', last_seen_landmark),
+        _safe_prompt_line('Public reward note', reward_note),
+        'Reward offered: yes' if has_reward else '',
+    ]
+    prompt_body = '\n'.join(line for line in prompt_lines if line)
+    prompt = (
+        'Create short printed-poster wording for a missing-cat report. '
+        'Use only the public-safe facts below. Do not include owner contact '
+        'details or exact street addresses. Tell readers to scan the QR code '
+        'with sightings.\n\n'
+        f'{prompt_body}'
+    )
+    fallback_text = _build_poster_text_fallback(
+        cat_name=cat_name,
+        coat_color=coat_color,
+        breed=breed,
+        last_seen_landmark=last_seen_landmark,
+        has_reward=has_reward,
+    )
+    result = generate_gemma_text(
+        prompt=prompt,
+        fallback_text=fallback_text,
+        system_instruction=POSTER_TEXT_SYSTEM_INSTRUCTION,
+        client=client,
+    )
+    suggestion = clean_ai_suggestion_text(
+        result.text,
+        max_length=POSTER_TEXT_MAX_LENGTH,
+    )
+    generated_by_ai = result.generated_by_ai
+    fallback_reason = result.error
+    if not suggestion:
+        suggestion = fallback_text
+        generated_by_ai = False
+        fallback_reason = fallback_reason or 'AI suggestion did not include safe text.'
+
+    return {
+        'suggestion': suggestion,
+        'generated_by_ai': generated_by_ai,
+        'requires_review': True,
+        'fallback_reason': fallback_reason,
+        'privacy_notice': AI_PRIVACY_NOTICE,
+    }
+
+
+def suggest_report_translation(
+        *,
+        target_language,
+        cat_name,
+        description,
+        breed='',
+        coat_color='',
+        gender='',
+        collar_description='',
+        personality='',
+        last_seen_landmark='',
+        client=None,
+):
+    target_language_label = TRANSLATION_LANGUAGE_LABELS[target_language]
+    prompt_lines = [
+        _safe_prompt_line('Cat name', cat_name),
+        _safe_prompt_line('Breed', breed),
+        _safe_prompt_line('Coat color', coat_color),
+        _safe_prompt_line('Gender', gender),
+        _safe_prompt_line('Collar', collar_description),
+        _safe_prompt_line('Personality', personality),
+        _safe_prompt_line('Description', description),
+        _safe_prompt_line('Public landmark', last_seen_landmark),
+    ]
+    prompt_body = '\n'.join(line for line in prompt_lines if line)
+    fallback_text = sanitize_text_for_ai(description)
+    prompt = (
+        f'Translate the public-safe lost-cat report facts below into '
+        f'{target_language_label}. Use only the provided facts. Do not include '
+        'owner contact details, exact street addresses, or private notes.\n\n'
+        f'{prompt_body}'
+    )
+    result = generate_gemma_text(
+        prompt=prompt,
+        fallback_text=fallback_text,
+        system_instruction=REPORT_TRANSLATION_SYSTEM_INSTRUCTION,
+        client=client,
+    )
+
+    return {
+        'suggestion': sanitize_text_for_ai(result.text),
+        'target_language': target_language,
+        'target_language_label': target_language_label,
         'generated_by_ai': result.generated_by_ai,
         'requires_review': True,
         'fallback_reason': result.error,

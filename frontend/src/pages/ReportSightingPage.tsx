@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import { BaseTileLayer } from '../components/BaseTileLayer';
@@ -9,6 +9,8 @@ import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import { fetchPublicReports, submitSighting, type PublicReport } from '../services/reportsApi';
+import { useAppSelector } from '../app/hooks';
+import { createSighting, fetchPublicReports, type PublicReport } from '../services/reportsApi';
 
 const DEFAULT_CENTER: [number, number] = [51.505, -0.09];
 const DEFAULT_ZOOM = 12;
@@ -54,10 +56,14 @@ const UNKNOWN_ID = '__unknown__';
 export function ReportSightingPage() {
   const location = useLocation();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const preSelectedId = (location.state as { preSelectedId?: string } | null)?.preSelectedId ?? null;
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   const [cats, setCats] = useState<PublicReport[] | null>(null);
   const [selectedCat, setSelectedCat] = useState<string | null>(preSelectedId);
+  const [notes, setNotes] = useState('');
+  const [confidence, setConfidence] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [details, setDetails] = useState('');
@@ -161,6 +167,34 @@ export function ReportSightingPage() {
     } catch {
       dispatch(addNotification('Failed to submit sighting. Please try again.', 'error'));
       setSubmitError('Something went wrong. Please try again.');
+    if (!accessToken) {
+      navigate('/login', { state: { from: '/report-sighting' } });
+      return;
+    }
+    if (!selectedCat || selectedCat === UNKNOWN_ID) {
+      setSubmitError('Please select which cat you spotted, or contact support if it\'s not listed.');
+      return;
+    }
+    if (!pinPosition) {
+      setSubmitError('Please tap the map to mark where you spotted the cat.');
+      return;
+    }
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      await createSighting(selectedCat, {
+        seen_at: new Date().toISOString(),
+        latitude: pinPosition[0],
+        longitude: pinPosition[1],
+        location_description: sightingAddress,
+        confidence,
+        notes,
+        photo: photoFile,
+      });
+      setSubmitted(true);
+    } catch (err) {
+      const message = (err as Record<string, unknown>)?.detail;
+      setSubmitError(typeof message === 'string' ? message : 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -168,6 +202,9 @@ export function ReportSightingPage() {
 
   function resetForm() {
     setSelectedCat(null);
+    setNotes('');
+    setConfidence('MEDIUM');
+    setSubmitError(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPhotoFile(null);
@@ -365,6 +402,27 @@ export function ReportSightingPage() {
                   </div>
                 </section>
 
+                {/* Confidence */}
+                <section>
+                  <h2 className="font-headline-md text-headline-md mb-md">How Confident Are You?</h2>
+                  <div className="flex gap-sm">
+                    {(['LOW', 'MEDIUM', 'HIGH'] as const).map((level) => (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => setConfidence(level)}
+                        className={`flex-1 py-sm rounded-xl border-2 font-label-md text-label-md transition-all ${
+                          confidence === level
+                            ? 'border-primary-container bg-primary-container text-on-primary'
+                            : 'border-outline-variant bg-surface-container text-on-surface hover:border-primary-container/50'
+                        }`}
+                      >
+                        {level === 'LOW' ? 'Not Sure' : level === 'MEDIUM' ? 'Pretty Sure' : 'Certain'}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
                 {/* Details textarea */}
                 <section>
                   <label
@@ -378,6 +436,8 @@ export function ReportSightingPage() {
                     rows={5}
                     value={details}
                     onChange={(e) => setDetails(e.target.value)}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                     placeholder="Where did you see them? Which direction were they heading? Did they look healthy?"
                     className="w-full p-md bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary font-body-md resize-none"
                   />
@@ -464,6 +524,17 @@ export function ReportSightingPage() {
                 <div className="flex flex-col gap-sm pt-md">
                   {submitError && (
                     <p className="text-label-sm font-label-sm text-error text-center">
+                  {!accessToken && (
+                    <p className="text-center font-body-md text-secondary">
+                      You must{' '}
+                      <Link to="/login" state={{ from: '/report-sighting' }} className="text-primary underline">
+                        sign in
+                      </Link>{' '}
+                      to submit a sighting.
+                    </p>
+                  )}
+                  {submitError && (
+                    <p role="alert" className="text-center font-body-md text-error bg-error/10 px-md py-sm rounded-xl">
                       {submitError}
                     </p>
                   )}

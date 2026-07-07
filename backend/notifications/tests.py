@@ -185,6 +185,22 @@ class NotificationServiceTests(TestCase):
         self.assertNotIn('+48 600 111 222', email.body)
         self.assertNotIn('owner@example.com', email.body)
 
+    def test_report_creation_email_uses_owner_preferred_language(self):
+        self.owner.preferred_language = 'pl'
+        self.owner.save(update_fields=('preferred_language',))
+        report = self._create_report(has_microchip=True, chip_number='private-chip-123')
+
+        sent = notify_owner_about_report_created(report=report)
+
+        self.assertTrue(sent)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, 'Raport CatSOS dla Luna jest opublikowany')
+        self.assertIn('Link do publicznego raportu', email.body)
+        self.assertNotIn('12 Private Home Street', email.body)
+        self.assertNotIn('private-chip-123', email.body)
+        self.assertNotIn('+48 600 111 222', email.body)
+        self.assertNotIn('owner@example.com', email.body)
+
     def test_skips_report_creation_email_when_account_preference_disabled(self):
         self.owner.notify_report_created_email = False
         self.owner.save(update_fields=('notify_report_created_email',))
@@ -241,6 +257,29 @@ class NotificationServiceTests(TestCase):
         self.assertNotIn('12 Private Home Street', email.body)
         self.assertNotIn('private-chip-123', email.body)
         self.assertNotIn('+48 600 111 222', email.body)
+        self.assertNotIn('owner@example.com', email.body)
+
+    def test_report_status_email_uses_localized_status_labels(self):
+        self.owner.preferred_language = 'nl'
+        self.owner.save(update_fields=('preferred_language',))
+        report = self._create_report(notify_email=True)
+
+        sent = notify_owner_about_report_status_changed(
+            report=report,
+            old_status=LostCatReport.Status.MISSING,
+            new_status=LostCatReport.Status.RECENTLY_SEEN,
+        )
+
+        self.assertTrue(sent)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, 'CatSOS-meldingsstatus gewijzigd voor Luna')
+        self.assertIn('Vermist', email.body)
+        self.assertIn('Recent gezien', email.body)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('12 Private Home Street', email.body)
         self.assertNotIn('owner@example.com', email.body)
 
     def test_skips_report_status_email_when_report_email_notifications_disabled(self):
@@ -311,6 +350,34 @@ class NotificationServiceTests(TestCase):
         )
         self.assertNotIn('helper@example.com', email.body)
         self.assertNotIn('Private helper note', email.body)
+
+    def test_sighting_email_uses_owner_preferred_language(self):
+        self.owner.preferred_language = 'pl'
+        self.owner.save(update_fields=('preferred_language',))
+        report = self._create_report()
+        sighting = self._create_sighting(report)
+
+        sent = notify_owner_about_sighting_created(sighting=sighting)
+
+        self.assertTrue(sent)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, 'Nowa obserwacja kota Luna')
+        self.assertIn('Lokalizacja: Behind the bakery', email.body)
+        self.assertIn('Pewność: Wysoka', email.body)
+        self.assertNotIn('helper@example.com', email.body)
+        self.assertNotIn('Private helper note', email.body)
+
+    def test_notification_email_falls_back_to_english_for_unsupported_language(self):
+        self.owner.preferred_language = 'de'
+        self.owner.save(update_fields=('preferred_language',))
+        report = self._create_report()
+
+        sent = notify_owner_about_report_created(report=report)
+
+        self.assertTrue(sent)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, 'CatSOS report published for Luna')
+        self.assertIn('Public report link', email.body)
 
     def test_skips_email_when_report_email_notifications_disabled(self):
         report = self._create_report(notify_email=False)

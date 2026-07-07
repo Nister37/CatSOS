@@ -1,7 +1,7 @@
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 
 import authReducer from '../features/auth/authSlice';
-import languageReducer from '../features/language/languageSlice';
+import languageReducer, { getInitialLanguageState } from '../features/language/languageSlice';
 import notificationsReducer from '../features/notifications/notificationsSlice';
 
 const rootReducer = combineReducers({
@@ -13,7 +13,10 @@ const rootReducer = combineReducers({
 export function createAppStore(preloadedState?: Partial<RootState>) {
   return configureStore({
     reducer: rootReducer,
-    preloadedState,
+    preloadedState: {
+      ...preloadedState,
+      language: preloadedState?.language ?? getInitialLanguageState(),
+    },
   });
 }
 

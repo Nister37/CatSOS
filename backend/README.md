@@ -52,13 +52,31 @@ Django backend for the CatSOS API.
 - OpenAPI schema: `http://localhost:8000/api/schema/`
 - Swagger UI: `http://localhost:8000/api/docs/`
 
+## Demo Data
+
+For a local demo database, run:
+
+```bash
+python manage.py seed_demo_data
+```
+
+The command creates or updates three email-verified demo accounts and three approved lost-cat reports:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Owner | `owner.demo@catsos.local` | `CatSOSDemo123!` |
+| Contributor | `helper.demo@catsos.local` | `CatSOSDemo123!` |
+| Admin | `admin.demo@catsos.local` | `CatSOSDemo123!` |
+
+Run `python manage.py seed_demo_data --reset` to delete and recreate only the CatSOS demo users and their related reports. The command refuses to run with `DEBUG=False` unless `--allow-production` is passed, and it still rejects the default demo password in that mode. Use `--password <value>` only for disposable non-local demo environments.
+
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
 
 Password recovery uses email reset links built from `DJANGO_FRONTEND_URL`, Django's default token generator, and enrolled authenticator-app TOTP codes as the second recovery option. Reset requests never return reset tokens in JSON. Successful password reset and logged-in password change send confirmation emails. SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, TOTP recovery, and logged-in password change with current-password verification. When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
 
 SSO login supports Google, GitHub, and Microsoft. Configure provider client IDs with `GOOGLE_OAUTH_CLIENT_ID` and `MICROSOFT_OAUTH_CLIENT_ID`; GitHub uses the provider access token to fetch the authenticated user's verified primary email.
 
-Authenticated users can read their private account summary through `/api/me/` and update product email notification preferences with `PATCH /api/me/`. The preferences are `notify_report_created_email`, `notify_sighting_created_email`, and `notify_report_status_changed_email`; they do not disable verification, password reset, or other security-critical account emails. Authenticated users can list their own in-app notifications through `/api/notifications/`, filter by `unread=true|false`, and mark one notification read through `/api/notifications/<id>/read/`. Notification responses do not expose account emails, phone numbers, exact addresses, chip numbers, sighting notes, helper private details, or internal user IDs. Authenticated users can upload, replace, and delete their profile picture through `/api/me/profile-picture/`. The backend accepts JPEG, PNG, and WebP images up to `DJANGO_PROFILE_PICTURE_MAX_SIZE_BYTES` bytes, stores them under media storage with generated filenames, and returns `/api/me/` profile data with `profile_picture_url` plus `avatar_fallback` for users without an image.
+Authenticated users can read their private account summary through `/api/me/` and update product email notification preferences with `PATCH /api/me/`. The preferences are `notify_report_created_email`, `notify_sighting_created_email`, and `notify_report_status_changed_email`; they do not disable verification, password reset, or other security-critical account emails. Users can also set `preferred_language` to `en`, `pl`, or `nl`; transactional account emails and report/sighting notification emails use that language when a template exists and fall back to English. Authenticated users can list their own in-app notifications through `/api/notifications/`, filter by `unread=true|false`, and mark one notification read through `/api/notifications/<id>/read/`. Notification responses do not expose account emails, phone numbers, exact addresses, chip numbers, sighting notes, helper private details, or internal user IDs. Authenticated users can upload, replace, and delete their profile picture through `/api/me/profile-picture/`. The backend accepts JPEG, PNG, and WebP images up to `DJANGO_PROFILE_PICTURE_MAX_SIZE_BYTES` bytes, stores them under media storage with generated filenames, and returns `/api/me/` profile data with `profile_picture_url` plus `avatar_fallback` for users without an image.
 
 Public contributor profiles are available at `/api/profiles/<id>/` for active, email-verified users with public activity. The response includes display name, profile picture, points, badges, and explicit public info only. Account email is never returned unless a separate public contact email is set.
 

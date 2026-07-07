@@ -33,6 +33,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { ContactPage } from './pages/ContactPage';
+import { GeneratePosterPage } from './pages/GeneratePosterPage';
 import { RequireAuth } from './components/RequireAuth';
 
 export function App() {
@@ -68,6 +69,7 @@ export function App() {
       <Route path="privacy" element={<PrivacyPage />} />
       <Route path="terms" element={<TermsPage />} />
       <Route path="contact" element={<ContactPage />} />
+      <Route path="generate-poster" element={<RequireAuth><GeneratePosterPage /></RequireAuth>} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>

@@ -70,14 +70,16 @@ class AccountAuthApiTests(APITestCase):
     def tearDown(self):
         cache.clear()
 
-    def _register(self, email='visitor@example.com'):
+    def _register(self, email='visitor@example.com', **overrides):
+        payload = {
+            'email': email,
+            'password': 'StrongPass123!',
+            'password_confirm': 'StrongPass123!',
+        }
+        payload.update(overrides)
         response = self.client.post(
             reverse('account-register'),
-            {
-                'email': email,
-                'password': 'StrongPass123!',
-                'password_confirm': 'StrongPass123!',
-            },
+            payload,
             format='json',
         )
         return response
@@ -135,15 +137,32 @@ class AccountAuthApiTests(APITestCase):
         self.assertTrue(response.data['email_verification_required'])
         self.assertEqual(response.data['resend_available_in_seconds'], 120)
         self.assertEqual(response.data['user']['email'], 'visitor@example.com')
+        self.assertEqual(response.data['user']['preferred_language'], 'en')
         self.assertNotIn('access', response.data)
         self.assertNotIn('refresh', response.data)
         self.assertNotIn('password', response.data)
 
         user = get_user_model().objects.get(email='visitor@example.com')
         self.assertTrue(user.check_password('StrongPass123!'))
+        self.assertEqual(user.preferred_language, 'en')
         self.assertFalse(user.is_email_verified)
         self.assertTrue(user.email_verification_code_hash)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(check_password(self._extract_latest_code(), user.email_verification_code_hash))
+
+    def test_register_accepts_preferred_language_and_localizes_verification_email(self):
+        response = self._register(
+            email='polish@example.com',
+            preferred_language='pl',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['user']['preferred_language'], 'pl')
+
+        user = get_user_model().objects.get(email='polish@example.com')
+        self.assertEqual(user.preferred_language, 'pl')
+        self.assertEqual(mail.outbox[-1].subject, 'Kod weryfikacyjny CatSOS')
+        self.assertIn('Twój kod weryfikacyjny CatSOS', mail.outbox[-1].body)
         self.assertTrue(check_password(self._extract_latest_code(), user.email_verification_code_hash))
 
     def test_register_rejects_invalid_payload_with_clear_errors(self):
@@ -209,6 +228,7 @@ class AccountAuthApiTests(APITestCase):
         user.notify_report_status_changed_email = False
         user.contribution_points = 35
         user.public_badges = ['Manual community badge']
+        user.preferred_language = 'nl'
         user.save(
             update_fields=(
                 'notify_report_created_email',
@@ -216,6 +236,7 @@ class AccountAuthApiTests(APITestCase):
                 'notify_report_status_changed_email',
                 'contribution_points',
                 'public_badges',
+                'preferred_language',
             )
         )
         UserBadge.objects.create(user=user, code='FIRST_HELP', label='First help')
@@ -235,6 +256,7 @@ class AccountAuthApiTests(APITestCase):
         )
         self.assertNotIn('earned_badges', response.data)
         self.assertNotIn('point_transactions', response.data)
+        self.assertEqual(response.data['preferred_language'], 'nl')
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
 
@@ -245,6 +267,7 @@ class AccountAuthApiTests(APITestCase):
         response = self.client.patch(
             reverse('account-me'),
             {
+                'preferred_language': 'pl',
                 'notify_report_created_email': False,
                 'notify_sighting_created_email': False,
                 'notify_report_status_changed_email': True,
@@ -254,12 +277,29 @@ class AccountAuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         user.refresh_from_db()
+        self.assertEqual(user.preferred_language, 'pl')
         self.assertFalse(user.notify_report_created_email)
         self.assertFalse(user.notify_sighting_created_email)
         self.assertTrue(user.notify_report_status_changed_email)
+        self.assertEqual(response.data['preferred_language'], 'pl')
         self.assertFalse(response.data['notify_report_created_email'])
         self.assertFalse(response.data['notify_sighting_created_email'])
         self.assertTrue(response.data['notify_report_status_changed_email'])
+
+    def test_current_user_patch_rejects_unsupported_preferred_language(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.patch(
+            reverse('account-me'),
+            {'preferred_language': 'fr'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('preferred_language', response.data)
+        user.refresh_from_db()
+        self.assertEqual(user.preferred_language, 'en')
 
     def test_current_user_patch_rejects_unknown_fields(self):
         user = self._create_verified_user()
@@ -686,6 +726,23 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['visitor@example.com'])
+        self.assertIn('http://frontend.test/password-reset/confirm/', mail.outbox[0].body)
+
+    def test_password_reset_email_uses_preferred_language(self):
+        self._create_verified_user()
+        user = get_user_model().objects.get(email='visitor@example.com')
+        user.preferred_language = 'nl'
+        user.save(update_fields=['preferred_language'])
+
+        response = self.client.post(
+            reverse('account-password-reset'),
+            {'email': 'visitor@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mail.outbox[0].subject, 'Reset je CatSOS-wachtwoord')
+        self.assertIn('Gebruik deze link', mail.outbox[0].body)
         self.assertIn('http://frontend.test/password-reset/confirm/', mail.outbox[0].body)
 
     def test_password_reset_email_is_not_sent_for_missing_email(self):
