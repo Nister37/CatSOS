@@ -357,23 +357,12 @@ export function SightingsMapResultsPage() {
     fetchPublicReports(100).then(setPublicReports).catch(() => {});
   }, []);
 
-  // If the user logs out while in track mode, reset to community
   useEffect(() => {
-    if (!user && mapMode === 'track') {
-      setMapMode('community');
-      setTrackPublicId('');
-      setTrackSightings([]);
-      setActiveMarker(null);
-    }
-  }, [user, mapMode]);
-
-  useEffect(() => {
-    if (mapMode !== 'track' || !trackPublicId || !accessToken) {
-      setTrackSightings([]);
-      return;
-    }
-    setLoadingTrack(true);
-    fetchOwnedReports()
+    const shouldFetch = mapMode === 'track' && !!trackPublicId && !!accessToken && !!user;
+    if (!shouldFetch) return;
+    // setState calls are inside promise callbacks, not the synchronous effect body
+    Promise.resolve()
+      .then(() => { setLoadingTrack(true); return fetchOwnedReports(); })
       .then((owned) => {
         const match = owned.find((r) => r.public_id === trackPublicId);
         if (!match) return [];
@@ -382,7 +371,7 @@ export function SightingsMapResultsPage() {
       .then((s) => setTrackSightings(s ?? []))
       .catch(() => setTrackSightings([]))
       .finally(() => setLoadingTrack(false));
-  }, [mapMode, trackPublicId, accessToken]);
+  }, [mapMode, trackPublicId, accessToken, user]);
 
   function scrollFeed(direction: 'left' | 'right') {
     scrollRef.current?.scrollBy({ left: direction === 'left' ? -300 : 300, behavior: 'smooth' });
@@ -390,7 +379,10 @@ export function SightingsMapResultsPage() {
 
   const locationLabel = query || 'your area';
   const resolvedCenter = mapCenter ?? DEFAULT_CENTER;
+  // Derive effective mode — if user logs out, fall back to community without a setState effect
+  const effectiveMode: MapMode = (!user && mapMode === 'track') ? 'community' : mapMode;
   const selectedCat = publicReports.find((r) => r.public_id === trackPublicId) ?? null;
+  const effectiveSightings = user ? trackSightings : [];
 
   const MODE_OPTIONS: { id: MapMode; icon: string; label: string; desc: string }[] = [
     { id: 'community', icon: 'share_location', label: 'Community Sightings', desc: 'Recent sighting activity' },
@@ -427,7 +419,7 @@ export function SightingsMapResultsPage() {
                 type="button"
                 onClick={() => setFilterOpen((o) => !o)}
                 className={`flex items-center gap-xs px-md py-sm rounded-xl border font-label-md transition-colors ${
-                  filterOpen || mapMode !== 'community'
+                  filterOpen || effectiveMode !== 'community'
                     ? 'bg-primary-container text-on-primary border-primary-container'
                     : 'bg-surface-container border-outline-variant text-on-surface hover:bg-secondary-container'
                 }`}
@@ -450,9 +442,9 @@ export function SightingsMapResultsPage() {
           </div>
 
           {/* Active mode info strip */}
-          {mapMode !== 'community' && (
+          {effectiveMode !== 'community' && (
             <div className="mt-md flex items-center gap-sm flex-wrap">
-              {mapMode === 'all' && (
+              {effectiveMode === 'all' && (
                 <>
                   <span className="inline-flex items-center gap-xs bg-primary/10 text-primary px-md py-xs rounded-full font-label-sm">
                     <span className="w-2 h-2 rounded-full bg-[#ff5a5f]" />
@@ -463,21 +455,21 @@ export function SightingsMapResultsPage() {
                   </span>
                 </>
               )}
-              {mapMode === 'track' && selectedCat && (
+              {effectiveMode === 'track' && selectedCat && (
                 <>
                   <span className="inline-flex items-center gap-xs bg-[#b52330]/10 text-[#b52330] px-md py-xs rounded-full font-label-sm">
                     <span className="w-2 h-2 rounded-full bg-[#b52330]" />A Last known location
                   </span>
                   <span className="inline-flex items-center gap-xs bg-amber-100 text-amber-700 px-md py-xs rounded-full font-label-sm">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    {trackSightings.length} reported {trackSightings.length === 1 ? 'sighting' : 'sightings'}
+                    {effectiveSightings.length} reported {effectiveSightings.length === 1 ? 'sighting' : 'sightings'}
                   </span>
                   {loadingTrack && (
                     <span className="material-symbols-outlined text-secondary animate-spin text-[16px]">sync</span>
                   )}
                 </>
               )}
-              {user && mapMode === 'track' && !selectedCat && (
+              {user && effectiveMode === 'track' && !selectedCat && (
                 <span className="font-body-sm text-secondary">Open Filter Map and select a cat to track it</span>
               )}
             </div>
@@ -507,10 +499,10 @@ export function SightingsMapResultsPage() {
                 >
                   <BaseTileLayer />
                   <MapContent
-                    mode={mapMode}
+                    mode={effectiveMode}
                     publicReports={publicReports}
                     selectedCat={selectedCat}
-                    sightings={trackSightings}
+                    sightings={effectiveSightings}
                     geocodedCenter={resolvedCenter}
                     onMarkerClick={setActiveMarker}
                   />
@@ -601,12 +593,16 @@ export function SightingsMapResultsPage() {
       {/* Filter Map bottom sheet */}
       {filterOpen && (
         <div
+          role="presentation"
           className="fixed inset-0 z-[500] flex flex-col justify-end"
           onClick={() => setFilterOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setFilterOpen(false); }}
         >
           <div
+            role="presentation"
             className="mx-4 mb-4 p-4 bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/40"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-3">
               <p className="font-bold text-on-background text-sm uppercase tracking-widest">Map View</p>
@@ -693,12 +689,16 @@ export function SightingsMapResultsPage() {
       {/* Login required modal for Track a Cat */}
       {showLoginModal && (
         <div
+          role="presentation"
           className="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 backdrop-blur-sm px-md"
-          onClick={() => setShowLoginModal(false)}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLoginModal(false); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowLoginModal(false); }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Sign in required"
             className="bg-white rounded-2xl p-xl shadow-2xl w-full max-w-sm"
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-md mb-md">
               <div className="w-12 h-12 bg-primary-container/20 rounded-full flex items-center justify-center shrink-0">
