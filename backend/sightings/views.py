@@ -15,8 +15,13 @@ from .serializers import (
     SightingOwnerSerializer,
     SightingSerializer,
     SightingVerificationUpdateSerializer,
+    VolunteerSearchSerializer,
 )
-from .services import create_sighting, update_sighting_verification
+from .services import (
+    create_sighting,
+    mark_volunteer_searching,
+    update_sighting_verification,
+)
 
 ACTIVE_SEARCH_STATUSES = (
     LostCatReport.Status.MISSING,
@@ -82,6 +87,50 @@ class PublicReportSightingCreateView(APIView):
         return no_store_response(
             response_serializer.data,
             status_code=status.HTTP_201_CREATED,
+        )
+
+
+class PublicReportVolunteerSearchCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'sighting_write'
+
+    def get_report(self):
+        return get_object_or_404(
+            LostCatReport.objects.exclude(
+                moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+            ),
+            public_id=self.kwargs['public_id'],
+        )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: VolunteerSearchSerializer,
+            201: VolunteerSearchSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def post(self, request, public_id):
+        report = self.get_report()
+        if report.status not in ACTIVE_SEARCH_STATUSES:
+            raise ValidationError(
+                {'report': ['Volunteer searches can only be joined for active reports.']}
+            )
+
+        volunteer_search, created = mark_volunteer_searching(
+            report=report,
+            volunteer=request.user,
+        )
+        response_serializer = VolunteerSearchSerializer(
+            volunteer_search,
+            context={'request': request},
+        )
+        return no_store_response(
+            response_serializer.data,
+            status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 
@@ -173,3 +222,27 @@ class ReportSightingVerificationView(ReportSightingBaseView):
             context={'request': request},
         )
         return no_store_response(response_serializer.data)
+
+
+class ReportVolunteerSearchListView(ReportSightingBaseView):
+    @extend_schema(
+        responses={
+            200: VolunteerSearchSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def get(self, request, pk):
+        report = self.get_report()
+        queryset = report.volunteer_searches.select_related('volunteer').order_by(
+            '-updated_at',
+            '-created_at',
+        )
+        paginator = ReportSightingPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = VolunteerSearchSerializer(
+            page,
+            many=True,
+            context={'request': request},
+        )
+        return set_no_store_headers(paginator.get_paginated_response(serializer.data))

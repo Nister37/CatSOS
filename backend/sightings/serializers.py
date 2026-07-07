@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Sighting, SightingPhoto
+from .models import Sighting, SightingPhoto, VolunteerSearch
 from .validators import validate_sighting_photo_upload
 
 SIGHTING_NOTES_MAX_LENGTH = 2000
@@ -127,6 +127,25 @@ class SightingVerificationUpdateSerializer(serializers.Serializer):
     verification_status = serializers.ChoiceField(
         choices=Sighting.VerificationStatus.choices,
     )
+
+
+class VolunteerSearchSerializer(serializers.ModelSerializer):
+    report_public_id = serializers.UUIDField(source='report.public_id', read_only=True)
+    volunteer = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VolunteerSearch
+        fields = (
+            'id',
+            'report_public_id',
+            'volunteer',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_volunteer(self, volunteer_search) -> dict[str, str] | None:
+        return build_user_summary(volunteer_search.volunteer)
 
 
 class SightingCreateSerializer(serializers.ModelSerializer):

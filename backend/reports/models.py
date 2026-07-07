@@ -168,6 +168,10 @@ class LostCatReportTimelineEvent(models.Model):
         SIGHTING_CREATED = 'SIGHTING_CREATED', 'Sighting created'
         SIGHTING_MARKED_USEFUL = 'SIGHTING_MARKED_USEFUL', 'Sighting marked useful'
         SIGHTING_MARKED_FALSE = 'SIGHTING_MARKED_FALSE', 'Sighting marked false'
+        VOLUNTEER_SEARCH_STARTED = (
+            'VOLUNTEER_SEARCH_STARTED',
+            'Volunteer search started',
+        )
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     report = models.ForeignKey(
