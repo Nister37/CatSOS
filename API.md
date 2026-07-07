@@ -429,6 +429,8 @@ HTTP 200 OK
 
 The response body uses the same owner report shape returned by `POST /api/reports/`, with the updated `status`. A real status change also creates a `STATUS_CHANGED` timeline event with the previous status, new status, actor, location summary, and timestamp. Sending the current status again is treated as a successful no-op and does not create a duplicate timeline event.
 
+When `notify_email=true` and the status actually changes, the backend sends the owner a status-change email after the transaction commits. The email includes the cat name, previous status, new status, and public report link. It does not include exact address, chip number, contact phone, or contact email. No email is sent for same-status no-op updates.
+
 Resolved status behavior:
 
 - `FOUND` and `CLOSED` set `resolved_at` when the report first becomes resolved.

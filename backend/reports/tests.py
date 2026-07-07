@@ -799,6 +799,92 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(timeline_event.to_status, LostCatReport.Status.RECENTLY_SEEN)
         self.assertEqual(timeline_event.location_summary, 'Near the school')
 
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_status_change_sends_owner_email_after_commit_when_enabled(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.MISSING,
+            notify_email=True,
+            has_microchip=True,
+            chip_number='private-chip-123',
+        )
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                self._status_url(report),
+                {'status': LostCatReport.Status.RECENTLY_SEEN},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['owner@example.com'])
+        self.assertIn('CatSOS report status changed for Milo', email.subject)
+        self.assertIn('Missing', email.body)
+        self.assertIn('Recently seen', email.body)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('4 Oak Street', email.body)
+        self.assertNotIn('private-chip-123', email.body)
+        self.assertNotIn('+48 600 000 000', email.body)
+        self.assertNotIn('milo@example.com', email.body)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_status_change_skips_owner_email_when_notifications_disabled(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.MISSING,
+            notify_email=False,
+        )
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                self._status_url(report),
+                {'status': LostCatReport.Status.RECENTLY_SEEN},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(
+            LostCatReportTimelineEvent.objects.filter(report=report).count(),
+            1,
+        )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_same_status_update_does_not_send_status_email(self):
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.MISSING,
+            notify_email=True,
+        )
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                self._status_url(report),
+                {'status': LostCatReport.Status.MISSING},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mail.outbox, [])
+        self.assertFalse(LostCatReportTimelineEvent.objects.exists())
+
     def test_owner_can_mark_report_found_with_safe_found_message(self):
         report = self._create_report(self.owner, status=LostCatReport.Status.MISSING)
         self._authenticate(self.owner)

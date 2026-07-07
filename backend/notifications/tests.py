@@ -10,6 +10,7 @@ from sightings.models import Sighting
 
 from .services import (
     notify_owner_about_report_created,
+    notify_owner_about_report_status_changed,
     notify_owner_about_sighting_created,
 )
 
@@ -100,6 +101,70 @@ class NotificationServiceTests(TestCase):
         self.assertFalse(sent)
         self.assertIn(
             'Failed to send report creation confirmation email.',
+            logs.output[0],
+        )
+
+    def test_sends_owner_email_for_report_status_change_when_enabled(self):
+        report = self._create_report(
+            notify_email=True,
+            has_microchip=True,
+            chip_number='private-chip-123',
+        )
+
+        sent = notify_owner_about_report_status_changed(
+            report=report,
+            old_status=LostCatReport.Status.MISSING,
+            new_status=LostCatReport.Status.FOUND,
+        )
+
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['owner@example.com'])
+        self.assertEqual(email.subject, 'CatSOS report status changed for Luna')
+        self.assertIn('Luna', email.body)
+        self.assertIn('Missing', email.body)
+        self.assertIn('Found', email.body)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('12 Private Home Street', email.body)
+        self.assertNotIn('private-chip-123', email.body)
+        self.assertNotIn('+48 600 111 222', email.body)
+        self.assertNotIn('owner@example.com', email.body)
+
+    def test_skips_report_status_email_when_report_email_notifications_disabled(self):
+        report = self._create_report(notify_email=False)
+
+        sent = notify_owner_about_report_status_changed(
+            report=report,
+            old_status=LostCatReport.Status.MISSING,
+            new_status=LostCatReport.Status.FOUND,
+        )
+
+        self.assertFalse(sent)
+        self.assertEqual(mail.outbox, [])
+
+    def test_report_status_email_backend_failure_is_logged_and_does_not_raise(self):
+        report = self._create_report(notify_email=True)
+
+        with (
+            patch(
+                'notifications.services.send_mail',
+                side_effect=RuntimeError('SMTP down'),
+            ),
+            self.assertLogs('notifications.services', level='ERROR') as logs,
+        ):
+            sent = notify_owner_about_report_status_changed(
+                report=report,
+                old_status=LostCatReport.Status.MISSING,
+                new_status=LostCatReport.Status.FOUND,
+            )
+
+        self.assertFalse(sent)
+        self.assertIn(
+            'Failed to send report status change notification email.',
             logs.output[0],
         )
 
