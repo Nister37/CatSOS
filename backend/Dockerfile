@@ -17,7 +17,6 @@ RUN chown -R appuser:appuser /app
 
 FROM base AS development
 EXPOSE 8000
-USER appuser
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
 FROM base AS test
