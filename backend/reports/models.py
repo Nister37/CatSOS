@@ -56,6 +56,7 @@ class LostCatReport(models.Model):
     has_microchip = models.BooleanField(default=False)
     chip_number = models.CharField(max_length=64, blank=True)
     personality = models.TextField(blank=True)
+    public_summary = models.CharField(max_length=240, blank=True)
     description = models.TextField()
     disappeared_at = models.DateTimeField(blank=True, null=True)
     last_seen_address = models.CharField(max_length=255)

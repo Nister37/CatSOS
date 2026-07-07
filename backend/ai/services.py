@@ -23,9 +23,20 @@ DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION = (
     'reward terms, or sightings. Keep the result concise, factual, and suitable '
     'for a public lost-cat report. Return only the rewritten description.'
 )
+PUBLIC_SUMMARY_SYSTEM_INSTRUCTION = (
+    'You write short public summaries for lost-cat reports. Use only facts '
+    'provided by the user. Do not invent details, sightings, diagnoses, reward '
+    'terms, exact addresses, or contact details. Keep the summary under 35 words '
+    'and suitable for public report cards. Return only the summary.'
+)
 AI_PRIVACY_NOTICE = (
     'Private contact details are removed before AI processing. Review the '
     'suggestion before saving.'
+)
+PUBLIC_SUMMARY_MAX_LENGTH = 240
+REDACTION_MARKER_PATTERN = re.compile(
+    r'\[(?:email|phone|address) removed\]',
+    re.IGNORECASE,
 )
 
 
@@ -184,6 +195,29 @@ def sanitize_text_for_ai(text):
     return sanitized.strip()
 
 
+def _condense_text(text):
+    return ' '.join(text.split())
+
+
+def _truncate_summary(text, *, max_length=PUBLIC_SUMMARY_MAX_LENGTH):
+    text = _condense_text(text)
+    if len(text) <= max_length:
+        return text
+
+    truncated = text[: max_length - 3].rsplit(' ', 1)[0].strip()
+    return f'{truncated}...'
+
+
+def sanitize_public_summary_text(text):
+    sanitized = sanitize_text_for_ai(text)
+    sanitized = REDACTION_MARKER_PATTERN.sub('', sanitized)
+    return _truncate_summary(sanitized)
+
+
+def build_public_summary_fallback(description):
+    return sanitize_public_summary_text(description)
+
+
 def improve_lost_cat_description(*, description, client=None):
     sanitized_description = sanitize_text_for_ai(description)
     prompt = (
@@ -199,6 +233,49 @@ def improve_lost_cat_description(*, description, client=None):
     )
     return {
         'suggestion': result.text,
+        'generated_by_ai': result.generated_by_ai,
+        'requires_review': True,
+        'fallback_reason': result.error,
+        'privacy_notice': AI_PRIVACY_NOTICE,
+    }
+
+
+def generate_public_report_summary(
+    *,
+    description,
+    cat_name='',
+    coat_color='',
+    personality='',
+    last_seen_landmark='',
+    client=None,
+):
+    fact_lines = []
+    for label, value in (
+        ('Cat name', cat_name),
+        ('Coat color', coat_color),
+        ('Personality', personality),
+        ('Public landmark', last_seen_landmark),
+        ('Description', description),
+    ):
+        sanitized_value = sanitize_text_for_ai(value)
+        if sanitized_value:
+            fact_lines.append(f'{label}: {sanitized_value}')
+
+    fallback_summary = build_public_summary_fallback(description)
+    prompt = (
+        'Create one short public lost-cat summary from these facts. '
+        'Use only these facts. Do not include contact details or exact addresses.\n\n'
+        + '\n'.join(fact_lines)
+    )
+    result = generate_gemma_text(
+        prompt=prompt,
+        fallback_text=fallback_summary,
+        system_instruction=PUBLIC_SUMMARY_SYSTEM_INSTRUCTION,
+        client=client,
+    )
+    suggestion = sanitize_public_summary_text(result.text) or fallback_summary
+    return {
+        'suggestion': suggestion,
         'generated_by_ai': result.generated_by_ai,
         'requires_review': True,
         'fallback_reason': result.error,
