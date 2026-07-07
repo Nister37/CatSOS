@@ -63,7 +63,7 @@ export function SettingsPage() {
     },
   });
 
-  const onSave = async (_data: ProfileFormData) => {
+  const onSave = async () => {
     await new Promise((r) => setTimeout(r, 500));
     dispatch(addNotification('Profile editing will be available once the backend endpoint is ready.', 'info'));
   };
