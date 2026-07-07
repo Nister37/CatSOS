@@ -3,6 +3,11 @@ import { axe } from 'jest-axe';
 import { App } from './App';
 import { renderWithProviders } from './test/renderWithProviders';
 
+jest.mock('./services/reportsApi', () => ({
+  fetchPublicReports: jest.fn().mockResolvedValue([]),
+  fetchReportDetail: jest.fn().mockResolvedValue(null),
+}));
+
 describe('accessibility', () => {
   it.each([
     ['home page', '/'],

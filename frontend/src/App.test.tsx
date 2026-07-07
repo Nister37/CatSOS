@@ -4,17 +4,36 @@ import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import { renderWithProviders } from './test/renderWithProviders';
 
+jest.mock('./services/reportsApi', () => ({
+  fetchPublicReports: jest.fn().mockResolvedValue([
+    { public_id: 'r1', cat_name: 'Milo', main_photo: { url: 'https://example.com/milo.jpg' }, location_summary: 'Downtown', last_seen_landmark: '', disappeared_at: null, status: 'MISSING' },
+  ]),
+  fetchReportDetail: jest.fn().mockResolvedValue(null),
+}));
+
+describe('ScrollToTop', () => {
+  it('calls window.scrollTo(0,0) on route change', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<App />, { route: '/login' });
+
+    await user.click(screen.getByRole('link', { name: /sign up/i }));
+    await screen.findByRole('heading', { name: /join the community/i });
+
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+});
+
 describe('App', () => {
   afterEach(() => {
     document.documentElement.lang = 'en';
   });
 
-  it('renders the public home page', () => {
+  it('renders the public home page', async () => {
     renderWithProviders(<App />);
 
     expect(screen.getByRole('heading', { name: /lost your cat/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /recently reported/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /milo, a missing cat/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /milo, a missing cat/i })).toBeInTheDocument();
   });
 
   it('toggles the public mobile navigation menu state', async () => {

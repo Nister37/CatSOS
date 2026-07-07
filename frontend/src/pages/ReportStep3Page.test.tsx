@@ -3,10 +3,15 @@ import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '../test/renderWithProviders';
 import { ReportStep3Page } from './ReportStep3Page';
+import { createReport } from '../services/reportsApi';
+
+jest.mock('../services/reportsApi', () => ({
+  createReport: jest.fn(),
+}));
 
 const mockNavigate = jest.fn();
 const mockRouterState = {
-  step1: { catName: 'Luna', breedColor: 'Tuxedo', hasMicrochip: 'no' as const },
+  step1: { catName: 'Luna', coatColor: 'Black & White', description: 'Friendly tabby cat', hasMicrochip: 'no' as const },
   step2: { address: 'Baker Street, London' },
 };
 
@@ -117,45 +122,36 @@ describe('ReportStep3Page — submission', () => {
     await user.click(screen.getByRole('button', { name: /post missing report/i }));
   };
 
-  // Keep nextTick/setImmediate real so findBy* polling and Promise chains resolve
-  // normally while setTimeout is faked (controls the simulated API delay).
-  const useFakeTimersSafe = () =>
-    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+  afterEach(() => jest.useRealTimers());
 
   it('shows the "Broadcasting Alert…" loading state immediately after submit', async () => {
-    useFakeTimersSafe();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime.bind(jest) });
+    (createReport as jest.Mock).mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
     renderWithProviders(<ReportStep3Page />);
 
     await fillAndSubmit(user);
 
     expect(await screen.findByText(/broadcasting alert/i)).toBeInTheDocument();
-    jest.useRealTimers();
   });
 
-  it('transitions to the "Alert Posted!" state after the API delay', async () => {
-    useFakeTimersSafe();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime.bind(jest) });
+  it('transitions to the "Alert Posted!" state after the API resolves', async () => {
+    (createReport as jest.Mock).mockResolvedValue({});
+    const user = userEvent.setup();
     renderWithProviders(<ReportStep3Page />);
 
     await fillAndSubmit(user);
-    await screen.findByText(/broadcasting alert/i); // wait for loading to appear
-    await act(async () => { jest.advanceTimersByTime(1500); });
 
     await waitFor(() =>
       expect(screen.getByText(/alert posted/i)).toBeInTheDocument(),
     );
-    jest.useRealTimers();
   });
 
   it('dispatches a success notification containing the cat name', async () => {
-    useFakeTimersSafe();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime.bind(jest) });
+    (createReport as jest.Mock).mockResolvedValue({});
+    const user = userEvent.setup();
     const { store } = renderWithProviders(<ReportStep3Page />);
 
     await fillAndSubmit(user);
-    await screen.findByText(/broadcasting alert/i);
-    await act(async () => { jest.advanceTimersByTime(1500); });
 
     await waitFor(() => {
       const items = store.getState().notifications.items;
@@ -163,20 +159,33 @@ describe('ReportStep3Page — submission', () => {
       expect(items[0].tone).toBe('success');
       expect(items[0].message).toMatch(/luna/i);
     });
-    jest.useRealTimers();
   });
 
   it('navigates to the home page after submission completes', async () => {
-    useFakeTimersSafe();
+    (createReport as jest.Mock).mockResolvedValue({});
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime.bind(jest) });
     renderWithProviders(<ReportStep3Page />);
 
     await fillAndSubmit(user);
-    await screen.findByText(/broadcasting alert/i);
-    await act(async () => { jest.advanceTimersByTime(1500); });
+    await waitFor(() => expect(screen.getByText(/alert posted/i)).toBeInTheDocument());
     await act(async () => { jest.advanceTimersByTime(800); });
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
-    jest.useRealTimers();
+  });
+
+  it('dispatches an error notification and re-enables the submit button when the API fails', async () => {
+    (createReport as jest.Mock).mockRejectedValue({ detail: 'Server error' });
+    const user = userEvent.setup();
+    const { store } = renderWithProviders(<ReportStep3Page />);
+
+    await fillAndSubmit(user);
+
+    await waitFor(() => {
+      const items = store.getState().notifications.items;
+      expect(items).toHaveLength(1);
+      expect(items[0].tone).toBe('error');
+    });
+    expect(screen.getByRole('button', { name: /post missing report/i })).not.toBeDisabled();
   });
 });

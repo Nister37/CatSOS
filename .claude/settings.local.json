@@ -8,7 +8,9 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Better\\\\Desktop\\\\coding\\\\CatSOS\\\\backend\" -Recurse -File)",
-      "Bash(yarn lint *)"
+      "Bash(yarn lint *)",
+      "Bash(yarn test:ci -- --testPathPattern=\"reportStep1Schema|ReportStep1Page|ReportStep2Page|ReportStep3Page\")",
+      "Bash(yarn jest *)"
     ]
   }
 }

@@ -1,10 +1,19 @@
 import { reportStep1Schema } from './reportStep1Schema';
 
 describe('reportStep1Schema', () => {
-  const base = { catName: 'Luna', breedColor: 'Tuxedo', hasMicrochip: 'no' as const };
+  const base = {
+    catName: 'Luna',
+    coatColor: 'Black & White',
+    description: 'Friendly cat with a white patch on chest',
+    hasMicrochip: 'no' as const,
+  };
 
   it('accepts valid data with hasMicrochip: no', () => {
     expect(reportStep1Schema.safeParse(base).success).toBe(true);
+  });
+
+  it('accepts valid data with optional breed', () => {
+    expect(reportStep1Schema.safeParse({ ...base, breed: 'Tuxedo' }).success).toBe(true);
   });
 
   it('accepts valid data with hasMicrochip: yes and a chip number', () => {
@@ -30,11 +39,18 @@ describe('reportStep1Schema', () => {
     expect(paths).toContain('catName');
   });
 
-  it('rejects empty breedColor', () => {
-    const result = reportStep1Schema.safeParse({ ...base, breedColor: '' });
+  it('rejects empty coatColor', () => {
+    const result = reportStep1Schema.safeParse({ ...base, coatColor: '' });
     expect(result.success).toBe(false);
     const paths = result.error?.issues.map((i) => i.path[0]);
-    expect(paths).toContain('breedColor');
+    expect(paths).toContain('coatColor');
+  });
+
+  it('rejects description shorter than 5 characters', () => {
+    const result = reportStep1Schema.safeParse({ ...base, description: 'Hi' });
+    expect(result.success).toBe(false);
+    const paths = result.error?.issues.map((i) => i.path[0]);
+    expect(paths).toContain('description');
   });
 
   it('rejects an invalid hasMicrochip value', () => {
