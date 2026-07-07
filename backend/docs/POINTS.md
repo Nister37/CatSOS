@@ -41,3 +41,21 @@ on their own reports.
 - Public profile responses should expose only safe badge labels, not internal
 transaction metadata or idempotency keys.
 - Admins can inspect transactions and badge awards through Django Admin.
+
+## Leaderboard API
+
+`GET /api/points/leaderboard/` returns a paginated public-safe leaderboard of
+active, email-verified users with at least one contribution point.
+
+Each result includes:
+
+- `rank`
+- `id`
+- `display_name`
+- `profile_picture_url`
+- `avatar_fallback`
+- `points`
+- `badges`
+
+The endpoint does not expose private emails, private phone numbers, point
+transaction metadata, idempotency keys, or account verification data.
