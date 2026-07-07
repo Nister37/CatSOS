@@ -13,14 +13,17 @@ class PointRule:
 class BadgeRule:
     code: str
     label: str
-    minimum_points: int
+    minimum_points: int | None
     description: str
+    is_point_threshold: bool = True
 
 
 SIGHTING_SUBMITTED = 'SIGHTING_SUBMITTED'
 SIGHTING_MARKED_USEFUL = 'SIGHTING_MARKED_USEFUL'
 VOLUNTEER_SEARCH_STARTED = 'VOLUNTEER_SEARCH_STARTED'
 HELPFUL_REPORT_UPDATE = 'HELPFUL_REPORT_UPDATE'
+TRUSTED_REPORTER = 'TRUSTED_REPORTER'
+TRUSTED_REPORTER_USEFUL_SIGHTING_COUNT = 3
 
 
 POINT_RULES = (
@@ -79,10 +82,22 @@ BADGE_RULES = (
         minimum_points=150,
         description='Earned by high-signal, sustained community help.',
     ),
+    BadgeRule(
+        code=TRUSTED_REPORTER,
+        label='Trusted reporter',
+        minimum_points=None,
+        description='Earned after repeated sightings are marked useful.',
+        is_point_threshold=False,
+    ),
 )
 
 BADGE_RULES_BY_CODE = {rule.code: rule for rule in BADGE_RULES}
 BADGE_RULE_CHOICES = tuple((rule.code, rule.label) for rule in BADGE_RULES)
+POINT_THRESHOLD_BADGE_RULES = tuple(
+    rule
+    for rule in BADGE_RULES
+    if rule.is_point_threshold
+)
 
 
 def get_point_rule(reason):
@@ -96,7 +111,7 @@ def get_badge_rule(code):
 def get_badge_rules_for_points(total_points):
     return tuple(
         rule
-        for rule in BADGE_RULES
+        for rule in POINT_THRESHOLD_BADGE_RULES
         if total_points >= rule.minimum_points
     )
 

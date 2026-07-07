@@ -8,6 +8,7 @@ from notifications.services import (
 from points.services import (
     award_sighting_marked_useful_points,
     award_sighting_submitted_points,
+    award_trusted_reporter_badge_for_useful_sighting,
     award_volunteer_search_started_points,
 )
 from reports.models import LostCatReportTimelineEvent
@@ -107,6 +108,7 @@ def update_sighting_verification(*, sighting, actor, verification_status):
             )
             if verification_status == Sighting.VerificationStatus.USEFUL:
                 award_sighting_marked_useful_points(sighting=sighting)
+                award_trusted_reporter_badge_for_useful_sighting(sighting=sighting)
             enqueue_sighting_verification_notification(
                 sighting=sighting,
                 actor=actor,

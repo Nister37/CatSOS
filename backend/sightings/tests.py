@@ -20,6 +20,7 @@ from points.models import PointTransaction, UserBadge
 from points.rules import (
     SIGHTING_MARKED_USEFUL,
     SIGHTING_SUBMITTED,
+    TRUSTED_REPORTER,
     VOLUNTEER_SEARCH_STARTED,
 )
 from reports.models import LostCatReport, LostCatReportTimelineEvent
@@ -514,6 +515,45 @@ class SightingCreateApiTests(APITestCase):
             ).count(),
             1,
         )
+
+    def test_trusted_reporter_badge_awarded_after_repeated_useful_sightings(self):
+        report = self._create_report()
+        first_sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(location_description='First useful sighting'),
+        )
+        second_sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(location_description='Second useful sighting'),
+        )
+        threshold_sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(location_description='Third useful sighting'),
+        )
+        for sighting in (first_sighting, second_sighting):
+            sighting.verification_status = Sighting.VerificationStatus.USEFUL
+            sighting.verified_by = self.owner
+            sighting.verified_at = timezone.now()
+            sighting.save(
+                update_fields=('verification_status', 'verified_by', 'verified_at'),
+            )
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._verification_url(report, threshold_sighting),
+            {'verification_status': Sighting.VerificationStatus.USEFUL},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.helper.refresh_from_db()
+        badge = UserBadge.objects.get(user=self.helper, code=TRUSTED_REPORTER)
+        self.assertEqual(badge.label, 'Trusted reporter')
+        self.assertEqual(badge.metadata, {'useful_sighting_count': 3})
+        self.assertIn('Trusted reporter', self.helper.public_badges)
 
     def test_owner_does_not_earn_helper_points_for_own_sighting(self):
         report = self._create_report(status=LostCatReport.Status.MISSING)
