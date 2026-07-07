@@ -45,6 +45,18 @@ export function SheltersPage() {
             Connect with trusted shelters and veterinary clinics in your immediate area to ensure
             the safety and well-being of our feline friends.
           </p>
+          <div
+            className="mt-md flex max-w-2xl gap-3 rounded-xl border border-[#E0A526]/30 bg-[#FFF7E6] p-4 text-on-background"
+            role="note"
+            aria-label="Nearby help data warning"
+          >
+            <span className="material-symbols-outlined text-[#8A5A00]" aria-hidden="true">
+              warning
+            </span>
+            <p className="font-body-md text-body-md">
+              <strong>Data may be incomplete.</strong> Call before visiting.
+            </p>
+          </div>
         </section>
 
         {/* Search & Filter */}
@@ -199,10 +211,10 @@ export function SheltersPage() {
                 <span className="material-symbols-outlined text-[32px]">volunteer_activism</span>
               </div>
               <div>
-                <h4 className="font-bold text-lg mb-1">Verified Partners</h4>
+                <h4 className="font-bold text-lg mb-1">Call Ahead</h4>
                 <p className="text-secondary text-sm">
-                  All listed shelters and vets are manually verified by our team for safety and
-                  professionalism.
+                  Listings can change quickly. Confirm opening hours, services, and appointment
+                  rules before you go.
                 </p>
               </div>
             </div>
