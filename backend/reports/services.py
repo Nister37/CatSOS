@@ -167,6 +167,15 @@ def build_report_location_summary(report):
     return report.last_seen_landmark or report.last_seen_address
 
 
+def create_report_created_timeline_event(*, report, actor):
+    return LostCatReportTimelineEvent.objects.create(
+        report=report,
+        actor=actor,
+        event_type=LostCatReportTimelineEvent.EventType.REPORT_CREATED,
+        location_summary=build_report_location_summary(report),
+    )
+
+
 @transaction.atomic
 def change_report_status(*, report, actor, new_status, found_message=None):
     old_status = report.status

@@ -66,6 +66,33 @@ def get_report_main_photo(report):
     return next(iter(photos), None)
 
 
+def get_latest_confirmed_sighting(report):
+    from sightings.models import Sighting
+
+    return (
+        report.sightings.filter(
+            verification_status=Sighting.VerificationStatus.USEFUL,
+        )
+        .order_by('-seen_at', '-created_at')
+        .first()
+    )
+
+
+class LostCatReportLatestSightingSerializer(serializers.Serializer):
+    seen_at = serializers.DateTimeField(read_only=True)
+    location_description = serializers.CharField(read_only=True)
+    latitude = serializers.FloatField(read_only=True)
+    longitude = serializers.FloatField(read_only=True)
+    confidence = serializers.CharField(read_only=True)
+
+
+def serialize_latest_confirmed_sighting(report) -> dict | None:
+    sighting = get_latest_confirmed_sighting(report)
+    if sighting is None:
+        return None
+    return LostCatReportLatestSightingSerializer(sighting).data
+
+
 class LostCatReportOwnerSerializer(serializers.ModelSerializer):
     is_active_search = serializers.BooleanField(read_only=True)
 
@@ -328,6 +355,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
     is_active_search = serializers.BooleanField(read_only=True)
     approximate_location = serializers.SerializerMethodField()
     contact = serializers.SerializerMethodField()
+    latest_sighting = serializers.SerializerMethodField()
     main_photo = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
     timeline = serializers.SerializerMethodField()
@@ -356,6 +384,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
             'resolved_at',
             'is_active_search',
             'contact',
+            'latest_sighting',
             'main_photo',
             'photos',
             'timeline',
@@ -386,6 +415,9 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
             'instructions': instructions,
         }
 
+    def get_latest_sighting(self, report) -> dict | None:
+        return serialize_latest_confirmed_sighting(report)
+
     def get_main_photo(self, report) -> dict | None:
         return serialize_report_photo(
             get_report_main_photo(report),
@@ -404,7 +436,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
         return photos
 
     def get_timeline(self, report) -> list[dict]:
-        timeline_events = report.timeline_events.all()[:20]
+        timeline_events = report.timeline_events.order_by('created_at')[:20]
         return LostCatReportPublicTimelineEventSerializer(
             timeline_events,
             many=True,
@@ -450,7 +482,7 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
         return f'/api/public/reports/{report.public_id}/'
 
     def get_latest_sighting(self, report) -> dict | None:
-        return None
+        return serialize_latest_confirmed_sighting(report)
 
     def get_location_summary(self, report) -> str:
         if report.last_seen_landmark:

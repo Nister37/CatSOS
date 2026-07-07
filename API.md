@@ -56,8 +56,11 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `POST` | [`/api/reports/{id}/photos/`](#post-apireportsidphotos) | JWT | `201` | Upload an additional photo for one authenticated owner's report. |
 | `PATCH` | [`/api/reports/{id}/photos/{photo_id}/main/`](#patch-apireportsidphotosphotoidmain) | JWT | `200` | Set one report photo as the main photo. |
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
+| `GET` | [`/api/reports/{id}/sightings/`](#get-apireportsidsightings) | JWT | `200` | List sightings for one owned report. |
+| `PATCH` | [`/api/reports/{id}/sightings/{sighting_id}/verification/`](#patch-apireportsidsightingssightingidverification) | JWT | `200` | Mark one sighting as pending, useful, or false. |
 | `GET` | [`/api/public/reports/`](#get-apipublicreports) | Public | `200` | Browse public-safe lost cat report cards. |
 | `GET` | [`/api/public/reports/{public_id}/`](#get-apipublicreportspublicid) | Public | `200` | View public-safe lost cat report details. |
+| `POST` | [`/api/public/reports/{public_id}/sightings/`](#post-apipublicreportspublicidsightings) | JWT | `201` | Submit an authenticated sighting for a public report. |
 | `POST` | [`/api/auth/register/`](#post-apiauthregister) | Public | `201` | Create an unverified account and send an 8-digit email code. |
 | `POST` | [`/api/auth/verify-email/`](#post-apiauthverify-email) | Public | `200` | Verify the 8-digit email code and return JWT tokens. |
 | `POST` | [`/api/auth/verification/resend/`](#post-apiauthverificationresend) | Public | `200` | Resend the verification code after the 120-second cooldown. |
@@ -428,14 +431,14 @@ Resolved status behavior:
 - `found_message` is accepted only for `FOUND` or `CLOSED`.
 - `found_message` is limited to 500 characters and rejects obvious email addresses or phone numbers because it may be shown publicly later.
 
-Public report pages are not implemented yet. When CAT-022 adds them, they should read this canonical report `status`.
+Public report pages read this canonical report `status`.
 
 <a id="get-apireportsidtimeline"></a>
 ### List My Lost Cat Report Timeline
 
 `GET /api/reports/{id}/timeline/`
 
-Returns timeline events for one report owned by the authenticated user. Reports owned by another user return `404 Not Found`.
+Returns timeline events for one report owned by the authenticated user in chronological order. Reports owned by another user return `404 Not Found`.
 
 The response is paginated:
 
@@ -447,6 +450,30 @@ The response is paginated:
   "results": [
     {
       "id": "45e87e07-5e11-4c3f-9a78-88914f66ccdf",
+      "event_type": "REPORT_CREATED",
+      "from_status": "",
+      "to_status": "",
+      "location_summary": "Near the playground",
+      "actor": {
+        "display_name": "Marta Owner",
+        "avatar_fallback": "MO"
+      },
+      "created_at": "2026-07-06T10:00:00Z"
+    },
+    {
+      "id": "cf86cf49-c3d1-468a-91d0-3b551624d743",
+      "event_type": "SIGHTING_CREATED",
+      "from_status": "",
+      "to_status": "",
+      "location_summary": "Behind the bakery",
+      "actor": {
+        "display_name": "Helpful Neighbor",
+        "avatar_fallback": "HN"
+      },
+      "created_at": "2026-07-06T10:20:00Z"
+    },
+    {
+      "id": "1cb21c2b-4be2-49f5-9a42-603088868c6f",
       "event_type": "STATUS_CHANGED",
       "from_status": "MISSING",
       "to_status": "RECENTLY_SEEN",
@@ -462,6 +489,16 @@ The response is paginated:
 ```
 
 Timeline actor data is intentionally public-safe and does not expose account email, phone, password state, or moderation fields.
+
+Timeline event types currently include:
+
+```text
+REPORT_CREATED
+SIGHTING_CREATED
+SIGHTING_MARKED_FALSE
+SIGHTING_MARKED_USEFUL
+STATUS_CHANGED
+```
 
 <a id="get-apireportsidsimilar"></a>
 ### List Similar Nearby Reports
@@ -649,7 +686,13 @@ Success response:
       "found_message": "",
       "resolved_at": null,
       "is_active_search": true,
-      "latest_sighting": null,
+      "latest_sighting": {
+        "seen_at": "2026-07-06T10:35:00Z",
+        "location_description": "Behind the bakery",
+        "latitude": 52.2297,
+        "longitude": 21.0122,
+        "confidence": "HIGH"
+      },
       "main_photo": {
         "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
       },
@@ -659,7 +702,7 @@ Success response:
 }
 ```
 
-`main_photo` is `null` when the report has no main photo. When present, it contains only a `url` key with an absolute media URL. `latest_sighting` is currently `null` until the sightings API is implemented. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, contact fields, notification preferences, moderation fields, and timeline data. Hidden moderated reports are excluded.
+`main_photo` is `null` when the report has no main photo. When present, it contains only a `url` key with an absolute media URL. `latest_sighting` is `null` until an owner or staff user marks a sighting as `USEFUL`; when present, it contains public-safe sighting time, location, coordinates, and confidence only. `detail_url` points to the public report detail API for the card. Public list responses exclude owner IDs, exact address, chip number, direct contact fields, notification preferences, moderation fields, sighting notes, sighting photos, helper identity, and timeline data. Hidden moderated reports are excluded.
 
 <a id="get-apipublicreportspublicid"></a>
 ### Public Lost Cat Report Detail
@@ -700,6 +743,13 @@ Success response:
     "visibility": "APP_ONLY",
     "instructions": "Log in to CatSOS to submit a sighting."
   },
+  "latest_sighting": {
+    "seen_at": "2026-07-06T10:35:00Z",
+    "location_description": "Behind the bakery",
+    "latitude": 52.2297,
+    "longitude": 21.0122,
+    "confidence": "HIGH"
+  },
   "main_photo": {
     "url": "http://localhost:8000/media/lost-cat-report-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg"
   },
@@ -730,9 +780,183 @@ Privacy behavior:
 - Hidden moderated reports return `404 Not Found`.
 - The response does not include internal report `id`, owner ID, owner email, exact `last_seen_address`, `chip_number`, notification preferences, or moderation fields.
 - Coordinates are rounded and marked approximate.
-- Timeline entries do not expose actor private data or location summaries.
+- Timeline entries are chronological and do not expose actor private data or location summaries.
+- `latest_sighting` is based only on sightings marked `USEFUL` and does not expose helper identity, notes, or photos.
 - `main_photo` is `null` when no main photo exists. When present, it contains only `url`.
 - `photos` contains URL-only photo objects and does not expose internal IDs, storage paths, original filenames, or owner data.
+
+<a id="post-apipublicreportspublicidsightings"></a>
+### Submit Sighting For Public Report
+
+`POST /api/public/reports/{public_id}/sightings/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Creates a pending sighting for a non-hidden active report. Guests cannot submit sightings. Hidden reports return `404 Not Found`; `FOUND` and `CLOSED` reports return `400 Bad Request`.
+
+Accepts either `application/json` for text-only sightings or `multipart/form-data` when attaching a photo. For multipart requests, send the existing sighting fields as form fields and the image file under the field name `photo`.
+
+Request:
+
+```json
+{
+  "seen_at": "2026-07-06T10:35:00Z",
+  "location_description": "Behind the bakery",
+  "latitude": 52.2297,
+  "longitude": 21.0122,
+  "confidence": "HIGH",
+  "notes": "The cat was walking slowly toward the courtyard."
+}
+```
+
+Multipart photo field:
+
+```text
+photo=<JPEG, PNG, or WebP file>
+```
+
+Success response:
+
+```json
+{
+  "id": "2ad10db8-0ac1-48ce-9c81-3cbaf356779d",
+  "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "seen_at": "2026-07-06T10:35:00Z",
+  "location_description": "Behind the bakery",
+  "latitude": 52.2297,
+  "longitude": 21.0122,
+  "confidence": "HIGH",
+  "notes": "The cat was walking slowly toward the courtyard.",
+  "photos": [
+    {
+      "id": "4e0987ad-6544-4564-8d8e-d7c2a48ceca8",
+      "url": "http://localhost:8000/media/sighting-photos/f7c9f1a2c80d4c1aa9c5cc14e0f81234.jpg",
+      "created_at": "2026-07-06T10:36:00Z"
+    }
+  ],
+  "verification_status": "PENDING",
+  "created_at": "2026-07-06T10:36:00Z"
+}
+```
+
+Confidence values:
+
+```text
+LOW
+MEDIUM
+HIGH
+```
+
+Validation behavior:
+
+- `seen_at` cannot be in the future beyond a small clock-skew tolerance.
+- `latitude` must be between `-90` and `90`.
+- `longitude` must be between `-180` and `180`.
+- `notes` are limited to 2000 characters.
+- Optional `photo` uploads allow JPEG, PNG, and WebP only, verify image bytes with Pillow, and use `DJANGO_SIGHTING_PHOTO_MAX_SIZE_BYTES` for the max size.
+
+Successful submission creates a `SIGHTING_CREATED` report timeline event. Sighting photo responses expose only photo IDs, absolute media URLs, and timestamps; they do not expose original filenames, storage paths, or uploader private data.
+
+<a id="get-apireportsidsightings"></a>
+### List Report Sightings
+
+`GET /api/reports/{id}/sightings/`
+
+Returns sightings for one report. The report owner can list sightings for their own report. Staff users can list sightings for any report. Other users receive `404 Not Found`.
+
+The response is paginated:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": "2ad10db8-0ac1-48ce-9c81-3cbaf356779d",
+      "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+      "seen_at": "2026-07-06T10:35:00Z",
+      "location_description": "Behind the bakery",
+      "latitude": 52.2297,
+      "longitude": 21.0122,
+      "confidence": "HIGH",
+      "notes": "The cat was walking slowly toward the courtyard.",
+      "photos": [],
+      "verification_status": "FALSE",
+      "created_at": "2026-07-06T10:36:00Z",
+      "submitted_by": {
+        "display_name": "Helpful Neighbor",
+        "avatar_fallback": "HN"
+      },
+      "verified_by": {
+        "display_name": "Marta Owner",
+        "avatar_fallback": "MO"
+      },
+      "verified_at": "2026-07-06T10:45:00Z",
+      "updated_at": "2026-07-06T10:45:00Z"
+    }
+  ]
+}
+```
+
+False sightings remain visible through this owner/admin endpoint. Submitter and verifier summaries are public-safe and do not expose account email or phone.
+
+<a id="patch-apireportsidsightingssightingidverification"></a>
+### Verify Or Reject Report Sighting
+
+`PATCH /api/reports/{id}/sightings/{sighting_id}/verification/`
+
+The report owner or a staff user can update a sighting verification status.
+
+Request:
+
+```json
+{
+  "verification_status": "USEFUL"
+}
+```
+
+Allowed values:
+
+```text
+PENDING
+USEFUL
+FALSE
+```
+
+Success response:
+
+```json
+{
+  "id": "2ad10db8-0ac1-48ce-9c81-3cbaf356779d",
+  "report_public_id": "80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "seen_at": "2026-07-06T10:35:00Z",
+  "location_description": "Behind the bakery",
+  "latitude": 52.2297,
+  "longitude": 21.0122,
+  "confidence": "HIGH",
+  "notes": "The cat was walking slowly toward the courtyard.",
+  "photos": [],
+  "verification_status": "USEFUL",
+  "created_at": "2026-07-06T10:36:00Z",
+  "submitted_by": {
+    "display_name": "Helpful Neighbor",
+    "avatar_fallback": "HN"
+  },
+  "verified_by": {
+    "display_name": "Marta Owner",
+    "avatar_fallback": "MO"
+  },
+  "verified_at": "2026-07-06T10:45:00Z",
+  "updated_at": "2026-07-06T10:45:00Z"
+}
+```
+
+Changing a sighting to `USEFUL` creates a `SIGHTING_MARKED_USEFUL` timeline event and makes it eligible for the public `latest_sighting` summary. Changing a sighting to `FALSE` creates a `SIGHTING_MARKED_FALSE` timeline event and excludes it from `latest_sighting`. Setting `verification_status` back to `PENDING` clears `verified_by` and `verified_at`.
 
 ## Auth Payloads
 
@@ -1761,6 +1985,7 @@ Default local rates:
 | Public profile | `120/minute` |
 | Lost report read | `120/minute` |
 | Lost report write | `30/minute` |
+| Sighting write | `30/minute` |
 | Password reset per email | `5/hour` |
 | Password reset per IP | `10/hour` |
 
@@ -1778,6 +2003,7 @@ DJANGO_AUTH_SSO_LINK_RATE=20/minute
 DJANGO_PUBLIC_PROFILE_RATE=120/minute
 DJANGO_LOST_REPORT_READ_RATE=120/minute
 DJANGO_LOST_REPORT_WRITE_RATE=30/minute
+DJANGO_SIGHTING_WRITE_RATE=30/minute
 DJANGO_PASSWORD_RESET_EMAIL_RATE_LIMIT_PER_HOUR=5
 DJANGO_PASSWORD_RESET_IP_RATE_LIMIT_PER_HOUR=10
 ```
