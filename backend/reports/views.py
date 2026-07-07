@@ -25,10 +25,10 @@ from .serializers import (
 )
 from .services import (
     change_report_status,
-    create_report_created_timeline_event,
     create_report_photo,
     delete_report_photo,
     find_similar_reports,
+    handle_report_created,
     set_main_report_photo,
 )
 
@@ -139,7 +139,7 @@ class LostCatReportListCreateView(LostCatReportBaseView):
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             report = serializer.save(owner=request.user)
-            create_report_created_timeline_event(
+            handle_report_created(
                 report=report,
                 actor=request.user,
             )

@@ -4,6 +4,8 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
+from notifications.services import enqueue_report_created_notification
+
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
 RESOLVED_REPORT_STATUSES = {
@@ -174,6 +176,15 @@ def create_report_created_timeline_event(*, report, actor):
         event_type=LostCatReportTimelineEvent.EventType.REPORT_CREATED,
         location_summary=build_report_location_summary(report),
     )
+
+
+def handle_report_created(*, report, actor):
+    timeline_event = create_report_created_timeline_event(
+        report=report,
+        actor=actor,
+    )
+    enqueue_report_created_notification(report=report)
+    return timeline_event
 
 
 @transaction.atomic

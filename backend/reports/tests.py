@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -189,6 +190,38 @@ class LostCatReportCreateApiTests(APITestCase):
         )
         self.assertEqual(timeline_event.actor, self.owner)
         self.assertEqual(timeline_event.location_summary, 'Near the playground')
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_create_report_sends_owner_confirmation_email_after_commit(self):
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('lost-report-list'),
+                self._payload(
+                    notify_email=False,
+                    chip_number='private-chip-123',
+                ),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        report = LostCatReport.objects.get()
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['owner@example.com'])
+        self.assertIn('CatSOS report published for Luna', email.subject)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('12 Maple Street', email.body)
+        self.assertNotIn('private-chip-123', email.body)
+        self.assertNotIn('+48 600 111 222', email.body)
+        self.assertNotIn('owner@example.com', email.body)
 
     def test_authenticated_owner_can_create_report_with_main_photo(self):
         self._authenticate(self.owner)

@@ -191,6 +191,8 @@ active=true
 
 Accepts either `application/json` for text-only report creation or `multipart/form-data` when uploading the first report photo. For multipart requests, send the existing report fields as form fields and the image file under the field name `photo`.
 
+When creation succeeds, the backend sends a transactional confirmation email to the report owner's account email after the report transaction commits. The email includes the cat name and public report link. It does not include exact address, chip number, contact phone, or contact email. This creation confirmation is separate from future `notify_email` sighting/status preferences.
+
 JSON request:
 
 ```json

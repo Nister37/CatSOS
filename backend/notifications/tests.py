@@ -8,14 +8,17 @@ from django.utils import timezone
 from reports.models import LostCatReport
 from sightings.models import Sighting
 
-from .services import notify_owner_about_sighting_created
+from .services import (
+    notify_owner_about_report_created,
+    notify_owner_about_sighting_created,
+)
 
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
     FRONTEND_URL='https://app.catsos.example',
 )
-class SightingNotificationServiceTests(TestCase):
+class NotificationServiceTests(TestCase):
     def setUp(self):
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
@@ -57,6 +60,48 @@ class SightingNotificationServiceTests(TestCase):
         }
         defaults.update(overrides)
         return Sighting.objects.create(**defaults)
+
+    def test_sends_owner_email_for_report_creation_confirmation(self):
+        report = self._create_report(
+            notify_email=False,
+            has_microchip=True,
+            chip_number='private-chip-123',
+        )
+
+        sent = notify_owner_about_report_created(report=report)
+
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['owner@example.com'])
+        self.assertEqual(email.subject, 'CatSOS report published for Luna')
+        self.assertIn('Luna', email.body)
+        self.assertIn(
+            f'https://app.catsos.example/reports/{report.public_id}',
+            email.body,
+        )
+        self.assertNotIn('12 Private Home Street', email.body)
+        self.assertNotIn('private-chip-123', email.body)
+        self.assertNotIn('+48 600 111 222', email.body)
+        self.assertNotIn('owner@example.com', email.body)
+
+    def test_report_creation_email_backend_failure_is_logged_and_does_not_raise(self):
+        report = self._create_report()
+
+        with (
+            patch(
+                'notifications.services.send_mail',
+                side_effect=RuntimeError('SMTP down'),
+            ),
+            self.assertLogs('notifications.services', level='ERROR') as logs,
+        ):
+            sent = notify_owner_about_report_created(report=report)
+
+        self.assertFalse(sent)
+        self.assertIn(
+            'Failed to send report creation confirmation email.',
+            logs.output[0],
+        )
 
     def test_sends_owner_email_for_new_sighting_when_enabled(self):
         report = self._create_report()
