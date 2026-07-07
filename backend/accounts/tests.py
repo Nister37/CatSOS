@@ -16,6 +16,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework.throttling import ScopedRateThrottle
 
+from points.models import UserBadge
+
 from .models import SocialAccount
 from .services import (
     PASSWORD_CHANGE_SUCCESS_DETAIL,
@@ -200,18 +202,24 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
 
-    def test_current_user_returns_notification_preferences(self):
+    def test_current_user_returns_notification_preferences_points_and_badges(self):
         user = self._create_verified_user()
         user.notify_report_created_email = False
         user.notify_sighting_created_email = True
         user.notify_report_status_changed_email = False
+        user.contribution_points = 35
+        user.public_badges = ['Manual community badge']
         user.save(
             update_fields=(
                 'notify_report_created_email',
                 'notify_sighting_created_email',
                 'notify_report_status_changed_email',
+                'contribution_points',
+                'public_badges',
             )
         )
+        UserBadge.objects.create(user=user, code='FIRST_HELP', label='First help')
+        UserBadge.objects.create(user=user, code='NEIGHBOR_HELPER', label='Neighbor helper')
         self._authenticate(user)
 
         response = self.client.get(reverse('account-me'))
@@ -220,6 +228,12 @@ class AccountAuthApiTests(APITestCase):
         self.assertFalse(response.data['notify_report_created_email'])
         self.assertTrue(response.data['notify_sighting_created_email'])
         self.assertFalse(response.data['notify_report_status_changed_email'])
+        self.assertEqual(response.data['points'], 35)
+        self.assertEqual(
+            response.data['badges'],
+            ['Manual community badge', 'First help', 'Neighbor helper'],
+        )
+        self.assertNotIn('point_transactions', response.data)
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
 
