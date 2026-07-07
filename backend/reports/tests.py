@@ -1,3 +1,4 @@
+from datetime import timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -1352,6 +1353,128 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertNotIn('id', card['main_photo'])
         self.assertNotIn('image', card['main_photo'])
         self.assertNotIn('path', card['main_photo'])
+
+    def test_public_report_list_prefers_confirmed_sighting_over_newer_pending(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Active Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        now = timezone.now()
+        confirmed_sighting = create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': now - timedelta(hours=2),
+                'location_description': 'Confirmed near the school',
+                'latitude': 52.22,
+                'longitude': 21.01,
+                'confidence': Sighting.Confidence.HIGH,
+                'notes': 'Owner confirmed this one.',
+            },
+        )
+        confirmed_sighting.verification_status = Sighting.VerificationStatus.USEFUL
+        confirmed_sighting.save(update_fields=('verification_status',))
+        create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': now - timedelta(minutes=10),
+                'location_description': 'Unverified near the bakery',
+                'latitude': 52.23,
+                'longitude': 21.02,
+                'confidence': Sighting.Confidence.MEDIUM,
+                'notes': 'Newer but not confirmed yet.',
+            },
+        )
+
+        response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest_sighting = response.data['results'][0]['latest_sighting']
+        self.assertEqual(
+            latest_sighting['location_description'],
+            'Confirmed near the school',
+        )
+        self.assertEqual(latest_sighting['latitude'], 52.22)
+        self.assertEqual(latest_sighting['longitude'], 21.01)
+        self.assertEqual(latest_sighting['confidence'], Sighting.Confidence.HIGH)
+        self.assertEqual(
+            latest_sighting['verification_status'],
+            Sighting.VerificationStatus.USEFUL,
+        )
+
+    def test_public_report_list_and_detail_fall_back_to_latest_pending_sighting(self):
+        report = self._create_report(
+            self.owner,
+            cat_name='Active Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        now = timezone.now()
+        create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': now - timedelta(hours=2),
+                'location_description': 'Older pending sighting',
+                'latitude': 52.20,
+                'longitude': 21.00,
+                'confidence': Sighting.Confidence.LOW,
+                'notes': 'Older pending note.',
+            },
+        )
+        latest_pending_sighting = create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': now - timedelta(minutes=20),
+                'location_description': 'Latest pending sighting',
+                'latitude': 52.24,
+                'longitude': 21.03,
+                'confidence': Sighting.Confidence.MEDIUM,
+                'notes': 'Private pending note.',
+            },
+        )
+        false_sighting = create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': now - timedelta(minutes=5),
+                'location_description': 'False sighting should be ignored',
+                'latitude': 52.25,
+                'longitude': 21.04,
+                'confidence': Sighting.Confidence.HIGH,
+                'notes': 'Owner rejected this one.',
+            },
+        )
+        false_sighting.verification_status = Sighting.VerificationStatus.FALSE
+        false_sighting.save(update_fields=('verification_status',))
+
+        list_response = self.client.get(self._public_list_url())
+        detail_response = self.client.get(self._public_url(report))
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        list_latest_sighting = list_response.data['results'][0]['latest_sighting']
+        self.assertEqual(
+            list_latest_sighting['location_description'],
+            latest_pending_sighting.location_description,
+        )
+        self.assertEqual(list_latest_sighting['latitude'], latest_pending_sighting.latitude)
+        self.assertEqual(list_latest_sighting['longitude'], latest_pending_sighting.longitude)
+        self.assertEqual(list_latest_sighting['confidence'], Sighting.Confidence.MEDIUM)
+        self.assertEqual(
+            list_latest_sighting['verification_status'],
+            Sighting.VerificationStatus.PENDING,
+        )
+        self.assertNotIn('submitted_by', list_latest_sighting)
+        self.assertNotIn('notes', list_latest_sighting)
+        self.assertNotIn('photos', list_latest_sighting)
+
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            detail_response.data['latest_sighting']['location_description'],
+            latest_pending_sighting.location_description,
+        )
 
     def test_public_report_list_can_filter_resolved_reports(self):
         self._create_report(
