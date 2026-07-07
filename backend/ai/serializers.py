@@ -67,3 +67,11 @@ class PublicSummaryResponseSerializer(serializers.Serializer):
     requires_review = serializers.BooleanField()
     fallback_reason = serializers.CharField(allow_blank=True)
     privacy_notice = serializers.CharField()
+
+
+class PosterTextSuggestionResponseSerializer(serializers.Serializer):
+    suggestion = serializers.CharField()
+    generated_by_ai = serializers.BooleanField()
+    requires_review = serializers.BooleanField()
+    fallback_reason = serializers.CharField(allow_blank=True)
+    privacy_notice = serializers.CharField()
