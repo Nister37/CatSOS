@@ -25,6 +25,8 @@ Django backend for the CatSOS API.
 - Public lost cat report list: `http://localhost:8000/api/public/reports/`
 - Public lost cat report detail: `http://localhost:8000/api/public/reports/<public_id>/`
 - Submit public report sighting: `http://localhost:8000/api/public/reports/<public_id>/sightings/`
+- Mark searching nearby: `http://localhost:8000/api/public/reports/<public_id>/volunteer-searches/`
+- Report volunteer searches: `http://localhost:8000/api/reports/<id>/volunteer-searches/`
 - Account registration: `http://localhost:8000/api/auth/register/`
 - Account email verification: `http://localhost:8000/api/auth/verify-email/`
 - Resend verification code: `http://localhost:8000/api/auth/verification/resend/`
@@ -61,6 +63,8 @@ Owners can fetch deterministic similar nearby report suggestions through `/api/r
 Public lost-cat report browsing is available through `/api/public/reports/`, defaulting to active searches and supporting `active` and `status` filters. Public report cards include `detail_url`, status, location summary, disappearance date, `main_photo`, and `latest_sighting`. Public report details are available through `/api/public/reports/<public_id>/`. Public `latest_sighting` summaries prefer confirmed useful sightings and fall back to the latest pending sighting when no confirmed sighting exists; false sightings are excluded, and the summary includes the sighting verification status for UI labeling. Public responses use the report `public_id`, approximate coordinates, public-safe contact instructions, URL-only photo objects, and status timeline events without actor private data. They do not expose owner IDs, exact addresses, chip numbers, notification preferences, moderation fields, original photo filenames, storage paths, sighting notes, or helper identity.
 
 Authenticated helpers can submit sightings for active public reports through `/api/public/reports/<public_id>/sightings/`. The endpoint requires JWT authentication, stores timestamp, coordinates, location notes, confidence, and description notes, and creates a `SIGHTING_CREATED` report timeline event. It also accepts an optional multipart `photo` file field. The backend accepts JPEG, PNG, and WebP sighting photos up to `DJANGO_SIGHTING_PHOTO_MAX_SIZE_BYTES` bytes, stores them with generated filenames, and returns URL-only photo objects. Hidden reports return `404`; resolved reports reject new sightings.
+
+Authenticated helpers can also mark that they are searching nearby through `/api/public/reports/<public_id>/volunteer-searches/`. The first action creates a `VOLUNTEER_SEARCH_STARTED` timeline event; repeated actions refresh the existing volunteer-search record instead of creating duplicates. Report owners and staff can list helpers through `/api/reports/<id>/volunteer-searches/`. Responses expose safe display summaries only, without helper email, phone, or internal user IDs.
 
 Report owners can review all sightings for their own reports through `/api/reports/<id>/sightings/`, including sightings marked false. Owners and staff can set a sighting verification status through `/api/reports/<id>/sightings/<sighting_id>/verification/` using `PENDING`, `USEFUL`, or `FALSE`. Useful and false decisions create sighting review timeline events; useful sightings also drive the public `latest_sighting` summary. These owner/admin responses expose safe submitter and verifier summaries only, without account email or phone fields.
 
