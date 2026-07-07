@@ -16,7 +16,8 @@ from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
 from reports.models import LostCatReport, LostCatReportTimelineEvent
-from .models import Sighting, SightingPhoto
+
+from .models import Sighting, SightingPhoto, VolunteerSearch
 from .services import create_sighting
 
 
@@ -74,6 +75,12 @@ class SightingCreateApiTests(APITestCase):
 
     def _verification_url(self, report, sighting):
         return reverse('report-sighting-verification', args=[report.id, sighting.id])
+
+    def _volunteer_search_url(self, report):
+        return reverse('public-report-volunteer-search-create', args=[report.public_id])
+
+    def _owner_volunteer_search_list_url(self, report):
+        return reverse('report-volunteer-search-list', args=[report.id])
 
     def _payload(self, **overrides):
         payload = {
@@ -455,8 +462,138 @@ class SightingCreateApiTests(APITestCase):
         sighting.refresh_from_db()
         self.assertEqual(sighting.verification_status, Sighting.VerificationStatus.PENDING)
 
+    def test_volunteer_search_requires_authentication(self):
+        report = self._create_report()
+
+        response = self.client.post(
+            self._volunteer_search_url(report),
+            {},
+            format='json',
+        )
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+        self.assertFalse(VolunteerSearch.objects.exists())
+
+    def test_authenticated_user_can_mark_searching_nearby(self):
+        self.helper.display_name = 'Helpful Neighbor'
+        self.helper.save(update_fields=('display_name',))
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        self._authenticate(self.helper)
+
+        response = self.client.post(
+            self._volunteer_search_url(report),
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['report_public_id'], str(report.public_id))
+        self.assertEqual(response.data['volunteer']['display_name'], 'Helpful Neighbor')
+        self.assertEqual(response.data['volunteer']['avatar_fallback'], 'HN')
+        self.assertNotIn('email', response.data['volunteer'])
+        self.assertNotIn('contact_email', response.data)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+        volunteer_search = VolunteerSearch.objects.get(report=report)
+        self.assertEqual(volunteer_search.volunteer, self.helper)
+        timeline_event = LostCatReportTimelineEvent.objects.get(report=report)
+        self.assertEqual(
+            timeline_event.event_type,
+            LostCatReportTimelineEvent.EventType.VOLUNTEER_SEARCH_STARTED,
+        )
+        self.assertEqual(timeline_event.actor, self.helper)
+        self.assertEqual(timeline_event.location_summary, 'Near the playground')
+
+    def test_volunteer_search_is_idempotent_for_same_report_and_user(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        self._authenticate(self.helper)
+
+        first_response = self.client.post(
+            self._volunteer_search_url(report),
+            {},
+            format='json',
+        )
+        second_response = self.client.post(
+            self._volunteer_search_url(report),
+            {},
+            format='json',
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(VolunteerSearch.objects.filter(report=report).count(), 1)
+        self.assertEqual(
+            LostCatReportTimelineEvent.objects.filter(
+                report=report,
+                event_type=LostCatReportTimelineEvent.EventType.VOLUNTEER_SEARCH_STARTED,
+            ).count(),
+            1,
+        )
+
+    def test_volunteer_search_rejects_hidden_and_resolved_reports(self):
+        hidden_report = self._create_report(
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+        resolved_report = self._create_report(
+            status=LostCatReport.Status.FOUND,
+            resolved_at=timezone.now(),
+        )
+        self._authenticate(self.helper)
+
+        hidden_response = self.client.post(
+            self._volunteer_search_url(hidden_report),
+            {},
+            format='json',
+        )
+        resolved_response = self.client.post(
+            self._volunteer_search_url(resolved_report),
+            {},
+            format='json',
+        )
+
+        self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resolved_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('report', resolved_response.data)
+        self.assertFalse(VolunteerSearch.objects.exists())
+
+    def test_owner_and_staff_can_list_volunteer_searches(self):
+        self.helper.display_name = 'Helpful Neighbor'
+        self.helper.save(update_fields=('display_name',))
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        VolunteerSearch.objects.create(report=report, volunteer=self.helper)
+
+        self._authenticate(self.owner)
+        owner_response = self.client.get(self._owner_volunteer_search_list_url(report))
+        self._authenticate(self.staff)
+        staff_response = self.client.get(self._owner_volunteer_search_list_url(report))
+
+        self.assertEqual(owner_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(owner_response.data['count'], 1)
+        volunteer_search = owner_response.data['results'][0]
+        self.assertEqual(
+            volunteer_search['volunteer']['display_name'],
+            'Helpful Neighbor',
+        )
+        self.assertNotIn('email', volunteer_search['volunteer'])
+        self.assertNotIn('contact_email', volunteer_search)
+        self.assertEqual(owner_response['Cache-Control'], 'no-store')
+
+        self.assertEqual(staff_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(staff_response.data['count'], 1)
+
+    def test_other_helper_cannot_list_report_volunteer_searches(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        VolunteerSearch.objects.create(report=report, volunteer=self.helper)
+        self._authenticate(self.helper)
+
+        response = self.client.get(self._owner_volunteer_search_list_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_sighting_is_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(Sighting))
         self.assertTrue(admin.site.is_registered(SightingPhoto))
-
-# Create your tests here.
+        self.assertTrue(admin.site.is_registered(VolunteerSearch))
