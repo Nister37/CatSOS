@@ -42,6 +42,7 @@ export function AppLayout() {
           <select id="language-select" value={language} onChange={handleLanguageChange}>
             <option value="en">EN</option>
             <option value="pl">PL</option>
+            <option value="nl">NL</option>
           </select>
           {user ? (
             <button type="button" onClick={() => dispatch(signOut())}>
