@@ -52,6 +52,24 @@ Django backend for the CatSOS API.
 - OpenAPI schema: `http://localhost:8000/api/schema/`
 - Swagger UI: `http://localhost:8000/api/docs/`
 
+## Demo Data
+
+For a local demo database, run:
+
+```bash
+python manage.py seed_demo_data
+```
+
+The command creates or updates three email-verified demo accounts and three approved lost-cat reports:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Owner | `owner.demo@catsos.local` | `CatSOSDemo123!` |
+| Contributor | `helper.demo@catsos.local` | `CatSOSDemo123!` |
+| Admin | `admin.demo@catsos.local` | `CatSOSDemo123!` |
+
+Run `python manage.py seed_demo_data --reset` to delete and recreate only the CatSOS demo users and their related reports. The command refuses to run with `DEBUG=False` unless `--allow-production` is passed, and it still rejects the default demo password in that mode. Use `--password <value>` only for disposable non-local demo environments.
+
 Registration sends an 8-digit email verification code. Email verification and login return JWT access and refresh tokens. Authenticated API requests should send the access token as `Authorization: Bearer <access>`.
 
 Password recovery uses email reset links built from `DJANGO_FRONTEND_URL`, Django's default token generator, and enrolled authenticator-app TOTP codes as the second recovery option. Reset requests never return reset tokens in JSON. Successful password reset and logged-in password change send confirmation emails. SMS password recovery is intentionally not implemented in the MVP because it adds cost and weaker security. CatSOS uses email reset links, TOTP recovery, and logged-in password change with current-password verification. When TOTP is enabled, login, password change, and SSO provider linking require a valid authenticator code.
