@@ -200,6 +200,67 @@ class AccountAuthApiTests(APITestCase):
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
 
+    def test_current_user_returns_notification_preferences(self):
+        user = self._create_verified_user()
+        user.notify_report_created_email = False
+        user.notify_sighting_created_email = True
+        user.notify_report_status_changed_email = False
+        user.save(
+            update_fields=(
+                'notify_report_created_email',
+                'notify_sighting_created_email',
+                'notify_report_status_changed_email',
+            )
+        )
+        self._authenticate(user)
+
+        response = self.client.get(reverse('account-me'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['notify_report_created_email'])
+        self.assertTrue(response.data['notify_sighting_created_email'])
+        self.assertFalse(response.data['notify_report_status_changed_email'])
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
+
+    def test_current_user_patch_updates_notification_preferences(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.patch(
+            reverse('account-me'),
+            {
+                'notify_report_created_email': False,
+                'notify_sighting_created_email': False,
+                'notify_report_status_changed_email': True,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertFalse(user.notify_report_created_email)
+        self.assertFalse(user.notify_sighting_created_email)
+        self.assertTrue(user.notify_report_status_changed_email)
+        self.assertFalse(response.data['notify_report_created_email'])
+        self.assertFalse(response.data['notify_sighting_created_email'])
+        self.assertTrue(response.data['notify_report_status_changed_email'])
+
+    def test_current_user_patch_rejects_unknown_fields(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.patch(
+            reverse('account-me'),
+            {'email': 'changed@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        user.refresh_from_db()
+        self.assertEqual(user.email, 'visitor@example.com')
+
     def test_login_rejects_unverified_user(self):
         self._register()
 

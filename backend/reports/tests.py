@@ -223,6 +223,26 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertNotIn('+48 600 111 222', email.body)
         self.assertNotIn('owner@example.com', email.body)
 
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_create_report_skips_confirmation_email_when_account_preference_disabled(self):
+        self.owner.notify_report_created_email = False
+        self.owner.save(update_fields=('notify_report_created_email',))
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('lost-report-list'),
+                self._payload(),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(LostCatReport.objects.count(), 1)
+
     def test_authenticated_owner_can_create_report_with_main_photo(self):
         self._authenticate(self.owner)
         payload = self._payload(photo=self._image_upload())
@@ -845,6 +865,34 @@ class LostCatReportCreateApiTests(APITestCase):
             self.owner,
             status=LostCatReport.Status.MISSING,
             notify_email=False,
+        )
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                self._status_url(report),
+                {'status': LostCatReport.Status.RECENTLY_SEEN},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(
+            LostCatReportTimelineEvent.objects.filter(report=report).count(),
+            1,
+        )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_status_change_skips_owner_email_when_account_preference_disabled(self):
+        self.owner.notify_report_status_changed_email = False
+        self.owner.save(update_fields=('notify_report_status_changed_email',))
+        report = self._create_report(
+            self.owner,
+            status=LostCatReport.Status.MISSING,
+            notify_email=True,
         )
         self._authenticate(self.owner)
 
