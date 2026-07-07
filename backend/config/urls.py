@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/', include('sightings.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('posters.urls')),
+    path('api/', include('points.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path(
