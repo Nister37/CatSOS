@@ -12,6 +12,7 @@ from accounts.services import create_token_pair
 from .services import (
     GemmaClient,
     generate_gemma_text,
+    generate_public_report_summary,
     improve_lost_cat_description,
     sanitize_text_for_ai,
 )
@@ -189,6 +190,78 @@ class DescriptionImproveServiceTests(TestCase):
         self.assertTrue(result['requires_review'])
         self.assertIn('disabled', result['fallback_reason'])
 
+    def test_public_summary_sends_sanitized_prompt_only(self):
+        class CaptureClient:
+            prompt = ''
+            system_instruction = ''
+
+            def generate_text(self, *, prompt, system_instruction=''):
+                self.prompt = prompt
+                self.system_instruction = system_instruction
+                return 'Mila is a shy black cat likely hiding near gardens.'
+
+        client = CaptureClient()
+
+        result = generate_public_report_summary(
+            cat_name='Mila',
+            coat_color='Black',
+            personality='Shy with strangers',
+            last_seen_landmark='Near the gardens',
+            description=(
+                'Mila is a shy black cat. Call +48 600 111 222. '
+                'She disappeared from 123 Private Street.'
+            ),
+            client=client,
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertTrue(result['requires_review'])
+        self.assertEqual(
+            result['suggestion'],
+            'Mila is a shy black cat likely hiding near gardens.',
+        )
+        self.assertIn('short public summaries', client.system_instruction)
+        self.assertNotIn('+48 600 111 222', client.prompt)
+        self.assertNotIn('123 Private Street', client.prompt)
+        self.assertIn('[phone removed]', client.prompt)
+        self.assertIn('[address removed]', client.prompt)
+
+    def test_public_summary_sanitizes_untrusted_ai_output(self):
+        class UnsafeClient:
+            def generate_text(self, *, prompt, system_instruction=''):
+                return (
+                    'Mila is a shy black cat. Call +48 600 111 222 or visit '
+                    '123 Private Street.'
+                )
+
+        result = generate_public_report_summary(
+            description='Mila is a shy black cat who may hide under cars.',
+            client=UnsafeClient(),
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+        self.assertNotIn('[phone removed]', result['suggestion'])
+        self.assertNotIn('[address removed]', result['suggestion'])
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_public_summary_falls_back_to_public_safe_text(self, mock_post):
+        result = generate_public_report_summary(
+            description=(
+                'Mila is a shy black cat who may hide under cars. '
+                'Call +48 600 111 222 or visit 123 Private Street.'
+            ),
+        )
+
+        self.assertFalse(result['generated_by_ai'])
+        self.assertTrue(result['requires_review'])
+        self.assertIn('Mila is a shy black cat', result['suggestion'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+        mock_post.assert_not_called()
+
 
 class DescriptionImproveApiTests(APITestCase):
     def setUp(self):
@@ -204,6 +277,9 @@ class DescriptionImproveApiTests(APITestCase):
 
     def _url(self):
         return reverse('ai-improve-description')
+
+    def _summary_url(self):
+        return reverse('ai-public-summary')
 
     def test_improve_description_requires_authentication(self):
         response = self.client.post(
@@ -289,6 +365,113 @@ class DescriptionImproveApiTests(APITestCase):
             response.data['suggestion'],
             'Mila is a shy black cat who may hide under cars.',
         )
+        self.assertFalse(response.data['generated_by_ai'])
+        self.assertTrue(response.data['requires_review'])
+        mock_post.assert_not_called()
+
+    def test_public_summary_requires_authentication(self):
+        response = self.client.post(
+            self._summary_url(),
+            {'description': 'Mila is a shy black cat.'},
+            format='json',
+        )
+
+        self.assertIn(
+            response.status_code,
+            {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN},
+        )
+
+    def test_public_summary_rejects_too_short_text(self):
+        self._authenticate()
+
+        response = self.client.post(
+            self._summary_url(),
+            {'description': 'short'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('description', response.data)
+
+    @override_settings(
+        GEMMA_ENABLED=True,
+        GEMMA_API_KEY='test-api-key',
+        GEMMA_API_BASE_URL='https://gemma.example.test/v1beta',
+        GEMMA_MODEL='gemma-test',
+    )
+    @patch('ai.services.requests.post')
+    def test_public_summary_returns_reviewable_ai_suggestion(self, mock_post):
+        self._authenticate()
+        response = Mock()
+        response.json.return_value = {
+            'candidates': [
+                {
+                    'content': {
+                        'parts': [
+                            {
+                                'text': (
+                                    'Mila is a shy black cat with a white chest spot.'
+                                )
+                            },
+                        ],
+                    },
+                },
+            ],
+        }
+        mock_post.return_value = response
+
+        api_response = self.client.post(
+            self._summary_url(),
+            {
+                'cat_name': 'Mila',
+                'coat_color': 'Black with a white chest spot',
+                'personality': 'Shy',
+                'last_seen_landmark': 'Near the gardens',
+                'description': (
+                    'Mila is a shy black cat. Call +48 600 111 222 or '
+                    'email owner@example.com. Last seen at 123 Private Street.'
+                ),
+            },
+            format='json',
+        )
+
+        self.assertEqual(api_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(api_response['Cache-Control'], 'no-store')
+        self.assertEqual(
+            api_response.data['suggestion'],
+            'Mila is a shy black cat with a white chest spot.',
+        )
+        self.assertTrue(api_response.data['generated_by_ai'])
+        self.assertTrue(api_response.data['requires_review'])
+        self.assertEqual(api_response.data['fallback_reason'], '')
+
+        prompt = mock_post.call_args.kwargs['json']['contents'][0]['parts'][0]['text']
+        self.assertNotIn('+48 600 111 222', prompt)
+        self.assertNotIn('owner@example.com', prompt)
+        self.assertNotIn('123 Private Street', prompt)
+        self.assertIn('[phone removed]', prompt)
+        self.assertIn('[email removed]', prompt)
+        self.assertIn('[address removed]', prompt)
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_public_summary_falls_back_without_provider_call(self, mock_post):
+        self._authenticate()
+
+        response = self.client.post(
+            self._summary_url(),
+            {
+                'description': (
+                    'Mila is a shy black cat who may hide under cars. '
+                    'Call +48 600 111 222.'
+                )
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Mila is a shy black cat', response.data['suggestion'])
+        self.assertNotIn('+48 600 111 222', response.data['suggestion'])
         self.assertFalse(response.data['generated_by_ai'])
         self.assertTrue(response.data['requires_review'])
         mock_post.assert_not_called()

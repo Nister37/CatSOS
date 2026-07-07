@@ -59,6 +59,7 @@ class LostCatReportCreateApiTests(APITestCase):
             'has_microchip': True,
             'chip_number': '985112003456789',
             'personality': 'Shy with strangers, responds to treats.',
+            'public_summary': 'Shy black cat with a white chest spot.',
             'description': 'Indoor cat, likely hiding close to home.',
             'disappeared_at': timezone.now().isoformat(),
             'last_seen_address': '12 Maple Street',
@@ -170,6 +171,10 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.data['cat_name'], 'Luna')
         self.assertEqual(response.data['status'], LostCatReport.Status.MISSING)
         self.assertEqual(response.data['coat_color'], 'Black with a white chest spot')
+        self.assertEqual(
+            response.data['public_summary'],
+            'Shy black cat with a white chest spot.',
+        )
         self.assertEqual(response.data['contact_visibility'], LostCatReport.ContactVisibility.APP_ONLY)
         self.assertNotIn('owner', response.data)
         self.assertNotIn('moderation_notes', response.data)
@@ -180,6 +185,7 @@ class LostCatReportCreateApiTests(APITestCase):
         report = LostCatReport.objects.get()
         self.assertEqual(report.owner, self.owner)
         self.assertEqual(report.cat_name, 'Luna')
+        self.assertEqual(report.public_summary, 'Shy black cat with a white chest spot.')
         self.assertEqual(report.status, LostCatReport.Status.MISSING)
         self.assertEqual(report.reward_amount, 100)
 
@@ -260,6 +266,21 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertTrue(photo.image.name.startswith('lost-cat-report-photos/'))
         self.assertNotIn(str(report.id), photo.image.name)
         self.assertTrue(photo.image.name.endswith('.jpg'))
+
+    def test_create_report_rejects_private_details_in_public_summary(self):
+        self._authenticate(self.owner)
+
+        response = self.client.post(
+            reverse('lost-report-list'),
+            self._payload(
+                public_summary='Call +48 600 111 222 at 123 Private Street.',
+            ),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('public_summary', response.data)
+        self.assertFalse(LostCatReport.objects.exists())
 
     def test_create_report_rejects_unsupported_photo_type(self):
         self._authenticate(self.owner)
@@ -613,6 +634,7 @@ class LostCatReportCreateApiTests(APITestCase):
             {
                 'cat_name': 'Luna',
                 'description': 'Likely hiding near the school.',
+                'public_summary': 'Shy cat likely hiding near the school.',
                 'last_seen_address': '8 School Road',
                 'last_seen_landmark': 'Behind the gym',
                 'last_seen_lat': 52.2401,
@@ -628,6 +650,10 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['cat_name'], 'Luna')
         self.assertEqual(response.data['description'], 'Likely hiding near the school.')
+        self.assertEqual(
+            response.data['public_summary'],
+            'Shy cat likely hiding near the school.',
+        )
         self.assertEqual(response.data['last_seen_address'], '8 School Road')
         self.assertEqual(response.data['contact_visibility'], LostCatReport.ContactVisibility.PUBLIC)
         self.assertFalse(response.data['notify_sms'])
@@ -667,6 +693,21 @@ class LostCatReportCreateApiTests(APITestCase):
         report.refresh_from_db()
         self.assertEqual(report.owner, self.owner)
         self.assertEqual(report.cat_name, 'Updated Luna')
+
+    def test_owner_cannot_save_private_details_in_public_summary(self):
+        report = self._create_report(self.owner)
+        self._authenticate(self.owner)
+
+        response = self.client.patch(
+            self._detail_url(report),
+            {'public_summary': 'Email owner@example.com near 123 Private Street.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('public_summary', response.data)
+        report.refresh_from_db()
+        self.assertEqual(report.public_summary, '')
 
     def test_put_returns_field_errors_when_required_fields_are_missing(self):
         report = self._create_report(self.owner)
@@ -1304,6 +1345,7 @@ class LostCatReportCreateApiTests(APITestCase):
             has_microchip=True,
             chip_number='985112003456789',
             personality='Shy but food motivated.',
+            public_summary='Luna is shy but food motivated and may be near gardens.',
             description='Likely hiding near gardens.',
             disappeared_at=timezone.now(),
             last_seen_address='12 Private Home Street',
@@ -1334,6 +1376,10 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['public_id'], str(report.public_id))
         self.assertEqual(response.data['cat_name'], 'Luna')
+        self.assertEqual(
+            response.data['public_summary'],
+            'Luna is shy but food motivated and may be near gardens.',
+        )
         self.assertEqual(response.data['status'], LostCatReport.Status.FOUND)
         self.assertEqual(response.data['found_message'], 'Luna is home. Thank you.')
         self.assertFalse(response.data['is_active_search'])
@@ -1447,6 +1493,7 @@ class LostCatReportCreateApiTests(APITestCase):
         active_report = self._create_report(
             self.owner,
             cat_name='Active Luna',
+            public_summary='Active Luna may be hiding near gardens.',
             description='Likely near gardens.',
             last_seen_landmark='Near the park',
             last_seen_lat=52.2297,
@@ -1478,6 +1525,7 @@ class LostCatReportCreateApiTests(APITestCase):
             f'/api/public/reports/{active_report.public_id}/',
         )
         self.assertEqual(card['cat_name'], 'Active Luna')
+        self.assertEqual(card['public_summary'], 'Active Luna may be hiding near gardens.')
         self.assertTrue(card['is_active_search'])
         self.assertEqual(card['location_summary'], 'Near the park')
         self.assertIsNone(card['latest_sighting'])
