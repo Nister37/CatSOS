@@ -29,6 +29,17 @@ PUBLIC_SUMMARY_SYSTEM_INSTRUCTION = (
     'terms, exact addresses, or contact details. Keep the summary under 35 words '
     'and suitable for public report cards. Return only the summary.'
 )
+TRANSLATION_LANGUAGE_LABELS = {
+    'en': 'English',
+    'pl': 'Polish',
+    'nl': 'Dutch',
+}
+REPORT_TRANSLATION_SYSTEM_INSTRUCTION = (
+    'You translate public lost-cat report text. Translate only facts present in '
+    'the user text. Do not invent details, exact addresses, contact details, '
+    'reward terms, sightings, medical advice, or certainty claims. Preserve a '
+    'clear public lost-cat report tone. Return only the translated text.'
+)
 AI_PRIVACY_NOTICE = (
     'Private contact details are removed before AI processing. Review the '
     'suggestion before saving.'
@@ -222,6 +233,13 @@ def build_public_summary_fallback(description):
     return sanitize_public_summary_text(description)
 
 
+def _safe_prompt_line(label, value):
+    sanitized = sanitize_text_for_ai(str(value or ''))
+    if not sanitized:
+        return ''
+    return f'{label}: {sanitized}'
+
+
 def improve_lost_cat_description(*, description, client=None):
     sanitized_description = sanitize_text_for_ai(description)
     prompt = (
@@ -280,6 +298,56 @@ def generate_public_report_summary(
     suggestion = sanitize_public_summary_text(result.text) or fallback_summary
     return {
         'suggestion': suggestion,
+        'generated_by_ai': result.generated_by_ai,
+        'requires_review': True,
+        'fallback_reason': result.error,
+        'privacy_notice': AI_PRIVACY_NOTICE,
+    }
+
+
+def suggest_report_translation(
+        *,
+        target_language,
+        cat_name,
+        description,
+        breed='',
+        coat_color='',
+        gender='',
+        collar_description='',
+        personality='',
+        last_seen_landmark='',
+        client=None,
+):
+    target_language_label = TRANSLATION_LANGUAGE_LABELS[target_language]
+    prompt_lines = [
+        _safe_prompt_line('Cat name', cat_name),
+        _safe_prompt_line('Breed', breed),
+        _safe_prompt_line('Coat color', coat_color),
+        _safe_prompt_line('Gender', gender),
+        _safe_prompt_line('Collar', collar_description),
+        _safe_prompt_line('Personality', personality),
+        _safe_prompt_line('Description', description),
+        _safe_prompt_line('Public landmark', last_seen_landmark),
+    ]
+    prompt_body = '\n'.join(line for line in prompt_lines if line)
+    fallback_text = sanitize_text_for_ai(description)
+    prompt = (
+        f'Translate the public-safe lost-cat report facts below into '
+        f'{target_language_label}. Use only the provided facts. Do not include '
+        'owner contact details, exact street addresses, or private notes.\n\n'
+        f'{prompt_body}'
+    )
+    result = generate_gemma_text(
+        prompt=prompt,
+        fallback_text=fallback_text,
+        system_instruction=REPORT_TRANSLATION_SYSTEM_INSTRUCTION,
+        client=client,
+    )
+
+    return {
+        'suggestion': sanitize_text_for_ai(result.text),
+        'target_language': target_language,
+        'target_language_label': target_language_label,
         'generated_by_ai': result.generated_by_ai,
         'requires_review': True,
         'fallback_reason': result.error,

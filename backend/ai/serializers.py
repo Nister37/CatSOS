@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from .services import TRANSLATION_LANGUAGE_LABELS
+
 
 class DescriptionImproveRequestSerializer(serializers.Serializer):
     description = serializers.CharField(
@@ -63,6 +65,25 @@ class PublicSummaryRequestSerializer(serializers.Serializer):
 
 class PublicSummaryResponseSerializer(serializers.Serializer):
     suggestion = serializers.CharField()
+    generated_by_ai = serializers.BooleanField()
+    requires_review = serializers.BooleanField()
+    fallback_reason = serializers.CharField(allow_blank=True)
+    privacy_notice = serializers.CharField()
+
+
+class ReportTranslationSuggestionRequestSerializer(serializers.Serializer):
+    target_language = serializers.ChoiceField(
+        choices=[
+            (code, label)
+            for code, label in TRANSLATION_LANGUAGE_LABELS.items()
+        ],
+    )
+
+
+class ReportTranslationSuggestionResponseSerializer(serializers.Serializer):
+    suggestion = serializers.CharField()
+    target_language = serializers.CharField()
+    target_language_label = serializers.CharField()
     generated_by_ai = serializers.BooleanField()
     requires_review = serializers.BooleanField()
     fallback_reason = serializers.CharField(allow_blank=True)

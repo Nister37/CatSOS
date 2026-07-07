@@ -10,6 +10,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from ai.serializers import (
+    ReportTranslationSuggestionRequestSerializer,
+    ReportTranslationSuggestionResponseSerializer,
+)
+from ai.services import suggest_report_translation
+
 from .models import LostCatReport
 from .serializers import (
     LostCatReportCreateSerializer,
@@ -266,6 +272,39 @@ class LostCatReportSimilarView(LostCatReportBaseView):
                 'results': serializer.data,
             }
         )
+
+
+class LostCatReportTranslationSuggestionView(LostCatReportBaseView):
+    throttle_scope_by_method = {
+        'POST': 'ai_write',
+    }
+
+    @extend_schema(
+        request=ReportTranslationSuggestionRequestSerializer,
+        responses={
+            200: ReportTranslationSuggestionResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def post(self, request, pk):
+        report = self.get_object()
+        serializer = ReportTranslationSuggestionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = suggest_report_translation(
+            target_language=serializer.validated_data['target_language'],
+            cat_name=report.cat_name,
+            description=report.description,
+            breed=report.breed,
+            coat_color=report.coat_color,
+            gender=report.get_gender_display(),
+            collar_description=report.collar_description,
+            personality=report.personality,
+            last_seen_landmark=report.last_seen_landmark,
+        )
+        response_serializer = ReportTranslationSuggestionResponseSerializer(result)
+        return no_store_response(response_serializer.data)
 
 
 class LostCatReportPhotoListCreateView(LostCatReportBaseView):
