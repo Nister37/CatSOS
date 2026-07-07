@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from reports.models import LostCatReport
 from sightings.models import Sighting
@@ -248,3 +251,104 @@ class PointAwardServiceTests(TestCase):
         self.assertIsNone(transaction)
         self.assertEqual(badges, [])
         self.assertFalse(PointTransaction.objects.exists())
+
+
+class LeaderboardApiTests(APITestCase):
+    def _create_user(self, **overrides):
+        defaults = {
+            'email': f'user-{get_user_model().objects.count()}@example.com',
+            'password': 'StrongPass123!',
+            'is_email_verified': True,
+            'display_name': 'Helpful Neighbor',
+            'contribution_points': 10,
+            'public_badges': ['First help'],
+        }
+        defaults.update(overrides)
+        return get_user_model().objects.create_user(**defaults)
+
+    def _url(self):
+        return reverse('points-leaderboard')
+
+    def test_leaderboard_returns_ranked_public_safe_contributors(self):
+        top_user = self._create_user(
+            email='top-secret@example.com',
+            display_name='Top Helper',
+            contribution_points=75,
+            public_badges=['Search regular'],
+            first_name='Private',
+            last_name='Person',
+        )
+        second_user = self._create_user(
+            email='second-secret@example.com',
+            display_name='Second Helper',
+            contribution_points=25,
+            public_badges=['Neighbor helper'],
+        )
+        UserBadge.objects.create(user=top_user, code='SEARCH_REGULAR', label='Search regular')
+
+        response = self.client.get(self._url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(response.data['results'][0]['rank'], 1)
+        self.assertEqual(response.data['results'][0]['id'], top_user.pk)
+        self.assertEqual(response.data['results'][0]['display_name'], 'Top Helper')
+        self.assertEqual(response.data['results'][0]['points'], 75)
+        self.assertEqual(response.data['results'][0]['badges'], ['Search regular'])
+        self.assertEqual(response.data['results'][1]['rank'], 2)
+        self.assertEqual(response.data['results'][1]['id'], second_user.pk)
+        self.assertEqual(response.data['results'][1]['points'], 25)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
+
+        serialized = str(response.data)
+        self.assertNotIn('top-secret@example.com', serialized)
+        self.assertNotIn('second-secret@example.com', serialized)
+        self.assertNotIn('Private', serialized)
+        self.assertNotIn('point_transactions', serialized)
+        self.assertNotIn('idempotency', serialized)
+
+    def test_leaderboard_filters_private_or_empty_profiles(self):
+        visible_user = self._create_user(
+            email='visible@example.com',
+            display_name='Visible Helper',
+            contribution_points=5,
+        )
+        self._create_user(
+            email='zero@example.com',
+            display_name='No Points',
+            contribution_points=0,
+        )
+        self._create_user(
+            email='unverified@example.com',
+            display_name='Unverified Helper',
+            contribution_points=100,
+            is_email_verified=False,
+        )
+        self._create_user(
+            email='inactive@example.com',
+            display_name='Inactive Helper',
+            contribution_points=100,
+            is_active=False,
+        )
+
+        response = self.client.get(self._url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], visible_user.pk)
+
+    def test_leaderboard_paginates_and_keeps_global_rank(self):
+        for index in range(3):
+            self._create_user(
+                email=f'helper-{index}@example.com',
+                display_name=f'Helper {index}',
+                contribution_points=30 - index,
+            )
+
+        response = self.client.get(self._url(), {'page_size': 2, 'page': 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['rank'], 3)
