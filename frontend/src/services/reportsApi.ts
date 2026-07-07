@@ -13,11 +13,88 @@ type CreateReportPayload = {
 export type PublicReport = {
   public_id: string;
   cat_name: string;
+  breed: string;
+  coat_color: string;
+  description: string;
   location_summary: string;
   last_seen_landmark: string;
   disappeared_at: string | null;
-  main_photo: { url: string } | null;
+  approximate_location: { latitude: number; longitude: number; is_approximate: boolean } | null;
+  reward_amount: string | null;
   status: string;
+  found_message: string;
+  resolved_at: string | null;
+  is_active_search: boolean;
+  main_photo: { url: string } | null;
+  updated_at: string;
+};
+
+export type OwnedReport = {
+  id: string;
+  public_id: string;
+  cat_name: string;
+  age_years: number | null;
+  breed: string;
+  coat_color: string;
+  eye_color: string;
+  gender: string;
+  collar_description: string;
+  has_microchip: boolean;
+  chip_number: string;
+  personality: string;
+  description: string;
+  disappeared_at: string | null;
+  last_seen_address: string;
+  last_seen_landmark: string;
+  last_seen_lat: number | null;
+  last_seen_lng: number | null;
+  reward_amount: string | null;
+  reward_note: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string;
+  contact_visibility: string;
+  status: string;
+  found_message: string;
+  resolved_at: string | null;
+  is_active_search: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OwnedSighting = {
+  id: string;
+  report_public_id: string;
+  seen_at: string;
+  location_description: string;
+  latitude: number | null;
+  longitude: number | null;
+  confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+  notes: string;
+  photos: { id: string; url: string; created_at: string }[];
+  verification_status: 'PENDING' | 'USEFUL' | 'FALSE';
+  created_at: string;
+  submitted_by: { display_name: string; avatar_fallback: string } | null;
+  verified_by: { display_name: string; avatar_fallback: string } | null;
+  verified_at: string | null;
+  updated_at: string;
+};
+
+export type TimelineEvent = {
+  id: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  location_summary: string | null;
+  actor: { display_name: string; avatar_fallback: string } | null;
+  created_at: string;
+};
+
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
 };
 
 export function createReport({ step1, step2, step3, photo }: CreateReportPayload) {
@@ -47,12 +124,42 @@ export function createReport({ step1, step2, step3, photo }: CreateReportPayload
       if (v !== null && v !== undefined) form.append(k, String(v));
     });
     form.append('photo', photo);
-    return apiRequest<unknown>('/api/reports/', { method: 'POST', body: form });
+    return apiRequest<OwnedReport>('/api/reports/', { method: 'POST', body: form });
   }
 
-  return apiRequest<unknown>('/api/reports/', {
+  return apiRequest<OwnedReport>('/api/reports/', {
     method: 'POST',
     body: JSON.stringify(fields),
+  });
+}
+
+export async function fetchOwnedReports(): Promise<OwnedReport[]> {
+  const data = await apiRequest<PaginatedResponse<OwnedReport>>('/api/reports/');
+  return data.results;
+}
+
+export function fetchOwnedReport(id: string): Promise<OwnedReport> {
+  return apiRequest<OwnedReport>(`/api/reports/${id}/`);
+}
+
+export async function fetchReportSightings(id: string): Promise<OwnedSighting[]> {
+  const data = await apiRequest<PaginatedResponse<OwnedSighting>>(`/api/reports/${id}/sightings/`);
+  return data.results;
+}
+
+export async function fetchReportTimeline(id: string): Promise<TimelineEvent[]> {
+  const data = await apiRequest<PaginatedResponse<TimelineEvent>>(`/api/reports/${id}/timeline/`);
+  return data.results;
+}
+
+export function verifySighting(
+  reportId: string,
+  sightingId: string,
+  verificationStatus: 'USEFUL' | 'FALSE',
+): Promise<void> {
+  return apiRequest<void>(`/api/reports/${reportId}/sightings/${sightingId}/verification/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ verification_status: verificationStatus }),
   });
 }
 
@@ -99,4 +206,16 @@ export async function fetchPublicReports(limit = 4): Promise<PublicReport[]> {
   if (!data.ok) throw await data.json().catch(() => ({ detail: 'Request failed' }));
   const json = (await data.json()) as { results: PublicReport[] };
   return json.results;
+}
+
+export async function fetchMissingCatsPage(
+  page = 1,
+  pageSize = 12,
+): Promise<{ results: PublicReport[]; count: number; hasNext: boolean }> {
+  const res = await fetch(
+    `${BASE_URL}/api/public/reports/?page=${page}&page_size=${pageSize}`,
+  );
+  if (!res.ok) throw await res.json().catch(() => ({ detail: 'Request failed' }));
+  const json = (await res.json()) as { results: PublicReport[]; count: number; next: string | null };
+  return { results: json.results, count: json.count, hasNext: json.next !== null };
 }
