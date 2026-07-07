@@ -24,6 +24,8 @@ misconfigured, times out, returns a bad response, or cannot be reached.
 - Provider errors are logged without prompts, API keys, or private contact data.
 - The service only sends text supplied by the caller. Callers must strip private
 contact details before using this service.
+- Suggestion responses are sanitized before they are returned, including
+fallback text used when AI is disabled or unavailable.
 - AI output is untrusted suggestion text and must be reviewed by the user before
 being saved.
 
@@ -54,8 +56,9 @@ Response:
 ```
 
 Before the provider call, the backend removes email addresses, phone-like values,
-and street-like exact addresses from the prompt. The endpoint does not save the
-suggestion to any report.
+and street-like exact addresses from the prompt. The same sanitization is applied
+to the suggestion response, including fallback text when AI is disabled or fails.
+The endpoint does not save the suggestion to any report.
 
 ## Public Summary API
 

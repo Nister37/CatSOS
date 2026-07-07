@@ -190,6 +190,44 @@ class DescriptionImproveServiceTests(TestCase):
         self.assertTrue(result['requires_review'])
         self.assertIn('disabled', result['fallback_reason'])
 
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    def test_improve_description_fallback_removes_private_contact_details(self):
+        result = improve_lost_cat_description(
+            description=(
+                'Mila is shy. Call +48 600 111 222 or owner@example.com. '
+                'She disappeared from 123 Private Street.'
+            ),
+        )
+
+        self.assertFalse(result['generated_by_ai'])
+        self.assertIn('[phone removed]', result['suggestion'])
+        self.assertIn('[email removed]', result['suggestion'])
+        self.assertIn('[address removed]', result['suggestion'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('owner@example.com', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+
+    def test_improve_description_sanitizes_provider_output(self):
+        class UnsafeOutputClient:
+            def generate_text(self, *, prompt, system_instruction=''):
+                return (
+                    'Mila may be near 123 Private Street. '
+                    'Call +48 600 111 222 or owner@example.com.'
+                )
+
+        result = improve_lost_cat_description(
+            description='Mila is shy and may hide under cars.',
+            client=UnsafeOutputClient(),
+        )
+
+        self.assertTrue(result['generated_by_ai'])
+        self.assertIn('[phone removed]', result['suggestion'])
+        self.assertIn('[email removed]', result['suggestion'])
+        self.assertIn('[address removed]', result['suggestion'])
+        self.assertNotIn('+48 600 111 222', result['suggestion'])
+        self.assertNotIn('owner@example.com', result['suggestion'])
+        self.assertNotIn('123 Private Street', result['suggestion'])
+
     def test_public_summary_sends_sanitized_prompt_only(self):
         class CaptureClient:
             prompt = ''
@@ -367,6 +405,38 @@ class DescriptionImproveApiTests(APITestCase):
         )
         self.assertFalse(response.data['generated_by_ai'])
         self.assertTrue(response.data['requires_review'])
+        mock_post.assert_not_called()
+
+    @override_settings(GEMMA_ENABLED=False, GEMMA_API_KEY='')
+    @patch('ai.services.requests.post')
+    def test_improve_description_fallback_response_hides_private_details(
+            self,
+            mock_post,
+    ):
+        self._authenticate()
+
+        response = self.client.post(
+            self._url(),
+            {
+                'description': (
+                    'Mila is shy. Call +48 600 111 222 or owner@example.com. '
+                    'Last seen at 123 Private Street.'
+                )
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['generated_by_ai'])
+        self.assertTrue(response.data['requires_review'])
+        self.assertIn('disabled', response.data['fallback_reason'])
+        self.assertIn('Review the suggestion', response.data['privacy_notice'])
+        self.assertIn('[phone removed]', response.data['suggestion'])
+        self.assertIn('[email removed]', response.data['suggestion'])
+        self.assertIn('[address removed]', response.data['suggestion'])
+        self.assertNotIn('+48 600 111 222', response.data['suggestion'])
+        self.assertNotIn('owner@example.com', response.data['suggestion'])
+        self.assertNotIn('123 Private Street', response.data['suggestion'])
         mock_post.assert_not_called()
 
     def test_public_summary_requires_authentication(self):

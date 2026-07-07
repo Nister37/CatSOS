@@ -195,6 +195,10 @@ def sanitize_text_for_ai(text):
     return sanitized.strip()
 
 
+def sanitize_ai_suggestion_text(text):
+    return sanitize_text_for_ai(str(text or ''))
+
+
 def _condense_text(text):
     return ' '.join(text.split())
 
@@ -227,12 +231,12 @@ def improve_lost_cat_description(*, description, client=None):
     )
     result = generate_gemma_text(
         prompt=prompt,
-        fallback_text=description.strip(),
+        fallback_text=sanitized_description,
         system_instruction=DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION,
         client=client,
     )
     return {
-        'suggestion': result.text,
+        'suggestion': sanitize_ai_suggestion_text(result.text),
         'generated_by_ai': result.generated_by_ai,
         'requires_review': True,
         'fallback_reason': result.error,
