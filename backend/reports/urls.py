@@ -11,6 +11,7 @@ from .views import (
     LostCatReportSimilarView,
     LostCatReportStatusView,
     LostCatReportTimelineView,
+    LostCatReportTranslationSuggestionView,
 )
 
 urlpatterns = [
@@ -34,6 +35,11 @@ urlpatterns = [
         'reports/<uuid:pk>/similar/',
         LostCatReportSimilarView.as_view(),
         name='lost-report-similar',
+    ),
+    path(
+        'reports/<uuid:pk>/translation-suggestion/',
+        LostCatReportTranslationSuggestionView.as_view(),
+        name='lost-report-translation-suggestion',
     ),
     path(
         'reports/<uuid:pk>/photos/',
