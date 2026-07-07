@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -14,6 +15,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
+from sightings.models import Sighting
+from sightings.services import create_sighting
 
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
@@ -25,6 +28,7 @@ class LostCatReportCreateApiTests(APITestCase):
         media_override = override_settings(MEDIA_ROOT=self.media_root.name)
         media_override.enable()
         self.addCleanup(media_override.disable)
+        cache.clear()
 
         self.owner = get_user_model().objects.create_user(
             email='owner@example.com',
@@ -176,6 +180,14 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(report.cat_name, 'Luna')
         self.assertEqual(report.status, LostCatReport.Status.MISSING)
         self.assertEqual(report.reward_amount, 100)
+
+        timeline_event = LostCatReportTimelineEvent.objects.get(report=report)
+        self.assertEqual(
+            timeline_event.event_type,
+            LostCatReportTimelineEvent.EventType.REPORT_CREATED,
+        )
+        self.assertEqual(timeline_event.actor, self.owner)
+        self.assertEqual(timeline_event.location_summary, 'Near the playground')
 
     def test_authenticated_owner_can_create_report_with_main_photo(self):
         self._authenticate(self.owner)
@@ -1031,6 +1043,60 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertEqual(event_data['actor']['display_name'], 'Marta Owner')
         self.assertEqual(event_data['actor']['avatar_fallback'], 'MO')
         self.assertNotIn('email', event_data['actor'])
+
+    def test_timeline_orders_creation_sighting_and_status_events_chronologically(self):
+        self.owner.display_name = 'Marta Owner'
+        self.owner.save(update_fields=('display_name',))
+        self.other_user.display_name = 'Helpful Neighbor'
+        self.other_user.save(update_fields=('display_name',))
+        self._authenticate(self.owner)
+
+        create_response = self.client.post(
+            reverse('lost-report-list'),
+            self._payload(),
+            format='json',
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        report = LostCatReport.objects.get(pk=create_response.data['id'])
+
+        create_sighting(
+            report=report,
+            submitted_by=self.other_user,
+            validated_data={
+                'seen_at': timezone.now(),
+                'location_description': 'Behind the bakery',
+                'latitude': 52.2297,
+                'longitude': 21.0122,
+                'confidence': Sighting.Confidence.HIGH,
+                'notes': 'Walking toward the courtyard.',
+            },
+        )
+        status_response = self.client.patch(
+            self._status_url(report),
+            {'status': LostCatReport.Status.RECENTLY_SEEN},
+            format='json',
+        )
+        self.assertEqual(status_response.status_code, status.HTTP_200_OK)
+
+        response = self.client.get(self._timeline_url(report))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        event_types = [
+            event['event_type']
+            for event in response.data['results']
+        ]
+        self.assertEqual(
+            event_types,
+            [
+                LostCatReportTimelineEvent.EventType.REPORT_CREATED,
+                LostCatReportTimelineEvent.EventType.SIGHTING_CREATED,
+                LostCatReportTimelineEvent.EventType.STATUS_CHANGED,
+            ],
+        )
+        sighting_event = response.data['results'][1]
+        self.assertEqual(sighting_event['location_summary'], 'Behind the bakery')
+        self.assertEqual(sighting_event['actor']['display_name'], 'Helpful Neighbor')
+        self.assertNotIn('email', sighting_event['actor'])
 
     def test_timeline_requires_authentication(self):
         report = self._create_report(self.owner)

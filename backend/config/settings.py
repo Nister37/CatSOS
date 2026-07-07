@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'api',
     'accounts',
     'reports',
+    'sightings',
 ]
 
 MIDDLEWARE = [
@@ -229,6 +230,10 @@ REPORT_PHOTO_MAX_SIZE_BYTES = env_int(
     'DJANGO_REPORT_PHOTO_MAX_SIZE_BYTES',
     5 * 1024 * 1024,
 )
+SIGHTING_PHOTO_MAX_SIZE_BYTES = env_int(
+    'DJANGO_SIGHTING_PHOTO_MAX_SIZE_BYTES',
+    5 * 1024 * 1024,
+)
 
 CORS_ALLOWED_ORIGINS = env_list(
     'DJANGO_CORS_ALLOWED_ORIGINS',
@@ -255,6 +260,7 @@ REST_FRAMEWORK = {
         'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
         'lost_report_read': os.getenv('DJANGO_LOST_REPORT_READ_RATE', '120/minute'),
         'lost_report_write': os.getenv('DJANGO_LOST_REPORT_WRITE_RATE', '30/minute'),
+        'sighting_write': os.getenv('DJANGO_SIGHTING_WRITE_RATE', '30/minute'),
     },
 }
 
