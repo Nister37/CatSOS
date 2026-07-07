@@ -41,7 +41,7 @@ class InAppNotificationBaseView(APIView):
     def get_queryset(self):
         return (
             InAppNotification.objects.filter(recipient=self.request.user)
-            .select_related('report')
+            .select_related('report', 'sighting', 'actor')
             .order_by('-created_at')
         )
 

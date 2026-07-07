@@ -15,7 +15,7 @@ def build_public_report_url(report) -> str:
 
 
 def build_report_action_url(report) -> str:
-    return f'/reports/{report.public_id}'
+    return f'/my-reports/{report.id}'
 
 
 def build_sighting_location_summary(sighting) -> str:
