@@ -173,6 +173,8 @@ describe('Report Missing Cat — Step 3', () => {
 
 describe('Report Missing Cat — Full Flow', () => {
   it('completes all three steps and returns to the homepage', () => {
+    cy.intercept('POST', '/api/reports/', { statusCode: 201, body: {} }).as('createReport');
+
     completeStep1('Luna', 'Tuxedo');
     completeStep2('Baker Street, London');
 
@@ -180,6 +182,7 @@ describe('Report Missing Cat — Full Flow', () => {
 
     completeStep3('Jane Doe', '+44 7700 900123', 'jane@example.com');
 
+    cy.wait('@createReport');
     cy.location('pathname', { timeout: 10000 }).should('eq', '/');
     cy.findByRole('heading', { name: /lost your cat/i }).should('be.visible');
     cy.findByText(/missing report for luna has been posted/i).should('be.visible');
