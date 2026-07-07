@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -15,11 +16,13 @@ from .rules import (
     POINT_RULES,
     SIGHTING_MARKED_USEFUL,
     SIGHTING_SUBMITTED,
+    TRUSTED_REPORTER,
+    TRUSTED_REPORTER_USEFUL_SIGHTING_COUNT,
     get_badge_rules_for_points,
     get_public_badge_labels_for_points,
     get_point_rule,
 )
-from .services import award_points
+from .services import award_points, award_trusted_reporter_badge_for_useful_sighting
 
 
 class PointRuleTests(TestCase):
@@ -34,14 +37,26 @@ class PointRuleTests(TestCase):
 
     def test_badge_rules_are_unique_and_ordered_by_threshold(self):
         codes = [rule.code for rule in BADGE_RULES]
-        thresholds = [rule.minimum_points for rule in BADGE_RULES]
+        point_threshold_rules = [
+            rule
+            for rule in BADGE_RULES
+            if rule.is_point_threshold
+        ]
+        thresholds = [rule.minimum_points for rule in point_threshold_rules]
 
         self.assertEqual(len(codes), len(set(codes)))
         self.assertEqual(thresholds, sorted(thresholds))
-        for rule in BADGE_RULES:
+        for rule in point_threshold_rules:
             self.assertGreater(rule.minimum_points, 0)
             self.assertTrue(rule.label)
             self.assertTrue(rule.description)
+
+    def test_special_badge_rules_are_not_point_thresholds(self):
+        trusted_reporter = next(rule for rule in BADGE_RULES if rule.code == TRUSTED_REPORTER)
+
+        self.assertFalse(trusted_reporter.is_point_threshold)
+        self.assertIsNone(trusted_reporter.minimum_points)
+        self.assertEqual(trusted_reporter.label, 'Trusted reporter')
 
     def test_rule_helpers_return_expected_mvp_values(self):
         self.assertEqual(get_point_rule(SIGHTING_SUBMITTED).points, 5)
@@ -165,6 +180,20 @@ class PointAwardServiceTests(TestCase):
             confidence=Sighting.Confidence.HIGH,
         )
 
+    def _create_useful_sighting(self, *, submitted_by=None, report=None):
+        return Sighting.objects.create(
+            report=report or self.report,
+            submitted_by=submitted_by or self.helper,
+            seen_at=timezone.now(),
+            location_description='Behind the bakery',
+            latitude=52.2297,
+            longitude=21.0122,
+            confidence=Sighting.Confidence.HIGH,
+            verification_status=Sighting.VerificationStatus.USEFUL,
+            verified_by=self.owner,
+            verified_at=timezone.now(),
+        )
+
     def test_award_points_updates_user_total_and_public_badges(self):
         transaction, badges = award_points(
             user=self.helper,
@@ -251,6 +280,58 @@ class PointAwardServiceTests(TestCase):
         self.assertIsNone(transaction)
         self.assertEqual(badges, [])
         self.assertFalse(PointTransaction.objects.exists())
+
+    def test_trusted_reporter_badge_requires_repeated_useful_sightings(self):
+        first_sighting = self._create_useful_sighting()
+
+        badge, created = award_trusted_reporter_badge_for_useful_sighting(
+            sighting=first_sighting,
+        )
+
+        self.assertIsNone(badge)
+        self.assertFalse(created)
+        self.assertFalse(UserBadge.objects.filter(code=TRUSTED_REPORTER).exists())
+
+        self._create_useful_sighting()
+        threshold_sighting = self._create_useful_sighting()
+
+        badge, created = award_trusted_reporter_badge_for_useful_sighting(
+            sighting=threshold_sighting,
+        )
+        duplicate_badge, duplicate_created = (
+            award_trusted_reporter_badge_for_useful_sighting(
+                sighting=threshold_sighting,
+            )
+        )
+
+        self.helper.refresh_from_db()
+        self.assertTrue(created)
+        self.assertFalse(duplicate_created)
+        self.assertEqual(duplicate_badge, badge)
+        self.assertEqual(badge.code, TRUSTED_REPORTER)
+        self.assertEqual(
+            badge.metadata,
+            {'useful_sighting_count': TRUSTED_REPORTER_USEFUL_SIGHTING_COUNT},
+        )
+        self.assertEqual(UserBadge.objects.filter(code=TRUSTED_REPORTER).count(), 1)
+        self.assertEqual(
+            self.helper.public_badges,
+            ['Manual community badge', 'Trusted reporter'],
+        )
+
+    def test_trusted_reporter_badge_skips_owner_self_sightings(self):
+        owner_sighting = self._create_useful_sighting(
+            submitted_by=self.owner,
+            report=self.report,
+        )
+
+        badge, created = award_trusted_reporter_badge_for_useful_sighting(
+            sighting=owner_sighting,
+        )
+
+        self.assertIsNone(badge)
+        self.assertFalse(created)
+        self.assertFalse(UserBadge.objects.filter(user=self.owner).exists())
 
 
 class LeaderboardApiTests(APITestCase):
