@@ -57,7 +57,7 @@ def load_local_env(env_path):
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
 
-        os.environ.setdefault(name, value)
+        os.environ[name] = value
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.

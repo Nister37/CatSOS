@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
-import { CircleMarker, MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 
 import { BaseTileLayer } from '../components/BaseTileLayer';
 import { Footer } from '../components/Footer';
@@ -14,6 +14,11 @@ import {
   type OwnedSighting,
   type PublicReport,
 } from '../services/reportsApi';
+import {
+  fetchNearbyHelp,
+  type NearbyHelpPlace,
+  type NearbyHelpType,
+} from '../services/nearbyHelpApi';
 
 type MapMode = 'all' | 'track';
 
@@ -28,6 +33,12 @@ const CONFIDENCE_LABEL: Record<string, string> = {
   LOW: 'Low confidence',
   MEDIUM: 'Medium confidence',
   HIGH: 'High confidence',
+};
+
+const NEARBY_HELP_COLORS: Record<NearbyHelpType, { color: string; fillColor: string; label: string; icon: string }> = {
+  vet: { color: '#15803d', fillColor: '#22c55e', label: 'Vet', icon: 'vaccines' },
+  shelter: { color: '#1d4ed8', fillColor: '#3b82f6', label: 'Shelter', icon: 'home' },
+  pet_help: { color: '#c2410c', fillColor: '#f97316', label: 'Pet-related', icon: 'pets' },
 };
 
 function timeAgo(isoString: string): string {
@@ -48,9 +59,11 @@ interface MapContentProps {
   sightings: OwnedSighting[];
   geocodedCenter: [number, number];
   onMarkerClick: (info: ActiveMarkerInfo | null) => void;
+  nearbyPlaces: NearbyHelpPlace[];
+  showNearby: boolean;
 }
 
-function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCenter, onMarkerClick }: MapContentProps) {
+function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCenter, onMarkerClick, nearbyPlaces, showNearby }: MapContentProps) {
   const map = useMap();
 
   // Close panel on bare map click
@@ -113,6 +126,21 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
               }}
             />
           ))}
+        {showNearby && nearbyPlaces.map((place) => {
+          const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          return (
+            <CircleMarker
+              key={`nearby-${place.id}`}
+              center={[place.lat, place.lng]}
+              radius={8}
+              pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
+            >
+              <Tooltip direction="top" offset={[0, -8]}>
+                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
       </>
     );
   }
@@ -147,6 +175,44 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
             }}
           />
         ))}
+        {showNearby && nearbyPlaces.map((place) => {
+          const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          return (
+            <CircleMarker
+              key={`nearby-${place.id}`}
+              center={[place.lat, place.lng]}
+              radius={8}
+              pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
+            >
+              <Tooltip direction="top" offset={[0, -8]}>
+                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
+      </>
+    );
+  }
+
+  // ── No mode matched but nearby is on — still show nearby markers ────────────
+  if (showNearby && nearbyPlaces.length > 0) {
+    return (
+      <>
+        {nearbyPlaces.map((place) => {
+          const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          return (
+            <CircleMarker
+              key={`nearby-${place.id}`}
+              center={[place.lat, place.lng]}
+              radius={8}
+              pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
+            >
+              <Tooltip direction="top" offset={[0, -8]}>
+                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
       </>
     );
   }
@@ -242,6 +308,11 @@ export function SightingsMapResultsPage() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeMarker, setActiveMarker] = useState<ActiveMarkerInfo | null>(null);
 
+  // Nearby help state
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyHelpPlace[]>([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [showNearby, setShowNearby] = useState(true);
+
   // Use `user` (not `accessToken`) for UI gating — accessToken persists stale in
   // localStorage across page refreshes, but user is only set on an active login.
   const user = useAppSelector((state) => state.auth.user);
@@ -264,6 +335,24 @@ export function SightingsMapResultsPage() {
   useEffect(() => {
     fetchPublicReports(100).then(setPublicReports).catch(() => {});
   }, []);
+
+  // Fetch nearby vets/shelters when map center is known
+  useEffect(() => {
+    if (!mapCenter) return;
+    // setState calls are inside promise callbacks, not the synchronous effect body
+    Promise.resolve()
+      .then(() => { setNearbyLoading(true); return fetchNearbyHelp(mapCenter[0], mapCenter[1], 10); })
+      .then((response) => {
+        setNearbyPlaces(response.places);
+      })
+      .catch(() => {
+        // Silently fail — don't break the map if API is down
+        setNearbyPlaces([]);
+      })
+      .finally(() => {
+        setNearbyLoading(false);
+      });
+  }, [mapCenter]);
 
   useEffect(() => {
     const shouldFetch = mapMode === 'track' && !!trackPublicId && !!accessToken && !!user;
@@ -389,6 +478,8 @@ export function SightingsMapResultsPage() {
                     sightings={effectiveSightings}
                     geocodedCenter={resolvedCenter}
                     onMarkerClick={setActiveMarker}
+                    nearbyPlaces={nearbyPlaces}
+                    showNearby={showNearby}
                   />
                 </MapContainer>
               )}
@@ -399,6 +490,122 @@ export function SightingsMapResultsPage() {
               <MarkerPanel info={activeMarker} onClose={() => setActiveMarker(null)} />
             )}
           </div>
+        </section>
+
+        {/* Nearby Help Toggle & Legend */}
+        <section className="max-w-container-max mx-auto px-margin-mobile md:px-xl pb-md">
+          <div className="flex flex-wrap items-center justify-between gap-md">
+            {/* Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowNearby((v) => !v)}
+              aria-pressed={showNearby}
+              className={`inline-flex items-center gap-sm px-md py-sm rounded-xl border font-label-md transition-colors ${
+                showNearby
+                  ? 'bg-primary-container/20 text-primary border-primary/30'
+                  : 'bg-surface-container text-secondary border-outline-variant'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {showNearby ? 'visibility' : 'visibility_off'}
+              </span>
+              {showNearby ? 'Hide' : 'Show'} Nearby Help
+              {nearbyLoading && (
+                <span className="material-symbols-outlined text-[16px] animate-spin ml-xs">progress_activity</span>
+              )}
+              {!nearbyLoading && nearbyPlaces.length > 0 && (
+                <span className="bg-primary/10 text-primary px-sm py-0.5 rounded-full text-xs font-semibold">
+                  {nearbyPlaces.length}
+                </span>
+              )}
+            </button>
+
+            {/* Legend */}
+            {showNearby && nearbyPlaces.length > 0 && (
+              <div className="flex flex-wrap items-center gap-md">
+                {Object.entries(NEARBY_HELP_COLORS).map(([type, conf]) => (
+                  <div key={type} className="flex items-center gap-xs">
+                    <span
+                      className="inline-block w-3 h-3 rounded-full"
+                      style={{ backgroundColor: conf.fillColor, border: `2px solid ${conf.color}` }}
+                    />
+                    <span className="font-label-sm text-secondary">{conf.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Nearby Help list */}
+          {showNearby && nearbyPlaces.length > 0 && (
+            <div className="mt-md grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-sm">
+              {nearbyPlaces.slice(0, 9).map((place) => {
+                const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+                return (
+                  <div
+                    key={place.id}
+                    className="bg-white p-sm rounded-xl border border-outline-variant/10 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-sm mb-xs">
+                      <span
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white text-xs"
+                        style={{ backgroundColor: conf.fillColor }}
+                      >
+                        <span className="material-symbols-outlined text-[14px]">{conf.icon}</span>
+                      </span>
+                      <span className="font-label-md text-on-surface truncate">
+                        {place.name ?? conf.label}
+                      </span>
+                      <span className="ml-auto font-label-sm text-secondary whitespace-nowrap">
+                        {place.distance_km.toFixed(1)} km
+                      </span>
+                    </div>
+                    {place.address && (
+                      <p className="text-xs text-secondary truncate">{place.address}</p>
+                    )}
+                    <div className="flex items-center gap-sm mt-xs">
+                      {place.phone && (
+                        <a
+                          href={`tel:${place.phone}`}
+                          className="text-xs text-primary hover:underline flex items-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">call</span>
+                          {place.phone}
+                        </a>
+                      )}
+                      {place.website && (
+                        <a
+                          href={place.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline flex items-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">language</span>
+                          Website
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* OSM attribution for nearby data */}
+          {showNearby && nearbyPlaces.length > 0 && (
+            <p className="mt-sm font-body-sm text-body-sm text-secondary">
+              Place data ©{' '}
+              <a
+                href="https://www.openstreetmap.org/copyright"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                OpenStreetMap contributors
+              </a>
+              . Data may be incomplete — call before visiting.
+            </p>
+          )}
         </section>
 
         {/* CTA */}

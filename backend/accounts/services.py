@@ -127,7 +127,12 @@ def register_account(*, email, password, preferred_language=DEFAULT_PREFERRED_LA
         password=password,
         preferred_language=normalize_preferred_language(preferred_language),
     )
-    send_verification_code(user)
+    if settings.DEBUG:
+        user.is_email_verified = True
+        user.email_verified_at = timezone.now()
+        user.save(update_fields=['is_email_verified', 'email_verified_at'])
+    else:
+        send_verification_code(user)
     return user
 
 
@@ -461,9 +466,25 @@ def send_verification_code(user):
         subject=subject,
         message=message,
         recipient_list=[user.email],
-        raise_on_error=False,
     )
     return user
+
+
+def get_debug_verification_code(email):
+    """Generate and store a new verification code, returning it raw. DEBUG only."""
+    user = get_unverified_user_by_email(email)
+    if user is None:
+        return None
+    code = generate_verification_code()
+    user.email_verification_code_hash = make_password(code)
+    user.email_verification_sent_at = timezone.now()
+    user.save(
+        update_fields=[
+            'email_verification_code_hash',
+            'email_verification_sent_at',
+        ]
+    )
+    return code
 
 
 def get_unverified_user_by_email(email):

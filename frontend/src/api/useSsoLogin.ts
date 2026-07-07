@@ -20,6 +20,7 @@ export function useSsoLogin() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [ssoLoading, setSsoLoading] = useState<'google' | 'microsoft' | null>(null);
+  const [ssoError, setSsoError] = useState<string | null>(null);
 
   const handleSsoSuccess = useCallback(
     async (provider: 'google' | 'microsoft', token: string) => {
@@ -59,14 +60,19 @@ export function useSsoLogin() {
   );
 
   const loginWithGoogle = useCallback(() => {
+    setSsoError(null);
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      dispatch(addNotification('Google SSO is not configured. Set VITE_GOOGLE_CLIENT_ID.', 'error'));
+      const msg = 'Google SSO is not configured. Set VITE_GOOGLE_CLIENT_ID in frontend/.env. See .env.example for details.';
+      setSsoError(msg);
+      dispatch(addNotification(msg, 'error'));
       return;
     }
 
     if (typeof google === 'undefined' || !google.accounts?.id) {
-      dispatch(addNotification('Google Sign-In is still loading. Please try again in a moment.', 'error'));
+      const msg = 'Google Sign-In script is still loading. Please try again in a moment.';
+      setSsoError(msg);
+      dispatch(addNotification(msg, 'error'));
       return;
     }
 
@@ -138,9 +144,12 @@ export function useSsoLogin() {
   );
 
   const loginWithMicrosoft = useCallback(() => {
+    setSsoError(null);
     const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
     if (!clientId) {
-      dispatch(addNotification('Microsoft SSO is not configured. Set VITE_MICROSOFT_CLIENT_ID.', 'error'));
+      const msg = 'Microsoft SSO is not configured. Set VITE_MICROSOFT_CLIENT_ID in frontend/.env. See .env.example for details.';
+      setSsoError(msg);
+      dispatch(addNotification(msg, 'error'));
       return;
     }
 
@@ -188,5 +197,5 @@ export function useSsoLogin() {
     }, 500);
   }, [dispatch, handleSsoSuccess]);
 
-  return { loginWithGoogle, loginWithMicrosoft, ssoLoading };
+  return { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError, clearSsoError: () => setSsoError(null) };
 }

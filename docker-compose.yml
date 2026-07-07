@@ -29,6 +29,9 @@ services:
       target: development
     environment:
       VITE_API_BASE_URL: http://localhost:8000
+      VITE_GOOGLE_CLIENT_ID: 915271044751-bib6lhpmfj2fc0169fd43c93lm758lrh.apps.googleusercontent.com
+      VITE_MICROSOFT_CLIENT_ID: 68f68d94-0731-4b3c-8584-977b6ba93287
+      VITE_MICROSOFT_TENANT_ID: common
     ports:
       - "5173:5173"
     volumes:

@@ -18,6 +18,7 @@ from .services import (
     create_token_pair,
     disable_totp,
     email_exists,
+    get_debug_verification_code,
     InvalidTOTPCodeError,
     link_sso_account,
     login_or_create_sso_account,
@@ -337,9 +338,12 @@ class LoginSerializer(serializers.Serializer):
                 password=attrs['password'],
             )
         except AccountNotVerifiedError:
-            raise serializers.ValidationError(
-                {'email': ['Verify your email before logging in.']}
-            )
+            error_detail = {'email': ['Verify your email before logging in.']}
+            if settings.DEBUG:
+                code = get_debug_verification_code(attrs['email'])
+                if code:
+                    error_detail['debug_verification_code'] = code
+            raise serializers.ValidationError(error_detail)
 
         if user is None:
             raise serializers.ValidationError(

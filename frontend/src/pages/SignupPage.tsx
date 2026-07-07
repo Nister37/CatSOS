@@ -13,7 +13,7 @@ import { useAppDispatch } from '../app/hooks';
 export function SignupPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { loginWithGoogle, loginWithMicrosoft, ssoLoading } = useSsoLogin();
+  const { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError } = useSsoLogin();
 
   const {
     register,
@@ -211,6 +211,13 @@ export function SignupPage() {
             )}
             Sign up with Microsoft
           </button>
+
+          {/* SSO configuration error */}
+          {ssoError && (
+            <div role="alert" className="w-full mt-sm p-sm bg-error/10 border border-error/30 rounded-lg">
+              <p className="text-error text-label-sm text-center">{ssoError}</p>
+            </div>
+          )}
 
           {/* Log in redirect */}
           <div className="mt-lg text-center">
