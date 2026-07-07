@@ -37,6 +37,13 @@ user's total `contribution_points` reaches the threshold.
 field is synchronized with safe badge labels so current public profile responses
 can show earned badges without exposing transaction metadata.
 
+## Profile Display
+
+Authenticated `/api/me/` responses include the user's point total and safe badge
+labels. Public `/api/profiles/{id}/` responses also include point totals and safe
+badge labels, but continue to hide private account fields such as email, phone,
+verification data, and point transaction metadata.
+
 ## Security and Privacy
 
 - Points are only for authenticated user actions.

@@ -5,6 +5,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from points.models import UserBadge
+
 
 class PublicProfileApiTests(APITestCase):
     def _create_contributor(self, **overrides):
@@ -122,6 +124,28 @@ class PublicProfileApiTests(APITestCase):
         self.assertNotIn('Secret', serialized)
         self.assertNotIn('Keeper', serialized)
         self.assertNotIn('Should not serialize', serialized)
+
+    def test_public_profile_includes_normalized_badges_safely(self):
+        user = self._create_contributor(
+            email='badge-helper@example.com',
+            display_name='Badge Helper',
+            contribution_points=35,
+            public_badges=[],
+        )
+        UserBadge.objects.create(user=user, code='FIRST_HELP', label='First help')
+        UserBadge.objects.create(user=user, code='NEIGHBOR_HELPER', label='Neighbor helper')
+
+        response = self.client.get(
+            reverse('account-public-profile', kwargs={'pk': user.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['points'], 35)
+        self.assertEqual(response.data['badges'], ['First help', 'Neighbor helper'])
+        serialized = json.dumps(response.data)
+        self.assertNotIn('badge-helper@example.com', serialized)
+        self.assertNotIn('point_transactions', serialized)
+        self.assertNotIn('idempotency', serialized)
 
     def test_public_profile_hides_users_without_public_activity(self):
         user = self._create_contributor(
