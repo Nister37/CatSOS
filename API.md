@@ -56,6 +56,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `POST` | [`/api/reports/{id}/photos/`](#post-apireportsidphotos) | JWT | `201` | Upload an additional photo for one authenticated owner's report. |
 | `PATCH` | [`/api/reports/{id}/photos/{photo_id}/main/`](#patch-apireportsidphotosphotoidmain) | JWT | `200` | Set one report photo as the main photo. |
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
+| `POST` | [`/api/reports/{id}/qr-code/`](#post-apireportsidqr-code) | JWT | `200` | Generate a QR code for one owned report's public page. |
 | `GET` | [`/api/reports/{id}/sightings/`](#get-apireportsidsightings) | JWT | `200` | List sightings for one owned report. |
 | `PATCH` | [`/api/reports/{id}/sightings/{sighting_id}/verification/`](#patch-apireportsidsightingssightingidverification) | JWT | `200` | Mark one sighting as pending, useful, or false. |
 | `GET` | [`/api/reports/{id}/volunteer-searches/`](#get-apireportsidvolunteer-searches) | JWT | `200` | List helpers searching near one owned report. |
@@ -636,6 +637,40 @@ HTTP 204 No Content
 ```
 
 Reports owned by another user or photos that do not belong to the report return `404 Not Found`.
+
+<a id="post-apireportsidqr-code"></a>
+### Generate Lost Cat Report QR Code
+
+`POST /api/reports/{id}/qr-code/`
+
+Generates a PNG QR code for one report owned by the authenticated user. The QR code points to the frontend public report page:
+
+```text
+{DJANGO_FRONTEND_URL}/reports/{public_id}
+```
+
+The request body is empty:
+
+```json
+{}
+```
+
+Success response:
+
+```json
+{
+  "public_url": "https://app.catsos.example/reports/80752d52-6f4b-4974-a8df-5532c7b0d2f4",
+  "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+  "content_type": "image/png"
+}
+```
+
+Behavior:
+
+- Reports owned by another user return `404 Not Found`.
+- Hidden moderated reports return `400 Bad Request` because their public page is not visible.
+- The response uses `Cache-Control: no-store`.
+- The response does not expose owner private contact fields, exact address, internal owner ID, or moderation notes.
 
 <a id="get-apipublicreports"></a>
 ### Browse Public Lost Cat Reports

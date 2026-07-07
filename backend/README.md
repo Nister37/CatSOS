@@ -22,6 +22,7 @@ Django backend for the CatSOS API.
 - Similar nearby reports: `http://localhost:8000/api/reports/<id>/similar/`
 - Lost cat report photos: `http://localhost:8000/api/reports/<id>/photos/`
 - Lost cat report main photo: `http://localhost:8000/api/reports/<id>/photos/<photo_id>/main/`
+- Lost cat report QR code: `http://localhost:8000/api/reports/<id>/qr-code/`
 - Public lost cat report list: `http://localhost:8000/api/public/reports/`
 - Public lost cat report detail: `http://localhost:8000/api/public/reports/<public_id>/`
 - Submit public report sighting: `http://localhost:8000/api/public/reports/<public_id>/sightings/`
@@ -57,6 +58,8 @@ Authenticated users can upload, replace, and delete their profile picture throug
 Public contributor profiles are available at `/api/profiles/<id>/` for active, email-verified users with public activity. The response includes display name, profile picture, points, badges, and explicit public info only. Account email is never returned unless a separate public contact email is set.
 
 Authenticated owners can create and list their own lost cat reports through `/api/reports/` and retrieve or edit one owned report through `/api/reports/<id>/`. Creation and editing cover cat details, disappearance location, optional reward, and contact preferences. Report creation also accepts an optional multipart `photo` file field. Owners can manage the gallery for one owned report through `/api/reports/<id>/photos/`, choose the main photo through `/api/reports/<id>/photos/<photo_id>/main/`, and delete incorrect photos through `/api/reports/<id>/photos/<photo_id>/`. The backend accepts JPEG, PNG, and WebP report photos up to `DJANGO_REPORT_PHOTO_MAX_SIZE_BYTES` bytes, stores them under media storage with generated filenames, and never exposes original filenames or storage paths through public photo responses. Owners can change status through `/api/reports/<id>/status/`, including an optional safe found message for `FOUND` or `CLOSED` reports. Resolved reports keep `found_message`, `resolved_at`, and `is_active_search=false`; reopened reports clear resolved metadata. The owner report list supports `active=true` and `active=false` filters. Report creation, sighting creation, and status changes record chronological timeline events readable through `/api/reports/<id>/timeline/`. Staff moderation is handled separately in Django admin through the report moderation fields.
+
+Owners can generate a PNG QR code for an owned report through `/api/reports/<id>/qr-code/`. The QR code points to `{DJANGO_FRONTEND_URL}/reports/<public_id>` so poster scanners open the frontend public report page. Hidden moderated reports reject QR generation because their public pages are not visible. QR responses include a public URL and `data:image/png;base64,...` payload only; they do not expose private contact details or owner IDs.
 
 Owners can fetch deterministic similar nearby report suggestions through `/api/reports/<id>/similar/`. The current matcher is AI-free and uses approximate distance plus simple breed, coat, and gender matches. Suggested reports use the public-safe card shape and exclude hidden or resolved candidates.
 
