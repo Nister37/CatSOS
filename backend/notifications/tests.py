@@ -38,6 +38,7 @@ class NotificationServiceTests(TestCase):
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
             password='StrongPass123!',
+            display_name='Helpful Anna',
             is_email_verified=True,
         )
 
@@ -87,7 +88,7 @@ class NotificationServiceTests(TestCase):
             notification.event_type,
             InAppNotification.EventType.REPORT_CREATED,
         )
-        self.assertEqual(notification.action_url, f'/reports/{report.public_id}')
+        self.assertEqual(notification.action_url, f'/my-reports/{report.id}')
         self.assertFalse(notification.is_read)
 
     def test_skips_report_created_in_app_notification_when_push_disabled(self):
@@ -158,7 +159,7 @@ class NotificationServiceTests(TestCase):
             notification.event_type,
             InAppNotification.EventType.SIGHTING_MARKED_USEFUL,
         )
-        self.assertEqual(notification.action_url, f'/reports/{report.public_id}')
+        self.assertEqual(notification.action_url, f'/my-reports/{report.id}')
 
     def test_sends_owner_email_for_report_creation_confirmation(self):
         report = self._create_report(
@@ -367,6 +368,7 @@ class InAppNotificationApiTests(APITestCase):
         self.helper = get_user_model().objects.create_user(
             email='helper@example.com',
             password='StrongPass123!',
+            display_name='Helpful Anna',
             is_email_verified=True,
         )
         self.other_user = get_user_model().objects.create_user(
@@ -431,7 +433,7 @@ class InAppNotificationApiTests(APITestCase):
             'event_type': InAppNotification.EventType.SIGHTING_CREATED,
             'title': 'New sighting for Luna',
             'message': 'A logged-in helper submitted a new sighting.',
-            'action_url': f'/reports/{report.public_id}',
+            'action_url': f'/my-reports/{report.id}',
         }
         defaults.update(overrides)
         return InAppNotification.objects.create(**defaults)
@@ -459,8 +461,22 @@ class InAppNotificationApiTests(APITestCase):
             notification['event_type'],
             InAppNotification.EventType.SIGHTING_CREATED,
         )
+        self.assertEqual(notification['action_url'], f'/my-reports/{report.id}')
+        self.assertEqual(notification['report']['id'], str(report.id))
         self.assertEqual(notification['report']['public_id'], str(report.public_id))
         self.assertEqual(notification['report']['cat_name'], 'Luna')
+        self.assertEqual(notification['sighting']['id'], str(report.sightings.get().id))
+        self.assertEqual(
+            notification['sighting']['location_description'],
+            'Behind the bakery',
+        )
+        self.assertEqual(notification['sighting']['confidence'], Sighting.Confidence.HIGH)
+        self.assertEqual(
+            notification['sighting']['verification_status'],
+            Sighting.VerificationStatus.PENDING,
+        )
+        self.assertEqual(notification['actor']['display_name'], 'Helpful Anna')
+        self.assertEqual(notification['actor']['avatar_fallback'], 'HA')
         response_text = str(response.data)
         self.assertNotIn('helper@example.com', response_text)
         self.assertNotIn('Private helper note', response_text)
@@ -545,4 +561,7 @@ class InAppNotificationApiTests(APITestCase):
             InAppNotification.EventType.SIGHTING_MARKED_USEFUL,
         )
         self.assertEqual(notification['title'], 'Your sighting was marked useful')
+        self.assertEqual(notification['report']['id'], str(report.id))
         self.assertEqual(notification['report']['public_id'], str(report.public_id))
+        self.assertEqual(notification['sighting']['id'], str(sighting.id))
+        self.assertEqual(notification['actor']['display_name'], 'CatSOS user')
