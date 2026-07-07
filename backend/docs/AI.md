@@ -26,3 +26,33 @@ misconfigured, times out, returns a bad response, or cannot be reached.
 contact details before using this service.
 - AI output is untrusted suggestion text and must be reviewed by the user before
 being saved.
+
+## Description Cleaner API
+
+`POST /api/ai/improve-description/`
+
+Authentication is required.
+
+Request:
+
+```json
+{
+  "description": "Rough lost-cat description text"
+}
+```
+
+Response:
+
+```json
+{
+  "suggestion": "Reviewable suggested text",
+  "generated_by_ai": true,
+  "requires_review": true,
+  "fallback_reason": "",
+  "privacy_notice": "Private contact details are removed before AI processing. Review the suggestion before saving."
+}
+```
+
+Before the provider call, the backend removes email addresses, phone-like values,
+and street-like exact addresses from the prompt. The endpoint does not save the
+suggestion to any report.
