@@ -3,12 +3,21 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
 
+from accounts.services import create_token_pair
 from reports.models import LostCatReport
 from sightings.models import Sighting
 
+from .models import InAppNotification
 from .services import (
+    create_report_created_in_app_notification,
+    create_report_status_changed_in_app_notification,
+    create_sighting_created_in_app_notification,
+    create_sighting_verification_in_app_notification,
     notify_owner_about_report_created,
     notify_owner_about_report_status_changed,
     notify_owner_about_sighting_created,
@@ -61,6 +70,95 @@ class NotificationServiceTests(TestCase):
         }
         defaults.update(overrides)
         return Sighting.objects.create(**defaults)
+
+    def test_creates_report_created_in_app_notification_when_push_enabled(self):
+        report = self._create_report(notify_push=True)
+
+        notification = create_report_created_in_app_notification(
+            report=report,
+            actor=self.owner,
+        )
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.recipient, self.owner)
+        self.assertEqual(notification.actor, self.owner)
+        self.assertEqual(notification.report, report)
+        self.assertEqual(
+            notification.event_type,
+            InAppNotification.EventType.REPORT_CREATED,
+        )
+        self.assertEqual(notification.action_url, f'/reports/{report.public_id}')
+        self.assertFalse(notification.is_read)
+
+    def test_skips_report_created_in_app_notification_when_push_disabled(self):
+        report = self._create_report(notify_push=False)
+
+        notification = create_report_created_in_app_notification(report=report)
+
+        self.assertIsNone(notification)
+        self.assertFalse(InAppNotification.objects.exists())
+
+    def test_creates_report_status_changed_in_app_notification(self):
+        report = self._create_report(notify_push=True)
+
+        notification = create_report_status_changed_in_app_notification(
+            report=report,
+            old_status=LostCatReport.Status.MISSING,
+            new_status=LostCatReport.Status.FOUND,
+            actor=self.owner,
+        )
+
+        self.assertEqual(notification.recipient, self.owner)
+        self.assertEqual(
+            notification.event_type,
+            InAppNotification.EventType.REPORT_STATUS_CHANGED,
+        )
+        self.assertEqual(notification.title, 'Status changed for Luna')
+        self.assertIn('Missing changed to Found', notification.message)
+
+    def test_creates_sighting_in_app_notification_without_email_enabled(self):
+        report = self._create_report(notify_email=False, notify_push=True)
+        sighting = self._create_sighting(report)
+
+        notification = create_sighting_created_in_app_notification(sighting=sighting)
+
+        self.assertEqual(notification.recipient, self.owner)
+        self.assertEqual(notification.actor, self.helper)
+        self.assertEqual(notification.sighting, sighting)
+        self.assertEqual(
+            notification.event_type,
+            InAppNotification.EventType.SIGHTING_CREATED,
+        )
+        self.assertNotIn('helper@example.com', notification.message)
+        self.assertNotIn('Private helper note', notification.message)
+
+    def test_skips_sighting_in_app_notification_when_owner_submits_sighting(self):
+        report = self._create_report(notify_push=True)
+        sighting = self._create_sighting(report, submitted_by=self.owner)
+
+        notification = create_sighting_created_in_app_notification(sighting=sighting)
+
+        self.assertIsNone(notification)
+        self.assertFalse(InAppNotification.objects.exists())
+
+    def test_creates_sighting_verification_in_app_notification_for_helper(self):
+        report = self._create_report()
+        sighting = self._create_sighting(report)
+        sighting.verification_status = Sighting.VerificationStatus.USEFUL
+        sighting.save(update_fields=('verification_status',))
+
+        notification = create_sighting_verification_in_app_notification(
+            sighting=sighting,
+            actor=self.owner,
+        )
+
+        self.assertEqual(notification.recipient, self.helper)
+        self.assertEqual(notification.actor, self.owner)
+        self.assertEqual(
+            notification.event_type,
+            InAppNotification.EventType.SIGHTING_MARKED_USEFUL,
+        )
+        self.assertEqual(notification.action_url, f'/reports/{report.public_id}')
 
     def test_sends_owner_email_for_report_creation_confirmation(self):
         report = self._create_report(
@@ -257,3 +355,194 @@ class NotificationServiceTests(TestCase):
 
         self.assertFalse(sent)
         self.assertIn('Failed to send sighting notification email.', logs.output[0])
+
+
+class InAppNotificationApiTests(APITestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        self.helper = get_user_model().objects.create_user(
+            email='helper@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        self.other_user = get_user_model().objects.create_user(
+            email='other@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+
+    def _authenticate(self, user):
+        tokens = create_token_pair(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+    def _create_report(self, **overrides):
+        defaults = {
+            'owner': self.owner,
+            'cat_name': 'Luna',
+            'coat_color': 'Black',
+            'description': 'Likely hiding near gardens.',
+            'last_seen_address': '12 Private Home Street',
+            'last_seen_landmark': 'Near the playground',
+            'contact_name': 'Marta Owner',
+            'contact_phone': '+48 600 111 222',
+            'contact_email': 'owner@example.com',
+            'notify_email': False,
+            'notify_push': True,
+        }
+        defaults.update(overrides)
+        return LostCatReport.objects.create(**defaults)
+
+    def _sighting_payload(self, **overrides):
+        payload = {
+            'seen_at': timezone.now().isoformat(),
+            'location_description': 'Behind the bakery',
+            'latitude': 52.2297,
+            'longitude': 21.0122,
+            'confidence': Sighting.Confidence.HIGH,
+            'notes': 'Private helper note with helper@example.com',
+        }
+        payload.update(overrides)
+        return payload
+
+    def _create_sighting(self, report, **overrides):
+        defaults = {
+            'report': report,
+            'submitted_by': self.helper,
+            'seen_at': timezone.now(),
+            'location_description': 'Behind the bakery',
+            'latitude': 52.2297,
+            'longitude': 21.0122,
+            'confidence': Sighting.Confidence.HIGH,
+            'notes': 'Private helper note with helper@example.com',
+        }
+        defaults.update(overrides)
+        return Sighting.objects.create(**defaults)
+
+    def _create_notification(self, **overrides):
+        report = overrides.pop('report', self._create_report())
+        defaults = {
+            'recipient': self.owner,
+            'actor': self.helper,
+            'report': report,
+            'event_type': InAppNotification.EventType.SIGHTING_CREATED,
+            'title': 'New sighting for Luna',
+            'message': 'A logged-in helper submitted a new sighting.',
+            'action_url': f'/reports/{report.public_id}',
+        }
+        defaults.update(overrides)
+        return InAppNotification.objects.create(**defaults)
+
+    def test_owner_can_list_recent_notification_after_sighting_submission(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        self._authenticate(self.helper)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(
+                reverse('public-report-sighting-create', args=[report.public_id]),
+                self._sighting_payload(),
+                format='json',
+            )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self._authenticate(self.owner)
+
+        response = self.client.get(reverse('notification-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        notification = response.data['results'][0]
+        self.assertEqual(
+            notification['event_type'],
+            InAppNotification.EventType.SIGHTING_CREATED,
+        )
+        self.assertEqual(notification['report']['public_id'], str(report.public_id))
+        self.assertEqual(notification['report']['cat_name'], 'Luna')
+        response_text = str(response.data)
+        self.assertNotIn('helper@example.com', response_text)
+        self.assertNotIn('Private helper note', response_text)
+        self.assertNotIn('12 Private Home Street', response_text)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_only_recipient_can_list_and_mark_notification_read(self):
+        notification = self._create_notification()
+        self._authenticate(self.helper)
+
+        list_response = self.client.get(reverse('notification-list'))
+        read_response = self.client.patch(
+            reverse('notification-read', args=[notification.id]),
+            format='json',
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data['count'], 0)
+        self.assertEqual(read_response.status_code, status.HTTP_404_NOT_FOUND)
+
+        self._authenticate(self.owner)
+        owner_response = self.client.patch(
+            reverse('notification-read', args=[notification.id]),
+            format='json',
+        )
+
+        self.assertEqual(owner_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(owner_response.data['is_read'])
+        self.assertIsNotNone(owner_response.data['read_at'])
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+        self.assertIsNotNone(notification.read_at)
+
+    def test_unread_filter_returns_matching_notifications(self):
+        unread_notification = self._create_notification(title='Unread update')
+        read_notification = self._create_notification(title='Read update')
+        read_notification.is_read = True
+        read_notification.read_at = timezone.now()
+        read_notification.save(update_fields=('is_read', 'read_at'))
+        self._authenticate(self.owner)
+
+        unread_response = self.client.get(reverse('notification-list'), {'unread': 'true'})
+        read_response = self.client.get(reverse('notification-list'), {'unread': 'false'})
+        invalid_response = self.client.get(reverse('notification-list'), {'unread': 'maybe'})
+
+        self.assertEqual(unread_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(unread_response.data['count'], 1)
+        self.assertEqual(
+            unread_response.data['results'][0]['id'],
+            str(unread_notification.id),
+        )
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(read_response.data['count'], 1)
+        self.assertEqual(
+            read_response.data['results'][0]['id'],
+            str(read_notification.id),
+        )
+        self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('unread', invalid_response.data)
+
+    def test_sighting_verification_creates_helper_notification_after_commit(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        sighting = self._create_sighting(report)
+        self._authenticate(self.owner)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                reverse('report-sighting-verification', args=[report.id, sighting.id]),
+                {'verification_status': Sighting.VerificationStatus.USEFUL},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self._authenticate(self.helper)
+        notification_response = self.client.get(reverse('notification-list'))
+
+        self.assertEqual(notification_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(notification_response.data['count'], 1)
+        notification = notification_response.data['results'][0]
+        self.assertEqual(
+            notification['event_type'],
+            InAppNotification.EventType.SIGHTING_MARKED_USEFUL,
+        )
+        self.assertEqual(notification['title'], 'Your sighting was marked useful')
+        self.assertEqual(notification['report']['public_id'], str(report.public_id))
