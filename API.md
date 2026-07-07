@@ -57,6 +57,7 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `PATCH` | [`/api/reports/{id}/photos/{photo_id}/main/`](#patch-apireportsidphotosphotoidmain) | JWT | `200` | Set one report photo as the main photo. |
 | `DELETE` | [`/api/reports/{id}/photos/{photo_id}/`](#delete-apireportsidphotosphotoid) | JWT | `204` | Delete one report photo. |
 | `POST` | [`/api/reports/{id}/qr-code/`](#post-apireportsidqr-code) | JWT | `200` | Generate a QR code for one owned report's public page. |
+| `POST` | [`/api/reports/{id}/poster/`](#post-apireportsidposter) | JWT | `200` | Generate a printable PDF poster for one owned report. |
 | `GET` | [`/api/reports/{id}/sightings/`](#get-apireportsidsightings) | JWT | `200` | List sightings for one owned report. |
 | `PATCH` | [`/api/reports/{id}/sightings/{sighting_id}/verification/`](#patch-apireportsidsightingssightingidverification) | JWT | `200` | Mark one sighting as pending, useful, or false. |
 | `GET` | [`/api/reports/{id}/volunteer-searches/`](#get-apireportsidvolunteer-searches) | JWT | `200` | List helpers searching near one owned report. |
@@ -671,6 +672,43 @@ Behavior:
 - Hidden moderated reports return `400 Bad Request` because their public page is not visible.
 - The response uses `Cache-Control: no-store`.
 - The response does not expose owner private contact fields, exact address, internal owner ID, or moderation notes.
+
+<a id="post-apireportsidposter"></a>
+### Generate Lost Cat Report PDF Poster
+
+`POST /api/reports/{id}/poster/`
+
+Generates an A4 printable PDF poster for one report owned by the authenticated user. The request body is empty:
+
+```json
+{}
+```
+
+Success response:
+
+```text
+HTTP 200 OK
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="<cat-name>-poster.pdf"
+Cache-Control: no-store
+```
+
+The PDF contains:
+
+- report status and cat name,
+- the main report photo when available,
+- a short description,
+- a public-safe last known location summary,
+- safe contact instructions,
+- a QR code and public URL pointing to `{DJANGO_FRONTEND_URL}/reports/{public_id}`.
+
+Privacy behavior:
+
+- Reports owned by another user return `404 Not Found`.
+- Hidden moderated reports return `400 Bad Request` because their public page is not visible.
+- Direct contact fields are printed only when `contact_visibility` is `PUBLIC`.
+- `APP_ONLY` and `PRIVATE` reports print sighting/QR instructions instead of phone or email.
+- The poster does not print exact `last_seen_address`, owner ID, chip number, notification preferences, or moderation notes.
 
 <a id="get-apipublicreports"></a>
 ### Browse Public Lost Cat Reports
