@@ -16,6 +16,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.services import create_token_pair
+from points.models import PointTransaction, UserBadge
+from points.rules import (
+    SIGHTING_MARKED_USEFUL,
+    SIGHTING_SUBMITTED,
+    VOLUNTEER_SEARCH_STARTED,
+)
 from reports.models import LostCatReport, LostCatReportTimelineEvent
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
@@ -152,6 +158,19 @@ class SightingCreateApiTests(APITestCase):
         )
         self.assertEqual(timeline_event.actor, self.helper)
         self.assertEqual(timeline_event.location_summary, 'Behind the bakery')
+
+        self.helper.refresh_from_db()
+        self.assertEqual(self.helper.contribution_points, 5)
+        self.assertEqual(self.helper.public_badges, ['First help'])
+        point_transaction = PointTransaction.objects.get(user=self.helper)
+        self.assertEqual(point_transaction.reason, SIGHTING_SUBMITTED)
+        self.assertEqual(point_transaction.points, 5)
+        self.assertEqual(
+            point_transaction.idempotency_key,
+            f'sighting:{sighting.pk}:submitted',
+        )
+        self.assertNotIn('notes', point_transaction.metadata)
+        self.assertTrue(UserBadge.objects.filter(user=self.helper, code='FIRST_HELP').exists())
 
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -398,6 +417,18 @@ class SightingCreateApiTests(APITestCase):
         self.assertEqual(timeline_event.actor, self.owner)
         self.assertEqual(timeline_event.location_summary, 'Behind the bakery')
 
+        self.helper.refresh_from_db()
+        self.assertEqual(self.helper.contribution_points, 20)
+        useful_transaction = PointTransaction.objects.get(
+            user=self.helper,
+            reason=SIGHTING_MARKED_USEFUL,
+        )
+        self.assertEqual(useful_transaction.points, 15)
+        self.assertEqual(
+            useful_transaction.idempotency_key,
+            f'sighting:{sighting.pk}:marked-useful',
+        )
+
         public_list_response = self.client.get(reverse('lost-report-public-list'))
         self.assertEqual(public_list_response.status_code, status.HTTP_200_OK)
         latest_sighting = public_list_response.data['results'][0]['latest_sighting']
@@ -445,6 +476,55 @@ class SightingCreateApiTests(APITestCase):
         sighting.refresh_from_db()
         self.assertIsNone(sighting.verified_by)
         self.assertIsNone(sighting.verified_at)
+
+    def test_sighting_useful_points_are_not_awarded_twice(self):
+        report = self._create_report()
+        sighting = create_sighting(
+            report=report,
+            submitted_by=self.helper,
+            validated_data=self._payload(),
+        )
+        self._authenticate(self.owner)
+
+        first_response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.USEFUL},
+            format='json',
+        )
+        second_response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.PENDING},
+            format='json',
+        )
+        third_response = self.client.patch(
+            self._verification_url(report, sighting),
+            {'verification_status': Sighting.VerificationStatus.USEFUL},
+            format='json',
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(third_response.status_code, status.HTTP_200_OK)
+        self.helper.refresh_from_db()
+        self.assertEqual(self.helper.contribution_points, 20)
+        self.assertEqual(
+            PointTransaction.objects.filter(
+                user=self.helper,
+                reason=SIGHTING_MARKED_USEFUL,
+            ).count(),
+            1,
+        )
+
+    def test_owner_does_not_earn_helper_points_for_own_sighting(self):
+        report = self._create_report(status=LostCatReport.Status.MISSING)
+        self._authenticate(self.owner)
+
+        response = self.client.post(self._url(report), self._payload(), format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.contribution_points, 0)
+        self.assertFalse(PointTransaction.objects.exists())
 
     def test_staff_can_verify_sighting_for_any_report(self):
         report = self._create_report()
@@ -562,6 +642,10 @@ class SightingCreateApiTests(APITestCase):
         )
         self.assertEqual(timeline_event.actor, self.helper)
         self.assertEqual(timeline_event.location_summary, 'Near the playground')
+        self.helper.refresh_from_db()
+        self.assertEqual(self.helper.contribution_points, 2)
+        point_transaction = PointTransaction.objects.get(user=self.helper)
+        self.assertEqual(point_transaction.reason, VOLUNTEER_SEARCH_STARTED)
 
     def test_volunteer_search_is_idempotent_for_same_report_and_user(self):
         report = self._create_report(status=LostCatReport.Status.MISSING)
@@ -585,6 +669,15 @@ class SightingCreateApiTests(APITestCase):
             LostCatReportTimelineEvent.objects.filter(
                 report=report,
                 event_type=LostCatReportTimelineEvent.EventType.VOLUNTEER_SEARCH_STARTED,
+            ).count(),
+            1,
+        )
+        self.helper.refresh_from_db()
+        self.assertEqual(self.helper.contribution_points, 2)
+        self.assertEqual(
+            PointTransaction.objects.filter(
+                user=self.helper,
+                reason=VOLUNTEER_SEARCH_STARTED,
             ).count(),
             1,
         )

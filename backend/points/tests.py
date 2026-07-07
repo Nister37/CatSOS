@@ -3,6 +3,9 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from reports.models import LostCatReport
+from sightings.models import Sighting
+
 from .models import PointTransaction, UserBadge
 from .rules import (
     BADGE_RULES,
@@ -13,6 +16,7 @@ from .rules import (
     get_public_badge_labels_for_points,
     get_point_rule,
 )
+from .services import award_points
 
 
 class PointRuleTests(TestCase):
@@ -122,3 +126,125 @@ class PointModelTests(TestCase):
     def test_points_models_are_registered_in_admin(self):
         self.assertTrue(admin.site.is_registered(PointTransaction))
         self.assertTrue(admin.site.is_registered(UserBadge))
+
+
+class PointAwardServiceTests(TestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            email='owner@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+        )
+        self.helper = get_user_model().objects.create_user(
+            email='helper@example.com',
+            password='StrongPass123!',
+            is_email_verified=True,
+            public_badges=['Manual community badge'],
+        )
+        self.report = LostCatReport.objects.create(
+            owner=self.owner,
+            cat_name='Luna',
+            coat_color='Black',
+            description='Likely hiding near gardens.',
+            last_seen_address='12 Private Home Street',
+            last_seen_landmark='Near the playground',
+            contact_name='Marta Owner',
+            contact_phone='+48 600 111 222',
+            contact_email='owner@example.com',
+        )
+        self.sighting = Sighting.objects.create(
+            report=self.report,
+            submitted_by=self.helper,
+            seen_at='2026-07-07T10:00:00Z',
+            location_description='Behind the bakery',
+            latitude=52.2297,
+            longitude=21.0122,
+            confidence=Sighting.Confidence.HIGH,
+        )
+
+    def test_award_points_updates_user_total_and_public_badges(self):
+        transaction, badges = award_points(
+            user=self.helper,
+            reason=SIGHTING_SUBMITTED,
+            idempotency_key=f'sighting:{self.sighting.pk}:submitted',
+            metadata={
+                'sighting_id': str(self.sighting.pk),
+                'report_id': str(self.report.pk),
+            },
+        )
+
+        self.helper.refresh_from_db()
+        self.assertEqual(transaction.points, 5)
+        self.assertEqual(self.helper.contribution_points, 5)
+        self.assertEqual([badge.code for badge in badges], ['FIRST_HELP'])
+        self.assertEqual(
+            self.helper.public_badges,
+            ['Manual community badge', 'First help'],
+        )
+        self.assertEqual(
+            PointTransaction.objects.get().metadata,
+            {
+                'sighting_id': str(self.sighting.pk),
+                'report_id': str(self.report.pk),
+            },
+        )
+
+    def test_award_points_is_idempotent_for_same_key(self):
+        first_transaction, first_badges = award_points(
+            user=self.helper,
+            reason=SIGHTING_SUBMITTED,
+            idempotency_key='sighting:duplicate:submitted',
+        )
+        second_transaction, second_badges = award_points(
+            user=self.helper,
+            reason=SIGHTING_SUBMITTED,
+            idempotency_key='sighting:duplicate:submitted',
+        )
+
+        self.helper.refresh_from_db()
+        self.assertEqual(first_transaction, second_transaction)
+        self.assertEqual(first_badges, [UserBadge.objects.get(code='FIRST_HELP')])
+        self.assertEqual(second_badges, [])
+        self.assertEqual(PointTransaction.objects.count(), 1)
+        self.assertEqual(self.helper.contribution_points, 5)
+
+    def test_award_points_adds_threshold_badges_once(self):
+        award_points(
+            user=self.helper,
+            reason=SIGHTING_SUBMITTED,
+            idempotency_key='sighting:1:submitted',
+        )
+        award_points(
+            user=self.helper,
+            reason=SIGHTING_MARKED_USEFUL,
+            idempotency_key='sighting:1:marked-useful',
+        )
+        transaction, badges = award_points(
+            user=self.helper,
+            reason=SIGHTING_MARKED_USEFUL,
+            idempotency_key='sighting:2:marked-useful',
+        )
+
+        self.helper.refresh_from_db()
+        self.assertEqual(transaction.points, 15)
+        self.assertEqual(self.helper.contribution_points, 35)
+        self.assertEqual([badge.code for badge in badges], ['NEIGHBOR_HELPER'])
+        self.assertEqual(
+            list(UserBadge.objects.filter(user=self.helper).values_list('code', flat=True)),
+            ['FIRST_HELP', 'NEIGHBOR_HELPER'],
+        )
+        self.assertEqual(
+            self.helper.public_badges,
+            ['Manual community badge', 'First help', 'Neighbor helper'],
+        )
+
+    def test_award_points_skips_missing_user(self):
+        transaction, badges = award_points(
+            user=None,
+            reason=SIGHTING_SUBMITTED,
+            idempotency_key='anonymous:submitted',
+        )
+
+        self.assertIsNone(transaction)
+        self.assertEqual(badges, [])
+        self.assertFalse(PointTransaction.objects.exists())

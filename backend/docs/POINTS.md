@@ -1,9 +1,7 @@
 # Community Points and Badges
 
 CAT-068 defines the backend source of truth for MVP community point and badge
-rules. It does not award points from user workflows yet; CAT-069 wires these
-rules into sightings, useful sightings, volunteer search actions, and helpful
-report updates.
+rules. CAT-069 wires the core helper actions into those rules.
 
 ## Point Rules
 
@@ -14,9 +12,8 @@ report updates.
 | `VOLUNTEER_SEARCH_STARTED` | 2 | A logged-in helper marks that they are searching nearby. |
 | `HELPFUL_REPORT_UPDATE` | 3 | An owner keeps a report current with a meaningful update. |
 
-Each award should create one `PointTransaction` with a stable
-`idempotency_key`, so retries or repeated workflow calls cannot double-award
-the same action.
+Each award creates one `PointTransaction` with a stable `idempotency_key`, so
+retries or repeated workflow calls cannot double-award the same action.
 
 ## Badge Rules
 
@@ -31,13 +28,16 @@ total `contribution_points` reaches the threshold.
 | `TRUSTED_HELPER` | Trusted helper | 150 |
 
 `UserBadge` stores normalized badge awards. The existing `User.public_badges`
-field remains the public profile compatibility field until CAT-070 connects the
-normalized badge records to profile responses.
+field is synchronized with safe badge labels so current public profile responses
+can show earned badges without exposing transaction metadata.
 
 ## Security and Privacy
 
 - Points are only for authenticated user actions.
+- Owners do not receive helper points for sightings or volunteer search actions
+on their own reports.
 - No private report, sighting, or contact data is stored in rule definitions.
+- Award metadata stores internal object IDs only.
 - Public profile responses should expose only safe badge labels, not internal
 transaction metadata or idempotency keys.
 - Admins can inspect transactions and badge awards through Django Admin.
