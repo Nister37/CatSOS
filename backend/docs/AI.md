@@ -95,3 +95,31 @@ before the provider call, then sanitizes and truncates returned text before
 sending it back. It does not save the suggestion. The reviewed text can be saved
 as `public_summary` through the owner report create/update API, where it is
 validated again before being exposed on public report list and detail responses.
+
+## Poster Text Suggestion API
+
+`POST /api/reports/{id}/poster-text-suggestion/`
+
+Authentication is required. The authenticated user must own the report. The
+endpoint returns concise wording that can be previewed before the owner accepts
+it in the poster flow. It does not save the suggestion and it does not generate
+the PDF.
+
+Request body: none.
+
+Response:
+
+```json
+{
+  "suggestion": "MISSING: Luna. Black cat. Last seen near the playground. Scan the QR code with any sightings.",
+  "generated_by_ai": true,
+  "requires_review": true,
+  "fallback_reason": "",
+  "privacy_notice": "Private contact details are removed before AI processing. Review the suggestion before saving."
+}
+```
+
+The prompt uses only public-safe report fields such as cat name, appearance,
+description, public landmark, and reward presence. It does not send owner
+contact fields or the exact last-seen address. Text is sanitized before the
+provider call and again before the API response.

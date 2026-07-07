@@ -11,6 +11,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from ai.serializers import PosterTextSuggestionResponseSerializer
+from ai.services import suggest_lost_cat_poster_text
 from reports.models import LostCatReport
 
 from .serializers import ReportQRCodeSerializer
@@ -108,3 +110,35 @@ class ReportPosterView(OwnedReportPosterBaseView):
             content_type=POSTER_CONTENT_TYPE,
             filename=build_report_poster_filename(report),
         )
+
+
+class ReportPosterTextSuggestionView(OwnedReportPosterBaseView):
+    throttle_scope = 'ai_write'
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: PosterTextSuggestionResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+            404: OpenApiResponse(description='Report not found'),
+        },
+    )
+    def post(self, request, pk):
+        report = self.get_report()
+        self.validate_public_artifact_allowed(report, 'Poster text suggestions')
+
+        result = suggest_lost_cat_poster_text(
+            cat_name=report.cat_name,
+            description=report.description,
+            coat_color=report.coat_color,
+            breed=report.breed,
+            gender=report.get_gender_display(),
+            collar_description=report.collar_description,
+            personality=report.personality,
+            last_seen_landmark=report.last_seen_landmark,
+            reward_note=report.reward_note,
+            has_reward=bool(report.reward_amount is not None or report.reward_note),
+        )
+        serializer = PosterTextSuggestionResponseSerializer(result)
+        return no_store_response(serializer.data)
