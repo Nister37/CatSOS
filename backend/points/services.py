@@ -8,6 +8,8 @@ from .rules import (
     HELPFUL_REPORT_UPDATE,
     SIGHTING_MARKED_USEFUL,
     SIGHTING_SUBMITTED,
+    TRUSTED_REPORTER,
+    TRUSTED_REPORTER_USEFUL_SIGHTING_COUNT,
     VOLUNTEER_SEARCH_STARTED,
     get_badge_rules_for_points,
     get_point_rule,
@@ -139,6 +141,40 @@ def award_sighting_marked_useful_points(*, sighting):
             'report_id': str(sighting.report_id),
         },
     )
+
+
+@transaction.atomic
+def award_trusted_reporter_badge_for_useful_sighting(*, sighting):
+    if not _is_awardable_user(sighting.submitted_by):
+        return None, False
+    if _is_owner_self_action(user=sighting.submitted_by, report=sighting.report):
+        return None, False
+
+    from sightings.models import Sighting
+
+    User = get_user_model()
+    locked_user = User.objects.select_for_update().get(pk=sighting.submitted_by_id)
+    useful_sighting_count = Sighting.objects.filter(
+        submitted_by=locked_user,
+        verification_status=Sighting.VerificationStatus.USEFUL,
+    ).count()
+
+    if useful_sighting_count < TRUSTED_REPORTER_USEFUL_SIGHTING_COUNT:
+        return None, False
+
+    rule = BADGE_RULES_BY_CODE[TRUSTED_REPORTER]
+    badge, created = UserBadge.objects.get_or_create(
+        user=locked_user,
+        code=TRUSTED_REPORTER,
+        defaults={
+            'label': rule.label,
+            'metadata': {'useful_sighting_count': useful_sighting_count},
+        },
+    )
+    if created:
+        _sync_public_badges(locked_user)
+
+    return badge, created
 
 
 def award_volunteer_search_started_points(*, volunteer_search):

@@ -15,10 +15,10 @@ rules. CAT-069 wires the core helper actions into those rules.
 Each award creates one `PointTransaction` with a stable `idempotency_key`, so
 retries or repeated workflow calls cannot double-award the same action.
 
-## Badge Rules
+## Point Threshold Badge Rules
 
-Badges are threshold based for the MVP. They should be granted when a user's
-total `contribution_points` reaches the threshold.
+Most badges are threshold based for the MVP. They should be granted when a
+user's total `contribution_points` reaches the threshold.
 
 | Code | Label | Minimum points |
 | --- | --- | ---: |
@@ -26,6 +26,12 @@ total `contribution_points` reaches the threshold.
 | `NEIGHBOR_HELPER` | Neighbor helper | 25 |
 | `SEARCH_REGULAR` | Search regular | 75 |
 | `TRUSTED_HELPER` | Trusted helper | 150 |
+
+## Special Badge Rules
+
+| Code | Label | When it should be awarded |
+| --- | --- | --- |
+| `TRUSTED_REPORTER` | Trusted reporter | A helper has at least 3 sightings marked useful. |
 
 `UserBadge` stores normalized badge awards. The existing `User.public_badges`
 field is synchronized with safe badge labels so current public profile responses
@@ -36,8 +42,10 @@ can show earned badges without exposing transaction metadata.
 - Points are only for authenticated user actions.
 - Owners do not receive helper points for sightings or volunteer search actions
 on their own reports.
+- Owners do not receive the trusted reporter badge for sightings on their own
+reports.
 - No private report, sighting, or contact data is stored in rule definitions.
-- Award metadata stores internal object IDs only.
+- Award metadata stores internal object IDs or aggregate counts only.
 - Public profile responses should expose only safe badge labels, not internal
 transaction metadata or idempotency keys.
 - Admins can inspect transactions and badge awards through Django Admin.
