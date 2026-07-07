@@ -233,6 +233,7 @@ class AccountAuthApiTests(APITestCase):
             response.data['badges'],
             ['Manual community badge', 'First help', 'Neighbor helper'],
         )
+        self.assertNotIn('earned_badges', response.data)
         self.assertNotIn('point_transactions', response.data)
         self.assertEqual(response['Cache-Control'], 'no-store')
         self.assertEqual(response['Pragma'], 'no-cache')
