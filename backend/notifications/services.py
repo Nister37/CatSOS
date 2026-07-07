@@ -18,6 +18,20 @@ def build_sighting_location_summary(sighting) -> str:
     return f'{sighting.latitude:.3f}, {sighting.longitude:.3f}'
 
 
+def build_report_created_email(*, report) -> tuple[str, str]:
+    report_url = build_public_report_url(report)
+    subject = f'CatSOS report published for {report.cat_name}'
+    message = (
+        f'Your lost-cat report for {report.cat_name} is published on CatSOS.\n\n'
+        f'Public report link:\n{report_url}\n\n'
+        'Share this link or use it on QR posters so helpers can view the public '
+        'report and submit accountable sightings.\n\n'
+        'For privacy, this confirmation does not include exact address, chip '
+        'number, contact phone, or contact email.'
+    )
+    return subject, message
+
+
 def build_sighting_created_email(*, sighting) -> tuple[str, str]:
     report = sighting.report
     seen_at = sighting.seen_at
@@ -48,6 +62,30 @@ def should_send_sighting_created_email(*, sighting) -> bool:
     return sighting.submitted_by_id != report.owner_id
 
 
+def notify_owner_about_report_created(*, report) -> bool:
+    owner = report.owner
+    if owner is None or not owner.email:
+        return False
+
+    subject, message = build_report_created_email(report=report)
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[owner.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception(
+            'Failed to send report creation confirmation email.',
+            extra={'report_id': str(report.id)},
+        )
+        return False
+
+    return True
+
+
 def notify_owner_about_sighting_created(*, sighting) -> bool:
     if not should_send_sighting_created_email(sighting=sighting):
         return False
@@ -73,6 +111,10 @@ def notify_owner_about_sighting_created(*, sighting) -> bool:
         return False
 
     return True
+
+
+def enqueue_report_created_notification(*, report) -> None:
+    transaction.on_commit(lambda: notify_owner_about_report_created(report=report))
 
 
 def enqueue_sighting_created_notification(*, sighting) -> None:
