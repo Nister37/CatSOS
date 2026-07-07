@@ -30,6 +30,10 @@ import { MissingCatsPage } from './pages/MissingCatsPage';
 import { MyReportsPage } from './pages/MyReportsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
+import { ContactPage } from './pages/ContactPage';
+import { RequireAuth } from './components/RequireAuth';
 
 export function App() {
   return (
@@ -47,9 +51,9 @@ export function App() {
         <Route path="intake" element={<IntakePage />} />
       </Route>
       <Route path="missing" element={<MissingCatsPage />} />
-      <Route path="notifications" element={<NotificationsPage />} />
-      <Route path="my-reports" element={<MyReportsPage />} />
-      <Route path="my-reports/:id" element={<MyReportPage />} />
+      <Route path="notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+      <Route path="my-reports" element={<RequireAuth><MyReportsPage /></RequireAuth>} />
+      <Route path="my-reports/:id" element={<RequireAuth><MyReportPage /></RequireAuth>} />
       <Route path="map" element={<SightingsMapSearchPage />} />
       <Route path="map/results" element={<SightingsMapResultsPage />} />
       <Route path="report-sighting" element={<ReportSightingPage />} />
@@ -60,7 +64,10 @@ export function App() {
       <Route path="forgot-password" element={<ForgotPasswordPage />} />
       <Route path="password-reset/confirm" element={<ResetPasswordPage />} />
       <Route path="about" element={<AboutPage />} />
-      <Route path="settings" element={<SettingsPage />} />
+      <Route path="settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+      <Route path="privacy" element={<PrivacyPage />} />
+      <Route path="terms" element={<TermsPage />} />
+      <Route path="contact" element={<ContactPage />} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>

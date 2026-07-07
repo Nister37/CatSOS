@@ -38,19 +38,8 @@ export function Footer() {
 
         <div className="mt-xl pt-lg border-t border-secondary/30 flex flex-col md:flex-row justify-between items-center gap-md">
           <p className="text-secondary-fixed-dim font-label-sm text-label-sm">
-            © 2024 CatSOS. All rights reserved.
+            © 2026 CatSOS. All rights reserved.
           </p>
-          <div className="flex gap-md">
-            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Share">
-              <span className="material-symbols-outlined">share</span>
-            </button>
-            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Email">
-              <span className="material-symbols-outlined">mail</span>
-            </button>
-            <button className="text-secondary-fixed-dim hover:text-on-primary transition-colors" aria-label="Help">
-              <span className="material-symbols-outlined">help</span>
-            </button>
-          </div>
         </div>
       </div>
     </footer>

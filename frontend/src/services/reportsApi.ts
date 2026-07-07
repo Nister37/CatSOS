@@ -219,3 +219,36 @@ export async function fetchMissingCatsPage(
   const json = (await res.json()) as { results: PublicReport[]; count: number; next: string | null };
   return { results: json.results, count: json.count, hasNext: json.next !== null };
 }
+
+export function submitSighting(
+  reportPublicId: string,
+  data: {
+    seen_at: string;
+    location_description?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+    notes?: string;
+    photo?: File | null;
+  },
+): Promise<{ id: string }> {
+  const { photo, ...fields } = data;
+  const clean = Object.fromEntries(
+    Object.entries(fields).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  ) as Record<string, string | number>;
+
+  if (photo) {
+    const form = new FormData();
+    Object.entries(clean).forEach(([k, v]) => form.append(k, String(v)));
+    form.append('photo', photo);
+    return apiRequest(`/api/public/reports/${reportPublicId}/sightings/`, {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  return apiRequest(`/api/public/reports/${reportPublicId}/sightings/`, {
+    method: 'POST',
+    body: JSON.stringify(clean),
+  });
+}

@@ -10,7 +10,11 @@ const interceptNominatim = () => {
 };
 
 // Step helpers
-const completeStep1 = (catName = 'Luna', coatColor = 'Black and white tuxedo') => {
+const completeStep1 = (
+  catName = 'Luna',
+  coatColor = 'Black and white tuxedo',
+  extraBeforeLoad?: (win: Cypress.AUTWindow) => void,
+) => {
   cy.visit('/report-missing', {
     onBeforeLoad: (win) => {
       cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
@@ -21,6 +25,7 @@ const completeStep1 = (catName = 'Luna', coatColor = 'Black and white tuxedo') =
           });
         },
       );
+      extraBeforeLoad?.(win);
     },
   });
   cy.findByLabelText(/cat's name/i).type(catName);
@@ -181,7 +186,12 @@ describe('Report Missing Cat — Full Flow', () => {
     cy.intercept('GET', '/api/reports/e2e-report-uuid/sightings/', { statusCode: 200, body: { count: 0, next: null, previous: null, results: [] } }).as('getSightings');
     cy.intercept('GET', '/api/reports/e2e-report-uuid/timeline/', { statusCode: 200, body: { count: 0, next: null, previous: null, results: [] } }).as('getTimeline');
 
-    completeStep1('Luna', 'Tuxedo');
+    completeStep1('Luna', 'Tuxedo', (win) => {
+      win.localStorage.setItem(
+        'catsos_auth',
+        JSON.stringify({ accessToken: 'fake-e2e-token', refreshToken: 'fake-e2e-refresh' }),
+      );
+    });
     completeStep2('Baker Street, London');
 
     cy.findByText(/cat: luna/i).should('be.visible');

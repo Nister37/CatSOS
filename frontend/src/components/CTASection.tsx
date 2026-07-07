@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function CTASection() {
   return (
     <section className="py-xl">
@@ -18,9 +20,12 @@ export function CTASection() {
             </p>
           </div>
           <div className="relative z-10">
-            <button className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:scale-105 transition-all shadow-xl">
+            <Link
+              to="/signup"
+              className="bg-primary text-on-primary px-xl py-md rounded-xl font-headline-md text-headline-md font-bold hover:scale-105 transition-all shadow-xl inline-block"
+            >
               Join the Network
-            </button>
+            </Link>
           </div>
         </div>
       </div>

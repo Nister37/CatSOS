@@ -4,9 +4,11 @@ import L from 'leaflet';
 import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import { BaseTileLayer } from '../components/BaseTileLayer';
 
+import { useAppDispatch } from '../app/hooks';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
-import { fetchPublicReports, type PublicReport } from '../services/reportsApi';
+import { addNotification } from '../features/notifications/notificationsSlice';
+import { fetchPublicReports, submitSighting, type PublicReport } from '../services/reportsApi';
 
 const DEFAULT_CENTER: [number, number] = [51.505, -0.09];
 const DEFAULT_ZOOM = 12;
@@ -51,14 +53,18 @@ const UNKNOWN_ID = '__unknown__';
 
 export function ReportSightingPage() {
   const location = useLocation();
+  const dispatch = useAppDispatch();
   const preSelectedId = (location.state as { preSelectedId?: string } | null)?.preSelectedId ?? null;
 
   const [cats, setCats] = useState<PublicReport[] | null>(null);
   const [selectedCat, setSelectedCat] = useState<string | null>(preSelectedId);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [details, setDetails] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mapRef = useRef<L.Map | null>(null);
@@ -120,28 +126,53 @@ export function ReportSightingPage() {
     if (!file.type.startsWith('image/')) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
+    setPhotoFile(file);
   }
 
   function resetUpload(e: React.MouseEvent) {
     e.stopPropagation();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setPhotoFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitError(null);
+
+    if (!selectedCat || selectedCat === UNKNOWN_ID) {
+      setSubmitError('Please select a cat from the list above to submit a sighting.');
+      return;
+    }
+
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await submitSighting(selectedCat, {
+        seen_at: new Date().toISOString(),
+        location_description: sightingAddress || undefined,
+        latitude: pinPosition?.[0] ?? null,
+        longitude: pinPosition?.[1] ?? null,
+        confidence: 'MEDIUM',
+        notes: details || undefined,
+        photo: photoFile,
+      });
       setSubmitted(true);
-    }, 1500);
+    } catch {
+      dispatch(addNotification('Failed to submit sighting. Please try again.', 'error'));
+      setSubmitError('Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function resetForm() {
     setSelectedCat(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setPhotoFile(null);
+    setDetails('');
+    setSubmitError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setSubmitted(false);
   }
@@ -345,6 +376,8 @@ export function ReportSightingPage() {
                   <textarea
                     id="details"
                     rows={5}
+                    value={details}
+                    onChange={(e) => setDetails(e.target.value)}
                     placeholder="Where did you see them? Which direction were they heading? Did they look healthy?"
                     className="w-full p-md bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background transition-all placeholder:text-secondary font-body-md resize-none"
                   />
@@ -429,6 +462,11 @@ export function ReportSightingPage() {
 
                 {/* Submit */}
                 <div className="flex flex-col gap-sm pt-md">
+                  {submitError && (
+                    <p className="text-label-sm font-label-sm text-error text-center">
+                      {submitError}
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={submitting}

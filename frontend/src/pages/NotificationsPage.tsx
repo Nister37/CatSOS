@@ -20,10 +20,16 @@ const EVENT_ICON: Record<string, string> = {
   SIGHTING_MARKED_FALSE: 'thumb_down',
 };
 
-const CONFIDENCE_LABELS: Record<string, string> = {
-  LOW: 'Low confidence',
-  MEDIUM: 'Medium confidence',
-  HIGH: 'High confidence',
+const CONFIDENCE_SHORT: Record<string, string> = {
+  LOW: 'Low',
+  MEDIUM: 'Med',
+  HIGH: 'High',
+};
+
+const CONFIDENCE_COLOR: Record<string, string> = {
+  LOW: 'bg-error-container text-on-error-container',
+  MEDIUM: 'bg-secondary-container text-on-secondary-container',
+  HIGH: 'bg-[#2D8C3C]/15 text-[#2D8C3C]',
 };
 
 function timeAgo(isoString: string): string {
@@ -55,7 +61,6 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
     notification.sighting?.verification_status === 'PENDING' &&
     notification.sighting?.id &&
     notification.report?.id;
-
   const isVerifying = verifyingId === notification.sighting?.id;
 
   function handleClick() {
@@ -71,15 +76,15 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
       }`}
     >
       <div className="p-md space-y-sm">
-        {/* Header row */}
-        <div className="flex items-start gap-md">
+        {/* Top row: icon · title · actor avatar · time · unread dot */}
+        <div className="flex items-center gap-sm">
           <div
-            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
               notification.is_read ? 'bg-surface-container' : 'bg-primary-container/20'
             }`}
           >
             <span
-              className={`material-symbols-outlined text-[18px] ${
+              className={`material-symbols-outlined text-[16px] ${
                 notification.is_read ? 'text-secondary' : 'text-primary-container'
               }`}
             >
@@ -87,130 +92,119 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
             </span>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-sm">
-              <p
-                className={`font-label-md text-label-md leading-snug ${
-                  notification.is_read ? 'text-secondary' : 'text-on-surface'
-                }`}
-              >
-                {notification.title}
-              </p>
-              <div className="flex items-center gap-sm shrink-0">
-                <span className="text-secondary font-body-sm text-body-sm whitespace-nowrap">
-                  {timeAgo(notification.created_at)}
-                </span>
-                {!notification.is_read && (
-                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Unread" />
-                )}
-              </div>
-            </div>
+          <p
+            className={`flex-1 min-w-0 font-label-md text-label-md truncate ${
+              notification.is_read ? 'text-secondary' : 'text-on-surface'
+            }`}
+          >
+            {notification.title}
+          </p>
 
-            <p className="font-body-md text-body-md text-secondary mt-xs">{notification.message}</p>
+          {notification.actor && (
+            <span
+              title={notification.actor.display_name}
+              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-container/30 text-primary-container font-label-sm text-[10px] shrink-0"
+            >
+              {notification.actor.avatar_fallback}
+            </span>
+          )}
 
-            {/* Actor */}
-            {notification.actor && (
-              <div className="flex items-center gap-xs mt-xs text-secondary font-body-sm text-body-sm">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-container/30 text-primary-container font-label-sm text-[10px] shrink-0">
-                  {notification.actor.avatar_fallback}
-                </span>
-                {notification.actor.display_name}
-              </div>
-            )}
-
-            {/* Sighting details */}
-            {notification.sighting && (
-              <div className="mt-sm p-sm bg-surface-container-low rounded-xl space-y-xs">
-                {notification.sighting.location_description && (
-                  <div className="flex items-center gap-xs text-on-surface font-body-sm text-body-sm">
-                    <span className="material-symbols-outlined text-[14px] text-primary">location_on</span>
-                    {notification.sighting.location_description}
-                  </div>
-                )}
-                <div className="flex items-center gap-xs text-secondary font-body-sm text-body-sm">
-                  <span className="material-symbols-outlined text-[14px]">signal_cellular_alt</span>
-                  {CONFIDENCE_LABELS[notification.sighting.confidence] ?? notification.sighting.confidence}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-sm pt-sm border-t border-surface-container">
-          {isSightingPending ? (
-            <>
-              <button
-                type="button"
-                disabled={!!verifyingId}
-                onClick={() =>
-                  onVerify(
-                    notification.report!.id!,
-                    notification.sighting!.id,
-                    'USEFUL',
-                    notification.id,
-                  )
-                }
-                className="flex items-center gap-xs px-md py-xs rounded-xl bg-[#2D8C3C]/10 text-[#2D8C3C] font-label-md text-label-md hover:bg-[#2D8C3C]/20 transition-colors disabled:opacity-50"
-              >
-                {isVerifying ? (
-                  <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-[14px]">thumb_up</span>
-                )}
-                Approve
-              </button>
-              <button
-                type="button"
-                disabled={!!verifyingId}
-                onClick={() =>
-                  onVerify(
-                    notification.report!.id!,
-                    notification.sighting!.id,
-                    'FALSE',
-                    notification.id,
-                  )
-                }
-                className="flex items-center gap-xs px-md py-xs rounded-xl bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-80 transition-opacity disabled:opacity-50"
-              >
-                {isVerifying ? (
-                  <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-[14px]">thumb_down</span>
-                )}
-                False
-              </button>
-              <Link
-                to={notification.action_url || `/my-reports/${notification.report?.id ?? ''}`}
-                onClick={handleClick}
-                className="ml-auto text-primary font-label-md text-label-md hover:underline"
-              >
-                View report
-              </Link>
-            </>
-          ) : (
-            <div className="flex items-center justify-between w-full">
-              {notification.report && (
-                <Link
-                  to={notification.action_url || `/my-reports/${notification.report.id ?? ''}`}
-                  onClick={handleClick}
-                  className="text-primary font-label-md text-label-md hover:underline"
-                >
-                  View report
-                </Link>
-              )}
-              {!notification.is_read && (
-                <button
-                  type="button"
-                  onClick={handleClick}
-                  className="ml-auto text-secondary font-label-sm text-label-sm hover:text-on-surface transition-colors"
-                >
-                  Mark as read
-                </button>
-              )}
-            </div>
+          <span className="text-secondary font-body-sm text-body-sm whitespace-nowrap shrink-0">
+            {timeAgo(notification.created_at)}
+          </span>
+          {!notification.is_read && (
+            <span className="w-2 h-2 rounded-full bg-primary shrink-0" aria-label="Unread" />
           )}
         </div>
+
+        {/* Sighting details — single compact row */}
+        {notification.sighting && (
+          <div className="flex items-center gap-sm px-sm py-xs bg-surface-container-low rounded-xl">
+            {notification.sighting.location_description ? (
+              <span className="flex items-center gap-xs text-on-surface font-body-sm text-body-sm min-w-0">
+                <span className="material-symbols-outlined text-[13px] text-primary shrink-0">location_on</span>
+                <span className="truncate">{notification.sighting.location_description}</span>
+              </span>
+            ) : (
+              <span className="text-secondary font-body-sm text-body-sm">No location</span>
+            )}
+            <span
+              className={`shrink-0 ml-auto px-xs py-[2px] rounded-full text-[11px] font-label-sm ${
+                CONFIDENCE_COLOR[notification.sighting.confidence] ?? 'bg-surface-container text-secondary'
+              }`}
+            >
+              {CONFIDENCE_SHORT[notification.sighting.confidence] ?? notification.sighting.confidence}
+            </span>
+          </div>
+        )}
+
+        {/* Actions */}
+        {isSightingPending ? (
+          <div className="grid grid-cols-2 gap-sm pt-sm border-t border-surface-container">
+            <button
+              type="button"
+              disabled={!!verifyingId}
+              onClick={() =>
+                onVerify(notification.report!.id!, notification.sighting!.id, 'USEFUL', notification.id)
+              }
+              className="flex items-center justify-center gap-xs py-sm rounded-xl bg-[#2D8C3C]/10 text-[#2D8C3C] font-label-md text-label-md hover:bg-[#2D8C3C]/20 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isVerifying ? (
+                <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">thumb_up</span>
+              )}
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={!!verifyingId}
+              onClick={() =>
+                onVerify(notification.report!.id!, notification.sighting!.id, 'FALSE', notification.id)
+              }
+              className="flex items-center justify-center gap-xs py-sm rounded-xl bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-80 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isVerifying ? (
+                <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">thumb_down</span>
+              )}
+              False
+            </button>
+            <Link
+              to={notification.action_url || `/my-reports/${notification.report?.id ?? ''}`}
+              onClick={handleClick}
+              className="col-span-2 text-center text-primary font-label-sm text-label-sm py-xs hover:underline"
+            >
+              View full report
+            </Link>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between pt-sm border-t border-surface-container">
+            {notification.report ? (
+              <Link
+                to={notification.action_url || `/my-reports/${notification.report.id ?? ''}`}
+                onClick={handleClick}
+                className="flex items-center gap-xs text-primary font-label-md text-label-md hover:underline"
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                View report
+              </Link>
+            ) : (
+              <span />
+            )}
+            {!notification.is_read && (
+              <button
+                type="button"
+                onClick={handleClick}
+                aria-label="Mark as read"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:bg-surface-container hover:text-on-surface transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">done</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
