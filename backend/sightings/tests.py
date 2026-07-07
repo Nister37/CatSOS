@@ -184,6 +184,30 @@ class SightingCreateApiTests(APITestCase):
         self.assertNotIn('helper@example.com', email.body)
         self.assertNotIn('Private helper note', email.body)
 
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        FRONTEND_URL='https://app.catsos.example',
+    )
+    def test_sighting_submission_skips_owner_email_when_account_preference_disabled(self):
+        self.owner.notify_sighting_created_email = False
+        self.owner.save(update_fields=('notify_sighting_created_email',))
+        report = self._create_report(
+            status=LostCatReport.Status.MISSING,
+            notify_email=True,
+        )
+        self._authenticate(self.helper)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self._url(report),
+                self._payload(),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(LostCatReportTimelineEvent.objects.count(), 1)
+
     def test_authenticated_user_can_submit_sighting_with_photo(self):
         report = self._create_report(status=LostCatReport.Status.MISSING)
         self._authenticate(self.helper)

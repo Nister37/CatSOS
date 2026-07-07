@@ -86,6 +86,16 @@ class NotificationServiceTests(TestCase):
         self.assertNotIn('+48 600 111 222', email.body)
         self.assertNotIn('owner@example.com', email.body)
 
+    def test_skips_report_creation_email_when_account_preference_disabled(self):
+        self.owner.notify_report_created_email = False
+        self.owner.save(update_fields=('notify_report_created_email',))
+        report = self._create_report()
+
+        sent = notify_owner_about_report_created(report=report)
+
+        self.assertFalse(sent)
+        self.assertEqual(mail.outbox, [])
+
     def test_report_creation_email_backend_failure_is_logged_and_does_not_raise(self):
         report = self._create_report()
 
@@ -146,6 +156,20 @@ class NotificationServiceTests(TestCase):
         self.assertFalse(sent)
         self.assertEqual(mail.outbox, [])
 
+    def test_skips_report_status_email_when_account_preference_disabled(self):
+        self.owner.notify_report_status_changed_email = False
+        self.owner.save(update_fields=('notify_report_status_changed_email',))
+        report = self._create_report(notify_email=True)
+
+        sent = notify_owner_about_report_status_changed(
+            report=report,
+            old_status=LostCatReport.Status.MISSING,
+            new_status=LostCatReport.Status.FOUND,
+        )
+
+        self.assertFalse(sent)
+        self.assertEqual(mail.outbox, [])
+
     def test_report_status_email_backend_failure_is_logged_and_does_not_raise(self):
         report = self._create_report(notify_email=True)
 
@@ -191,6 +215,17 @@ class NotificationServiceTests(TestCase):
 
     def test_skips_email_when_report_email_notifications_disabled(self):
         report = self._create_report(notify_email=False)
+        sighting = self._create_sighting(report)
+
+        sent = notify_owner_about_sighting_created(sighting=sighting)
+
+        self.assertFalse(sent)
+        self.assertEqual(mail.outbox, [])
+
+    def test_skips_sighting_email_when_account_preference_disabled(self):
+        self.owner.notify_sighting_created_email = False
+        self.owner.save(update_fields=('notify_sighting_created_email',))
+        report = self._create_report(notify_email=True)
         sighting = self._create_sighting(report)
 
         sent = notify_owner_about_sighting_created(sighting=sighting)

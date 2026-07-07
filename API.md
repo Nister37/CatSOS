@@ -43,6 +43,8 @@ These are framework defaults in this project, not custom endpoint behavior.
 | Method | Path | Auth | Status | Purpose |
 | --- | --- | --- | --- | --- |
 | `GET` | [`/api/health/`](#get-apihealth) | Public | `200` | Backend health check. |
+| `GET` | [`/api/me/`](#get-apime) | JWT | `200` | Return the authenticated user's private account summary and notification preferences. |
+| `PATCH` | [`/api/me/`](#patch-apime) | JWT | `200` | Update the authenticated user's email notification preferences. |
 | `GET` | [`/api/profiles/{id}/`](#get-apiprofilesid) | Public | `200` | View a limited public contributor profile. |
 | `GET` | [`/api/reports/`](#get-apireports) | JWT | `200` | List the authenticated owner's lost cat reports. |
 | `POST` | [`/api/reports/`](#post-apireports) | JWT | `201` | Create a lost cat report with an optional main photo. |
@@ -99,6 +101,77 @@ Success response:
   "service": "catsos-backend"
 }
 ```
+
+<a id="get-apime"></a>
+### Current User
+
+`GET /api/me/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+```
+
+Success response:
+
+```json
+{
+  "id": 1,
+  "email": "owner@example.com",
+  "first_name": "Marta",
+  "last_name": "Owner",
+  "notify_report_created_email": true,
+  "notify_sighting_created_email": true,
+  "notify_report_status_changed_email": true,
+  "profile_picture_url": null,
+  "avatar_fallback": "MO"
+}
+```
+
+This endpoint is private to the authenticated user and returns `Cache-Control: no-store`.
+
+<a id="patch-apime"></a>
+### Update Current User Notification Preferences
+
+`PATCH /api/me/`
+
+Requires:
+
+```text
+Authorization: Bearer <access>
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "notify_report_created_email": false,
+  "notify_sighting_created_email": true,
+  "notify_report_status_changed_email": false
+}
+```
+
+All fields are optional. Unknown fields return `400 Bad Request` and are not saved.
+
+Success response:
+
+```json
+{
+  "id": 1,
+  "email": "owner@example.com",
+  "first_name": "Marta",
+  "last_name": "Owner",
+  "notify_report_created_email": false,
+  "notify_sighting_created_email": true,
+  "notify_report_status_changed_email": false,
+  "profile_picture_url": null,
+  "avatar_fallback": "MO"
+}
+```
+
+These preferences apply to product notification emails only. Email verification, password reset, password change, and other security-critical account emails are not disabled by these settings.
 
 <a id="get-apiprofilesid"></a>
 ### Public Contributor Profile
@@ -191,7 +264,7 @@ active=true
 
 Accepts either `application/json` for text-only report creation or `multipart/form-data` when uploading the first report photo. For multipart requests, send the existing report fields as form fields and the image file under the field name `photo`.
 
-When creation succeeds, the backend sends a transactional confirmation email to the report owner's account email after the report transaction commits. The email includes the cat name and public report link. It does not include exact address, chip number, contact phone, or contact email. This creation confirmation is separate from future `notify_email` sighting/status preferences.
+When creation succeeds and the owner has `notify_report_created_email=true`, the backend sends a transactional confirmation email to the report owner's account email after the report transaction commits. The email includes the cat name and public report link. It does not include exact address, chip number, contact phone, or contact email. This creation confirmation is controlled by the owner account preference rather than the per-report `notify_email` sighting/status preference.
 
 JSON request:
 
@@ -429,7 +502,7 @@ HTTP 200 OK
 
 The response body uses the same owner report shape returned by `POST /api/reports/`, with the updated `status`. A real status change also creates a `STATUS_CHANGED` timeline event with the previous status, new status, actor, location summary, and timestamp. Sending the current status again is treated as a successful no-op and does not create a duplicate timeline event.
 
-When `notify_email=true` and the status actually changes, the backend sends the owner a status-change email after the transaction commits. The email includes the cat name, previous status, new status, and public report link. It does not include exact address, chip number, contact phone, or contact email. No email is sent for same-status no-op updates.
+When `notify_email=true` on the report, `notify_report_status_changed_email=true` on the owner account, and the status actually changes, the backend sends the owner a status-change email after the transaction commits. The email includes the cat name, previous status, new status, and public report link. It does not include exact address, chip number, contact phone, or contact email. No email is sent for same-status no-op updates.
 
 Resolved status behavior:
 
@@ -882,7 +955,7 @@ Creates a pending sighting for a non-hidden active report. Guests cannot submit 
 
 Accepts either `application/json` for text-only sightings or `multipart/form-data` when attaching a photo. For multipart requests, send the existing sighting fields as form fields and the image file under the field name `photo`.
 
-When the report has `notify_email=true`, the backend sends the report owner an email after the sighting transaction commits. The email includes cat name, seen time, public-safe sighting location, confidence, and the public report link. It does not include helper email, phone, internal user ID, or private notes. Owner-submitted sightings do not send an owner notification.
+When the report has `notify_email=true` and the owner account has `notify_sighting_created_email=true`, the backend sends the report owner an email after the sighting transaction commits. The email includes cat name, seen time, public-safe sighting location, confidence, and the public report link. It does not include helper email, phone, internal user ID, or private notes. Owner-submitted sightings do not send an owner notification.
 
 Request:
 

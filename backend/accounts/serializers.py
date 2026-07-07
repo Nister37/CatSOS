@@ -114,6 +114,9 @@ class CurrentUserSerializer(serializers.Serializer):
     email = serializers.EmailField(read_only=True)
     first_name = serializers.CharField(read_only=True)
     last_name = serializers.CharField(read_only=True)
+    notify_report_created_email = serializers.BooleanField(read_only=True)
+    notify_sighting_created_email = serializers.BooleanField(read_only=True)
+    notify_report_status_changed_email = serializers.BooleanField(read_only=True)
     profile_picture_url = serializers.SerializerMethodField()
     avatar_fallback = serializers.SerializerMethodField()
 
@@ -125,6 +128,37 @@ class CurrentUserSerializer(serializers.Serializer):
 
     def get_avatar_fallback(self, user) -> str:
         return build_avatar_fallback(user)
+
+
+class CurrentUserUpdateSerializer(serializers.Serializer):
+    notify_report_created_email = serializers.BooleanField(required=False)
+    notify_sighting_created_email = serializers.BooleanField(required=False)
+    notify_report_status_changed_email = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        unknown_fields = set(self.initial_data) - set(self.fields)
+        if unknown_fields:
+            raise serializers.ValidationError(
+                {
+                    field: ['Unknown field.']
+                    for field in sorted(unknown_fields)
+                }
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        update_fields = []
+        for field, value in validated_data.items():
+            if getattr(instance, field) == value:
+                continue
+
+            setattr(instance, field, value)
+            update_fields.append(field)
+
+        if update_fields:
+            instance.save(update_fields=update_fields)
+
+        return instance
 
 
 class PublicProfileSerializer(serializers.Serializer):

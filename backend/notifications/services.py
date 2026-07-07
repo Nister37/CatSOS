@@ -79,12 +79,31 @@ def build_sighting_created_email(*, sighting) -> tuple[str, str]:
     return subject, message
 
 
+def user_allows_email_notification(*, user, preference_field) -> bool:
+    return bool(getattr(user, preference_field, True))
+
+
+def should_send_report_created_email(*, report) -> bool:
+    owner = report.owner
+    if owner is None or not owner.email:
+        return False
+    return user_allows_email_notification(
+        user=owner,
+        preference_field='notify_report_created_email',
+    )
+
+
 def should_send_sighting_created_email(*, sighting) -> bool:
     report = sighting.report
     owner = report.owner
     if not report.notify_email:
         return False
     if owner is None or not owner.email:
+        return False
+    if not user_allows_email_notification(
+        user=owner,
+        preference_field='notify_sighting_created_email',
+    ):
         return False
     return sighting.submitted_by_id != report.owner_id
 
@@ -95,12 +114,14 @@ def should_send_report_status_changed_email(*, report) -> bool:
         return False
     if owner is None or not owner.email:
         return False
-    return True
+    return user_allows_email_notification(
+        user=owner,
+        preference_field='notify_report_status_changed_email',
+    )
 
 
 def notify_owner_about_report_created(*, report) -> bool:
-    owner = report.owner
-    if owner is None or not owner.email:
+    if not should_send_report_created_email(report=report):
         return False
 
     subject, message = build_report_created_email(report=report)
@@ -109,7 +130,7 @@ def notify_owner_about_report_created(*, report) -> bool:
             subject=subject,
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[owner.email],
+            recipient_list=[report.owner.email],
             fail_silently=False,
         )
     except Exception:
