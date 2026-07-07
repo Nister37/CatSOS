@@ -166,12 +166,11 @@ function DetailCard({ report }: DetailCardProps) {
 
 interface SightingCardProps {
   sighting: OwnedSighting;
-  reportId: string;
   verifyingId: string | null;
   onVerify: (sightingId: string, status: 'USEFUL' | 'FALSE') => void;
 }
 
-function SightingCard({ sighting, reportId: _reportId, verifyingId, onVerify }: SightingCardProps) {
+function SightingCard({ sighting, verifyingId, onVerify }: SightingCardProps) {
   const verification = VERIFICATION_CONFIG[sighting.verification_status] ?? VERIFICATION_CONFIG.PENDING;
   const isPending = sighting.verification_status === 'PENDING';
   const isVerifying = verifyingId === sighting.id;
@@ -182,7 +181,7 @@ function SightingCard({ sighting, reportId: _reportId, verifyingId, onVerify }: 
         <div className="h-48 overflow-hidden bg-surface-container">
           <img
             src={sighting.photos[0].url}
-            alt="Sighting photo"
+            alt="Evidence from this sighting"
             className="w-full h-full object-cover"
           />
         </div>
@@ -555,7 +554,7 @@ export function MyReportPage() {
                           <SightingCard
                             key={s.id}
                             sighting={s}
-                            reportId={id!}
+
                             verifyingId={verifyingId}
                             onVerify={handleVerify}
                           />
@@ -574,7 +573,7 @@ export function MyReportPage() {
                           <SightingCard
                             key={s.id}
                             sighting={s}
-                            reportId={id!}
+
                             verifyingId={verifyingId}
                             onVerify={handleVerify}
                           />

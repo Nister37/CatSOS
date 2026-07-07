@@ -104,7 +104,6 @@ export function ForgotPasswordPage() {
                       type="email"
                       placeholder="name@example.com"
                       autoComplete="email"
-                      autoFocus
                       aria-invalid={Boolean(errors.email)}
                       aria-describedby={errors.email ? 'email-error' : undefined}
                       className="bg-surface-container-low border-2 border-transparent rounded-lg px-md py-sm font-body-md text-body-md transition-all duration-200 focus:outline-none focus:border-on-background focus:bg-white"

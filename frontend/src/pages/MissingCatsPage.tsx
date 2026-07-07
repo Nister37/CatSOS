@@ -23,7 +23,7 @@ export function MissingCatsPage() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
-  const [loadingCards, setLoadingCards] = useState(true);
+  const [loadingCards, setLoadingCards] = useState(true); // true = loading on mount
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -35,7 +35,6 @@ export function MissingCatsPage() {
 
   // Fetch first page of cards
   useEffect(() => {
-    setLoadingCards(true);
     fetchMissingCatsPage(1, PAGE_SIZE)
       .then(({ results, count, hasNext: hn }) => {
         setCards(results);
