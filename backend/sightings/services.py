@@ -1,7 +1,10 @@
 from django.db import transaction
 from django.utils import timezone
 
-from notifications.services import enqueue_sighting_created_notification
+from notifications.services import (
+    enqueue_sighting_created_notification,
+    enqueue_sighting_verification_notification,
+)
 from reports.models import LostCatReportTimelineEvent
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
@@ -94,5 +97,9 @@ def update_sighting_verification(*, sighting, actor, verification_status):
                 actor=actor,
                 event_type=event_type,
                 location_summary=build_sighting_location_summary(sighting),
+            )
+            enqueue_sighting_verification_notification(
+                sighting=sighting,
+                actor=actor,
             )
     return sighting
