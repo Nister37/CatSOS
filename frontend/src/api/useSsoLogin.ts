@@ -283,28 +283,44 @@ export function useSsoLogin() {
     setSsoLoading('microsoft');
 
     const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
-    const redirectUri = `${window.location.origin}/sso/microsoft/callback`;
+    const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
     const scope = 'openid email profile';
     const nonce = crypto.randomUUID();
 
-    const url =
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
-      `client_id=${encodeURIComponent(clientId)}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=id_token` +
-      `&scope=${encodeURIComponent(scope)}` +
-      `&response_mode=fragment` +
-      `&nonce=${encodeURIComponent(nonce)}` +
-      `&prompt=select_account`;
+    // Use Authorization Code with PKCE (recommended by Microsoft, doesn't require implicit grant)
+    const codeVerifier = crypto.randomUUID() + crypto.randomUUID();
+    sessionStorage.setItem('catsos-ms-code-verifier', codeVerifier);
 
-    const popup = window.open(url, 'microsoft-sso', 'width=500,height=700,left=200,top=100');
-    if (!popup) {
-      setSsoLoading(null);
-      dispatch(addNotification('Pop-up blocked. Please allow pop-ups for this site.', 'error'));
-      return;
-    }
+    // Generate code_challenge from code_verifier using SHA-256
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier)).then((hash) => {
+      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
-    listenForPopupResult('microsoft');
+      const url =
+        `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&response_mode=fragment` +
+        `&nonce=${encodeURIComponent(nonce)}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256` +
+        `&prompt=select_account`;
+
+      const popup = window.open(url, 'microsoft-sso', 'width=500,height=700,left=200,top=100');
+      if (!popup) {
+        setSsoLoading(null);
+        const msg = 'Pop-up blocked. Please allow pop-ups for this site.';
+        setSsoError(msg);
+        dispatch(addNotification(msg, 'error'));
+        return;
+      }
+
+      listenForPopupResult('microsoft');
+    });
   }, [dispatch, listenForPopupResult]);
 
   return { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError, clearSsoError: () => setSsoError(null) };

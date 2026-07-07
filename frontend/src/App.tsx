@@ -39,43 +39,47 @@ import { MicrosoftSsoCallbackPage } from './pages/MicrosoftSsoCallbackPage';
 import { RequireAuth } from './components/RequireAuth';
 
 export function App() {
+  const location = useLocation();
+
   return (
     <>
       <ScrollToTop />
-      <Routes>
-      <Route index element={<HomePage />} />
-      <Route path="report-missing">
-        <Route index element={<ReportStep1Page />} />
-        <Route path="location" element={<ReportStep2Page />} />
-        <Route path="contact" element={<ReportStep3Page />} />
-      </Route>
-      <Route element={<AppLayout />}>
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="intake" element={<IntakePage />} />
-      </Route>
-      <Route path="missing" element={<MissingCatsPage />} />
-      <Route path="notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
-      <Route path="my-reports" element={<RequireAuth><MyReportsPage /></RequireAuth>} />
-      <Route path="my-reports/:id" element={<RequireAuth><MyReportPage /></RequireAuth>} />
-      <Route path="map" element={<SightingsMapSearchPage />} />
-      <Route path="map/results" element={<SightingsMapResultsPage />} />
-      <Route path="report-sighting" element={<ReportSightingPage />} />
-      <Route path="shelters" element={<SheltersPage />} />
-      <Route path="login" element={<LoginPage />} />
-      <Route path="signup" element={<SignupPage />} />
-      <Route path="verify-email" element={<EmailVerificationPage />} />
-      <Route path="forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="password-reset/confirm" element={<ResetPasswordPage />} />
-      <Route path="about" element={<AboutPage />} />
-      <Route path="settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
-      <Route path="privacy" element={<PrivacyPage />} />
-      <Route path="terms" element={<TermsPage />} />
-      <Route path="contact" element={<ContactPage />} />
-      <Route path="generate-poster" element={<RequireAuth><GeneratePosterPage /></RequireAuth>} />
-      <Route path="sso/google/callback" element={<GoogleSsoCallbackPage />} />
-      <Route path="sso/microsoft/callback" element={<MicrosoftSsoCallbackPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <div key={location.pathname} className="route-motion">
+        <Routes>
+          <Route index element={<HomePage />} />
+          <Route path="report-missing">
+            <Route index element={<ReportStep1Page />} />
+            <Route path="location" element={<ReportStep2Page />} />
+            <Route path="contact" element={<ReportStep3Page />} />
+          </Route>
+          <Route element={<AppLayout />}>
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="intake" element={<IntakePage />} />
+          </Route>
+          <Route path="missing" element={<MissingCatsPage />} />
+          <Route path="notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="my-reports" element={<RequireAuth><MyReportsPage /></RequireAuth>} />
+          <Route path="my-reports/:id" element={<RequireAuth><MyReportPage /></RequireAuth>} />
+          <Route path="map" element={<SightingsMapSearchPage />} />
+          <Route path="map/results" element={<SightingsMapResultsPage />} />
+          <Route path="report-sighting" element={<ReportSightingPage />} />
+          <Route path="shelters" element={<SheltersPage />} />
+          <Route path="login" element={<LoginPage />} />
+          <Route path="signup" element={<SignupPage />} />
+          <Route path="verify-email" element={<EmailVerificationPage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="password-reset/confirm" element={<ResetPasswordPage />} />
+          <Route path="about" element={<AboutPage />} />
+          <Route path="settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+          <Route path="privacy" element={<PrivacyPage />} />
+          <Route path="terms" element={<TermsPage />} />
+          <Route path="contact" element={<ContactPage />} />
+          <Route path="generate-poster" element={<RequireAuth><GeneratePosterPage /></RequireAuth>} />
+          <Route path="sso/google/callback" element={<GoogleSsoCallbackPage />} />
+          <Route path="auth/callback/microsoft" element={<MicrosoftSsoCallbackPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
     </>
   );
 }
