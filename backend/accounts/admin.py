@@ -39,6 +39,16 @@ class AccountUserAdmin(UserAdmin):
             'Email verification',
             {'fields': ('is_email_verified', 'email_verification_sent_at', 'email_verified_at')},
         ),
+        (
+            'Notification preferences',
+            {
+                'fields': (
+                    'notify_report_created_email',
+                    'notify_sighting_created_email',
+                    'notify_report_status_changed_email',
+                )
+            },
+        ),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )

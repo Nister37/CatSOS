@@ -14,6 +14,7 @@ from .serializers import (
     AuthResponseSerializer,
     ChangeVerificationEmailSerializer,
     CurrentUserSerializer,
+    CurrentUserUpdateSerializer,
     DetailResponseSerializer,
     LoginSerializer,
     PasswordChangeSerializer,
@@ -92,6 +93,28 @@ class CurrentUserView(NoStoreAPIView):
     def get(self, request):
         serializer = CurrentUserSerializer(request.user, context={'request': request})
         return no_store_response(serializer.data)
+
+    @extend_schema(
+        request=CurrentUserUpdateSerializer,
+        responses={
+            200: CurrentUserSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def patch(self, request):
+        serializer = CurrentUserUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        response_serializer = CurrentUserSerializer(
+            user,
+            context={'request': request},
+        )
+        return no_store_response(response_serializer.data)
 
 
 class PublicProfileView(NoStoreAPIView):
