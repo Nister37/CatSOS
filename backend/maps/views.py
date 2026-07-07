@@ -15,6 +15,7 @@ OSM_ATTRIBUTION = '© OpenStreetMap contributors'
 class NearbyHelpView(APIView):
     """Return nearby veterinary clinics, animal shelters, and pet-related places."""
 
+    authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'nearby_help'

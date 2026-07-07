@@ -1,4 +1,4 @@
-import { apiRequest } from '../api/client';
+const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export type NearbyHelpType = 'vet' | 'shelter' | 'pet_help';
 
@@ -30,7 +30,14 @@ export async function fetchNearbyHelp(
   lng: number,
   radiusKm: number,
 ): Promise<NearbyHelpResponse> {
-  return apiRequest<NearbyHelpResponse>(
-    `/api/maps/nearby-help/?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`,
-  );
+  const url = `${BASE_URL}/api/maps/nearby-help/?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`;
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw await res.json().catch(() => ({ detail: 'Request failed' }));
+  }
+
+  return res.json() as Promise<NearbyHelpResponse>;
 }

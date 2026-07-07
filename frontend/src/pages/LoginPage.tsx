@@ -216,7 +216,7 @@ export function LoginPage() {
             {/* SSO configuration error */}
             {ssoError && (
               <div role="alert" className="w-full mt-sm p-sm bg-error/10 border border-error/30 rounded-lg">
-                <p className="text-error text-label-sm text-center">{ssoError}</p>
+                <p className="text-error text-label-sm text-center whitespace-pre-line">{ssoError}</p>
               </div>
             )}
 
