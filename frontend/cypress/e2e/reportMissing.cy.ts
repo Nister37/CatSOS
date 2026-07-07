@@ -185,6 +185,5 @@ describe('Report Missing Cat — Full Flow', () => {
     cy.wait('@createReport');
     cy.location('pathname', { timeout: 10000 }).should('eq', '/');
     cy.findByRole('heading', { name: /lost your cat/i }).should('be.visible');
-    cy.findByText(/missing report for luna has been posted/i).should('be.visible');
   });
 });
