@@ -1,6 +1,7 @@
-import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup } from 'react-leaflet';
 
 import { ShelterLocation } from '../data/shelters';
+import { BaseTileLayer } from './BaseTileLayer';
 
 interface SheltersMapProps {
   locations: ShelterLocation[];
@@ -18,10 +19,7 @@ export function SheltersMap({ locations }: SheltersMapProps) {
       className="w-full h-full"
       aria-label="Map of nearby shelters and veterinary clinics"
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <BaseTileLayer />
       {locations.map((loc) => {
         const color = loc.type === 'vet' ? VET_COLOR : SHELTER_COLOR;
         return (

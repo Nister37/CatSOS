@@ -22,6 +22,12 @@ import { SightingsMapResultsPage } from './pages/SightingsMapResultsPage';
 import { SightingsMapSearchPage } from './pages/SightingsMapSearchPage';
 import { SignupPage } from './pages/SignupPage';
 import { AboutPage } from './pages/AboutPage';
+import { MyReportPage } from './pages/MyReportPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { MissingCatsPage } from './pages/MissingCatsPage';
+import { MyReportsPage } from './pages/MyReportsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { SettingsPage } from './pages/SettingsPage';
 
@@ -40,6 +46,10 @@ export function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="intake" element={<IntakePage />} />
       </Route>
+      <Route path="missing" element={<MissingCatsPage />} />
+      <Route path="notifications" element={<NotificationsPage />} />
+      <Route path="my-reports" element={<MyReportsPage />} />
+      <Route path="my-reports/:id" element={<MyReportPage />} />
       <Route path="map" element={<SightingsMapSearchPage />} />
       <Route path="map/results" element={<SightingsMapResultsPage />} />
       <Route path="report-sighting" element={<ReportSightingPage />} />
@@ -47,6 +57,8 @@ export function App() {
       <Route path="login" element={<LoginPage />} />
       <Route path="signup" element={<SignupPage />} />
       <Route path="verify-email" element={<EmailVerificationPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="password-reset/confirm" element={<ResetPasswordPage />} />
       <Route path="about" element={<AboutPage />} />
       <Route path="settings" element={<SettingsPage />} />
       <Route path="*" element={<NotFoundPage />} />

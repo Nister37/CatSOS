@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, Marker, TileLayer } from 'react-leaflet';
+import { MapContainer, Marker } from 'react-leaflet';
+import { BaseTileLayer } from './BaseTileLayer';
 import L from 'leaflet';
 
 import { useAppSelector } from '../app/hooks';
@@ -184,7 +185,7 @@ export function CatDetailModal({ publicId, onClose }: Props) {
                           attributionControl={false}
                           style={{ height: '100%' }}
                         >
-                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <BaseTileLayer />
                           <Marker
                             position={[report.approximate_location.latitude, report.approximate_location.longitude]}
                             icon={pinIcon}

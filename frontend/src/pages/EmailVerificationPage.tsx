@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -5,16 +6,57 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { verifyEmailSchema, type VerifyEmailFormData } from '../schemas/authSchema';
-import { verifyEmail, getMe } from '../api/auth';
+import { verifyEmail, getMe, resendVerification } from '../api/auth';
 import { setCredentials, setAccessToken } from '../features/auth/authSlice';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import { useAppDispatch } from '../app/hooks';
+
+const RESEND_COOLDOWN_S = 60;
 
 export function EmailVerificationPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const email = (location.state as { email?: string } | null)?.email ?? '';
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function startCooldown(seconds: number) {
+    setResendCooldown(seconds);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((s) => {
+        if (s <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  }
+
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
+
+  async function handleResend() {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
+    try {
+      await resendVerification(email);
+      dispatch(addNotification('Verification code resent. Check your inbox.', 'success'));
+      startCooldown(RESEND_COOLDOWN_S);
+    } catch (err: unknown) {
+      const apiError = err as Record<string, unknown>;
+      if (Array.isArray(apiError.resend_available_in_seconds)) {
+        const wait = Number(apiError.resend_available_in_seconds[0]);
+        startCooldown(wait);
+        dispatch(addNotification(`Please wait ${wait}s before resending.`, 'warning'));
+      } else {
+        dispatch(addNotification('Failed to resend code. Please try again.', 'error'));
+      }
+    } finally {
+      setResending(false);
+    }
+  }
 
   const {
     register,
@@ -142,13 +184,22 @@ export function EmailVerificationPage() {
               </button>
             </form>
 
-            <div className="mt-lg text-center">
+            <div className="mt-lg text-center space-y-xs">
               <p className="font-body-md text-body-md text-tertiary">
-                Didn't receive the code?{' '}
-                <Link className="text-primary font-bold hover:underline" to="/signup">
-                  Try again
-                </Link>
+                Didn't receive the code?
               </p>
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || resending}
+                onClick={handleResend}
+                className="text-primary font-label-md text-label-md hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resending
+                  ? 'Sending…'
+                  : resendCooldown > 0
+                  ? `Resend in ${resendCooldown}s`
+                  : 'Resend code'}
+              </button>
             </div>
           </div>
         </div>
