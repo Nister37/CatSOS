@@ -10,8 +10,17 @@ from .services import create_report_photo
 from .validators import validate_report_photo_upload
 
 FOUND_MESSAGE_MAX_LENGTH = 500
+PUBLIC_SUMMARY_MAX_LENGTH = 240
 PRIVATE_EMAIL_PATTERN = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
 PHONE_CANDIDATE_PATTERN = re.compile(r'\+?\d[\d\s().-]{7,}\d')
+PRIVATE_ADDRESS_PATTERN = re.compile(
+    r'\b\d{1,5}\s+'
+    r'[\w\s.\'-]{2,80}'
+    r'\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|lane|ln\.?|drive|dr\.?|'
+    r'boulevard|blvd\.?|court|ct\.?|place|pl\.?)\b'
+    r'(?:\s+[\w\s.\'-]{0,40})?',
+    re.IGNORECASE,
+)
 RESOLVED_REPORT_STATUSES = {
     LostCatReport.Status.FOUND,
     LostCatReport.Status.CLOSED,
@@ -25,6 +34,18 @@ def contains_phone_like_text(value):
             return True
 
     return False
+
+
+def validate_public_safe_summary(value):
+    if PRIVATE_EMAIL_PATTERN.search(value) or contains_phone_like_text(value):
+        raise serializers.ValidationError(
+            'Do not include private email addresses or phone numbers.'
+        )
+    if PRIVATE_ADDRESS_PATTERN.search(value):
+        raise serializers.ValidationError(
+            'Do not include exact street addresses in the public summary.'
+        )
+    return value
 
 
 def build_approximate_location(report):
@@ -126,6 +147,7 @@ class LostCatReportOwnerSerializer(serializers.ModelSerializer):
             'has_microchip',
             'chip_number',
             'personality',
+            'public_summary',
             'description',
             'disappeared_at',
             'last_seen_address',
@@ -185,6 +207,12 @@ class LostCatReportPhotoUploadSerializer(serializers.Serializer):
 
 class LostCatReportWriteSerializer(serializers.ModelSerializer):
     photo = serializers.ImageField(required=False, write_only=True)
+    public_summary = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=PUBLIC_SUMMARY_MAX_LENGTH,
+        trim_whitespace=True,
+    )
 
     class Meta:
         model = LostCatReport
@@ -199,6 +227,7 @@ class LostCatReportWriteSerializer(serializers.ModelSerializer):
             'has_microchip',
             'chip_number',
             'personality',
+            'public_summary',
             'description',
             'disappeared_at',
             'last_seen_address',
@@ -223,6 +252,9 @@ class LostCatReportWriteSerializer(serializers.ModelSerializer):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(list(exc.messages))
         return value
+
+    def validate_public_summary(self, value):
+        return validate_public_safe_summary(value)
 
     def _value_from_attrs_or_instance(self, attrs, field_name, default=None):
         if field_name in attrs:
@@ -388,6 +420,7 @@ class LostCatReportPublicSerializer(serializers.ModelSerializer):
             'collar_description',
             'has_microchip',
             'personality',
+            'public_summary',
             'description',
             'disappeared_at',
             'last_seen_landmark',
@@ -474,6 +507,7 @@ class LostCatReportPublicListSerializer(serializers.ModelSerializer):
             'cat_name',
             'breed',
             'coat_color',
+            'public_summary',
             'description',
             'disappeared_at',
             'location_summary',

@@ -56,3 +56,39 @@ Response:
 Before the provider call, the backend removes email addresses, phone-like values,
 and street-like exact addresses from the prompt. The endpoint does not save the
 suggestion to any report.
+
+## Public Summary API
+
+`POST /api/ai/public-summary/`
+
+Authentication is required.
+
+Request:
+
+```json
+{
+  "cat_name": "Luna",
+  "coat_color": "Black with a white chest spot",
+  "personality": "Shy with strangers",
+  "last_seen_landmark": "Near the playground",
+  "description": "Indoor cat, likely hiding close to home."
+}
+```
+
+Response:
+
+```json
+{
+  "suggestion": "Luna is a shy black cat with a white chest spot, likely hiding near the playground.",
+  "generated_by_ai": true,
+  "requires_review": true,
+  "fallback_reason": "",
+  "privacy_notice": "Private contact details are removed before AI processing. Review the suggestion before saving."
+}
+```
+
+The endpoint strips private contact details and street-like exact addresses
+before the provider call, then sanitizes and truncates returned text before
+sending it back. It does not save the suggestion. The reviewed text can be saved
+as `public_summary` through the owner report create/update API, where it is
+validated again before being exposed on public report list and detail responses.

@@ -9,8 +9,10 @@ from rest_framework.views import APIView
 from .serializers import (
     DescriptionImproveRequestSerializer,
     DescriptionImproveResponseSerializer,
+    PublicSummaryRequestSerializer,
+    PublicSummaryResponseSerializer,
 )
-from .services import improve_lost_cat_description
+from .services import generate_public_report_summary, improve_lost_cat_description
 
 
 def set_no_store_headers(response):
@@ -40,6 +42,30 @@ class DescriptionImproveView(APIView):
             description=serializer.validated_data['description'],
         )
         response_serializer = DescriptionImproveResponseSerializer(result)
+        return set_no_store_headers(
+            Response(response_serializer.data, status=status.HTTP_200_OK)
+        )
+
+
+class PublicSummaryView(APIView):
+    parser_classes = [JSONParser]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'ai_write'
+
+    @extend_schema(
+        request=PublicSummaryRequestSerializer,
+        responses={
+            200: PublicSummaryResponseSerializer,
+            400: OpenApiResponse(description='Validation errors'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def post(self, request):
+        serializer = PublicSummaryRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = generate_public_report_summary(**serializer.validated_data)
+        response_serializer = PublicSummaryResponseSerializer(result)
         return set_no_store_headers(
             Response(response_serializer.data, status=status.HTTP_200_OK)
         )
