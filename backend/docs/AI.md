@@ -95,3 +95,46 @@ before the provider call, then sanitizes and truncates returned text before
 sending it back. It does not save the suggestion. The reviewed text can be saved
 as `public_summary` through the owner report create/update API, where it is
 validated again before being exposed on public report list and detail responses.
+
+## Report Translation Suggestion API
+
+`POST /api/reports/{id}/translation-suggestion/`
+
+Authentication is required. The authenticated user must own the report. The
+endpoint returns translated report text for owner review and does not save the
+suggestion to the report.
+
+Request:
+
+```json
+{
+  "target_language": "pl"
+}
+```
+
+Supported `target_language` values:
+
+- `en`: English
+- `pl`: Polish
+- `nl`: Dutch
+
+Response:
+
+```json
+{
+  "suggestion": "Reviewable translated text",
+  "target_language": "pl",
+  "target_language_label": "Polish",
+  "generated_by_ai": true,
+  "requires_review": true,
+  "fallback_reason": "",
+  "privacy_notice": "Private contact details are removed before AI processing. Review the suggestion before saving."
+}
+```
+
+The backend sends only public-safe report fields to AI: cat name, breed, coat
+color, gender, collar description, personality, description, and public
+landmark. It does not send owner contact fields, exact last-seen address, chip
+number, moderation notes, or private helper notes. If AI is disabled or
+unavailable, the response falls back to sanitized source description text with
+`generated_by_ai` set to `false`.
