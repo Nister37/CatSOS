@@ -46,7 +46,7 @@ export function ReportStep3Page() {
   const onSubmit = async (step3: ReportStep3Data) => {
     setIsSubmitting(true);
     try {
-      await createReport({ step1: state!.step1!, step2: state!.step2!, step3, photo: state?.photo });
+      const report = await createReport({ step1: state!.step1!, step2: state!.step2!, step3, photo: state?.photo });
       setIsSubmitted(true);
       dispatch(
         addNotification(
@@ -55,7 +55,7 @@ export function ReportStep3Page() {
         ),
       );
       await new Promise((r) => setTimeout(r, 800));
-      navigate('/');
+      navigate(`/my-reports/${report.id}`);
     } catch (err) {
       const message =
         err && typeof err === 'object' && 'detail' in err

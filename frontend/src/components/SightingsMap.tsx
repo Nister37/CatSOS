@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup, useMap } from 'react-leaflet';
 
 import { CatSighting, STATUS_LABELS } from '../data/sightings';
+import { BaseTileLayer } from './BaseTileLayer';
 
 interface SightingsMapProps {
   sightings: CatSighting[];
@@ -32,10 +33,7 @@ export function SightingsMap({ sightings, center }: SightingsMapProps) {
       className="w-full h-full"
       aria-label="Map of active cat sightings"
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <BaseTileLayer />
       <FlyToCenter center={center} />
       {sightings.map((s) => {
         const color = STATUS_COLORS[s.status];

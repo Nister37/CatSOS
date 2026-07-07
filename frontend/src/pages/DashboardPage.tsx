@@ -1,4 +1,5 @@
-import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup } from 'react-leaflet';
+import { BaseTileLayer } from '../components/BaseTileLayer';
 
 const rescueLocations = [
   { id: 'warsaw', name: 'Warsaw intake hub', position: [52.2297, 21.0122] as [number, number], cases: 12 },
@@ -37,10 +38,7 @@ export function DashboardPage() {
           className="map"
           aria-label="Map of active CatSOS rescue locations"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <BaseTileLayer />
           {rescueLocations.map((location) => (
             <CircleMarker center={location.position} key={location.id} radius={12}>
               <Popup>
