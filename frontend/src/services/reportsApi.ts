@@ -174,8 +174,18 @@ export function createReport({ step1, step2, step3, photo }: CreateReportPayload
 }
 
 export async function fetchOwnedReports(): Promise<OwnedReport[]> {
-  const data = await apiRequest<PaginatedResponse<OwnedReport>>('/api/reports/');
+  const data = await apiRequest<PaginatedResponse<OwnedReport>>('/api/reports/?page_size=50');
   return data.results;
+}
+
+export async function fetchOwnedReportsPage(
+  page = 1,
+  pageSize = 6,
+): Promise<{ results: OwnedReport[]; count: number; hasNext: boolean }> {
+  const data = await apiRequest<PaginatedResponse<OwnedReport>>(
+    `/api/reports/?page=${page}&page_size=${pageSize}`,
+  );
+  return { results: data.results, count: data.count, hasNext: data.next !== null };
 }
 
 export function fetchOwnedReport(id: string): Promise<OwnedReport> {
@@ -183,13 +193,35 @@ export function fetchOwnedReport(id: string): Promise<OwnedReport> {
 }
 
 export async function fetchReportSightings(id: string): Promise<OwnedSighting[]> {
-  const data = await apiRequest<PaginatedResponse<OwnedSighting>>(`/api/reports/${id}/sightings/`);
+  const data = await apiRequest<PaginatedResponse<OwnedSighting>>(`/api/reports/${id}/sightings/?page_size=50`);
   return data.results;
 }
 
 export async function fetchReportTimeline(id: string): Promise<TimelineEvent[]> {
-  const data = await apiRequest<PaginatedResponse<TimelineEvent>>(`/api/reports/${id}/timeline/`);
+  const data = await apiRequest<PaginatedResponse<TimelineEvent>>(`/api/reports/${id}/timeline/?page_size=50`);
   return data.results;
+}
+
+export async function fetchReportSightingsPage(
+  id: string,
+  page = 1,
+  pageSize = 6,
+): Promise<{ results: OwnedSighting[]; count: number; hasNext: boolean }> {
+  const data = await apiRequest<PaginatedResponse<OwnedSighting>>(
+    `/api/reports/${id}/sightings/?page=${page}&page_size=${pageSize}`,
+  );
+  return { results: data.results, count: data.count, hasNext: data.next !== null };
+}
+
+export async function fetchReportTimelinePage(
+  id: string,
+  page = 1,
+  pageSize = 8,
+): Promise<{ results: TimelineEvent[]; count: number; hasNext: boolean }> {
+  const data = await apiRequest<PaginatedResponse<TimelineEvent>>(
+    `/api/reports/${id}/timeline/?page=${page}&page_size=${pageSize}`,
+  );
+  return { results: data.results, count: data.count, hasNext: data.next !== null };
 }
 
 export function verifySighting(

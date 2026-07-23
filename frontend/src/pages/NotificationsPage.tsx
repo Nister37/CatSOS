@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAppDispatch } from '../app/hooks';
+import { AccordionSection } from '../components/AccordionSection';
 import { Footer } from '../components/Footer';
+import { LoadMoreButton } from '../components/LoadMoreButton';
 import { Navbar } from '../components/Navbar';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import {
-  fetchNotifications,
+  fetchNotificationsPage,
   markNotificationRead,
   type BackendNotification,
 } from '../services/notificationsApi';
 import { verifySighting } from '../services/reportsApi';
+
+const PAGE_SIZE = 8;
 
 const EVENT_ICON: Record<string, string> = {
   REPORT_CREATED: 'flag',
@@ -77,7 +81,6 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
       }`}
     >
       <div className="p-md space-y-sm">
-        {/* Top row: icon · title · actor avatar · time · unread dot */}
         <div className="flex items-center gap-sm">
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
@@ -118,7 +121,6 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
           )}
         </div>
 
-        {/* Sighting details — single compact row */}
         {notification.sighting && (
           <div className="flex items-center gap-sm px-sm py-xs bg-surface-container-low rounded-xl">
             {notification.sighting.location_description ? (
@@ -139,7 +141,6 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
           </div>
         )}
 
-        {/* Actions */}
         {isSightingPending ? (
           <div className="grid grid-cols-2 gap-sm pt-sm border-t border-surface-container">
             <button
@@ -214,16 +215,41 @@ function NotificationCard({ notification, verifyingId, onRead, onVerify }: Notif
 export function NotificationsPage() {
   const dispatch = useAppDispatch();
   const [notifications, setNotifications] = useState<BackendNotification[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchNotifications()
-      .then(setNotifications)
+    fetchNotificationsPage(1, PAGE_SIZE)
+      .then(({ results, count, hasNext: hn }) => {
+        setNotifications(results);
+        setTotalCount(count);
+        setHasNext(hn);
+        setPage(1);
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  async function loadMore() {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const { results, count, hasNext: hn } = await fetchNotificationsPage(nextPage, PAGE_SIZE);
+      setNotifications((prev) => [...prev, ...results]);
+      setTotalCount(count);
+      setHasNext(hn);
+      setPage(nextPage);
+    } catch {
+      setError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function handleRead(notificationId: string) {
     try {
@@ -232,7 +258,7 @@ export function NotificationsPage() {
         prev.map((n) => (n.id === notificationId ? { ...n, ...updated } : n)),
       );
     } catch {
-      // non-critical, silently ignore
+      // Non-critical for the page flow.
     }
   }
 
@@ -246,7 +272,6 @@ export function NotificationsPage() {
     setVerifyingId(sightingId);
     try {
       await verifySighting(reportId, sightingId, status);
-      // Update the sighting status inside the notification and mark it read
       setNotifications((prev) =>
         prev.map((n) => {
           if (n.id !== notificationId) return n;
@@ -263,7 +288,6 @@ export function NotificationsPage() {
           'success',
         ),
       );
-      // Fire mark-read in background
       markNotificationRead(notificationId).catch(() => {});
     } catch {
       dispatch(addNotification('Failed to update sighting. Please try again.', 'error'));
@@ -281,8 +305,7 @@ export function NotificationsPage() {
 
       <main className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
         <div className="max-w-2xl mx-auto space-y-xl">
-
-          <div className="flex items-end justify-between gap-md">
+          <div className="motion-reveal flex items-end justify-between gap-md">
             <div>
               <p className="text-label-md font-label-md text-primary uppercase tracking-widest mb-sm">
                 Your account
@@ -327,40 +350,58 @@ export function NotificationsPage() {
             </div>
           )}
 
+          {!loading && !error && notifications.length > 0 && (
+            <p className="motion-reveal font-body-md text-body-md text-secondary">
+              Showing {notifications.length} of {totalCount} notifications.
+            </p>
+          )}
+
           {unread.length > 0 && (
-            <section aria-labelledby="unread-heading" className="space-y-md">
-              <h2 id="unread-heading" className="font-label-md text-label-md text-secondary uppercase tracking-widest">
-                New · {unread.length}
-              </h2>
-              {unread.map((n) => (
-                <NotificationCard
-                  key={n.id}
-                  notification={n}
-                  verifyingId={verifyingId}
-                  onRead={handleRead}
-                  onVerify={handleVerify}
-                />
-              ))}
-            </section>
+            <AccordionSection
+              title="New"
+              count={unread.length}
+              summary="Unread updates that still need attention."
+            >
+              <div className="motion-stagger space-y-md">
+                {unread.map((n) => (
+                  <NotificationCard
+                    key={n.id}
+                    notification={n}
+                    verifyingId={verifyingId}
+                    onRead={handleRead}
+                    onVerify={handleVerify}
+                  />
+                ))}
+              </div>
+            </AccordionSection>
           )}
 
           {read.length > 0 && (
-            <section aria-labelledby="read-heading" className="space-y-md">
-              <h2 id="read-heading" className="font-label-md text-label-md text-secondary uppercase tracking-widest">
-                Earlier
-              </h2>
-              {read.map((n) => (
-                <NotificationCard
-                  key={n.id}
-                  notification={n}
-                  verifyingId={verifyingId}
-                  onRead={handleRead}
-                  onVerify={handleVerify}
-                />
-              ))}
-            </section>
+            <AccordionSection
+              title="Earlier"
+              count={read.length}
+              summary="Already-read notification history."
+              defaultOpen={unread.length === 0}
+            >
+              <div className="motion-stagger space-y-md">
+                {read.map((n) => (
+                  <NotificationCard
+                    key={n.id}
+                    notification={n}
+                    verifyingId={verifyingId}
+                    onRead={handleRead}
+                    onVerify={handleVerify}
+                  />
+                ))}
+              </div>
+            </AccordionSection>
           )}
 
+          {hasNext && !loading && !error && (
+            <div className="flex justify-center">
+              <LoadMoreButton onClick={loadMore} loading={loadingMore} />
+            </div>
+          )}
         </div>
       </main>
 

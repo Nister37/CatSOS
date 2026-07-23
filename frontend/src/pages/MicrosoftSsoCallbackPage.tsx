@@ -56,6 +56,13 @@ export function MicrosoftSsoCallbackPage() {
     const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
     const codeVerifier = sessionStorage.getItem('catsos-ms-code-verifier') || '';
 
+    if (!clientId) {
+      const msg = 'Microsoft sign-in is not configured. Missing client id.';
+      setError(msg);
+      sendResult({ type: 'microsoft-error', error: msg });
+      return;
+    }
+
     if (!codeVerifier) {
       const msg = 'Missing PKCE code verifier. Please try signing in again.';
       setError(msg);

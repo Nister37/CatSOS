@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { AccordionSection } from '../components/AccordionSection';
 import { Footer } from '../components/Footer';
+import { LoadMoreButton } from '../components/LoadMoreButton';
 import { Navbar } from '../components/Navbar';
-import { fetchOwnedReports, type OwnedReport } from '../services/reportsApi';
+import { fetchOwnedReportsPage, type OwnedReport } from '../services/reportsApi';
+
+const PAGE_SIZE = 6;
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
   MISSING: { label: 'Missing', bg: 'bg-error-container', text: 'text-on-error-container', icon: 'search' },
@@ -72,15 +76,40 @@ function ReportCard({ report }: ReportCardProps) {
 
 export function MyReportsPage() {
   const [reports, setReports] = useState<OwnedReport[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetchOwnedReports()
-      .then(setReports)
+    fetchOwnedReportsPage(1, PAGE_SIZE)
+      .then(({ results, count, hasNext: hn }) => {
+        setReports(results);
+        setTotalCount(count);
+        setHasNext(hn);
+        setPage(1);
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  async function loadMore() {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const { results, count, hasNext: hn } = await fetchOwnedReportsPage(nextPage, PAGE_SIZE);
+      setReports((prev) => [...prev, ...results]);
+      setTotalCount(count);
+      setHasNext(hn);
+      setPage(nextPage);
+    } catch {
+      setError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const active = reports.filter((r) => r.is_active_search);
   const resolved = reports.filter((r) => !r.is_active_search);
@@ -92,7 +121,7 @@ export function MyReportsPage() {
       <main className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
         <div className="max-w-container-max mx-auto space-y-xl">
 
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-md">
+          <div className="motion-reveal flex flex-col md:flex-row md:items-end justify-between gap-md">
             <div>
               <p className="text-label-md font-label-md text-primary uppercase tracking-widest mb-sm">
                 Your account
@@ -140,26 +169,41 @@ export function MyReportsPage() {
             </div>
           )}
 
+          {!loading && !error && reports.length > 0 && (
+            <p className="motion-reveal font-body-md text-body-md text-secondary">
+              Showing {reports.length} of {totalCount} {totalCount === 1 ? 'report' : 'reports'}.
+            </p>
+          )}
+
           {active.length > 0 && (
-            <section aria-labelledby="active-heading">
-              <h2 id="active-heading" className="font-label-md text-label-md text-secondary uppercase tracking-widest mb-md">
-                Active searches
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+            <AccordionSection
+              title="Active searches"
+              count={active.length}
+              summary="Reports still open for community search."
+            >
+              <div className="motion-stagger grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
                 {active.map((r) => <ReportCard key={r.id} report={r} />)}
               </div>
-            </section>
+            </AccordionSection>
           )}
 
           {resolved.length > 0 && (
-            <section aria-labelledby="resolved-heading">
-              <h2 id="resolved-heading" className="font-label-md text-label-md text-secondary uppercase tracking-widest mb-md">
-                Resolved
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+            <AccordionSection
+              title="Resolved"
+              count={resolved.length}
+              summary="Found or closed reports."
+              defaultOpen={active.length === 0}
+            >
+              <div className="motion-stagger grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
                 {resolved.map((r) => <ReportCard key={r.id} report={r} />)}
               </div>
-            </section>
+            </AccordionSection>
+          )}
+
+          {hasNext && !loading && !error && (
+            <div className="flex justify-center">
+              <LoadMoreButton onClick={loadMore} loading={loadingMore} />
+            </div>
           )}
 
         </div>

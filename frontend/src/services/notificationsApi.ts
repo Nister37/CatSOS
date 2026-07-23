@@ -40,9 +40,26 @@ type PaginatedResponse<T> = {
 };
 
 export async function fetchNotifications(unreadOnly = false): Promise<BackendNotification[]> {
-  const qs = unreadOnly ? '?unread=true' : '';
+  const qs = unreadOnly ? '?unread=true&page_size=50' : '?page_size=50';
   const data = await apiRequest<PaginatedResponse<BackendNotification>>(`/api/notifications/${qs}`);
   return data.results;
+}
+
+export async function fetchNotificationsPage(
+  page = 1,
+  pageSize = 8,
+  unreadOnly = false,
+): Promise<{ results: BackendNotification[]; count: number; hasNext: boolean }> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  if (unreadOnly) params.set('unread', 'true');
+
+  const data = await apiRequest<PaginatedResponse<BackendNotification>>(
+    `/api/notifications/?${params.toString()}`,
+  );
+  return { results: data.results, count: data.count, hasNext: data.next !== null };
 }
 
 export async function fetchUnreadCount(): Promise<number> {
