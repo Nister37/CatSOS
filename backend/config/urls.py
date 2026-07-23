@@ -24,6 +24,7 @@ from accounts.views import CurrentUserView, ProfilePictureView, PublicProfileVie
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/admin/', include('reports.admin_urls')),
     path('api/me/', CurrentUserView.as_view(), name='account-me'),
     path(
         'api/me/profile-picture/',
