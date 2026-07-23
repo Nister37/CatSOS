@@ -427,6 +427,14 @@ class LostCatReportPublicDetailView(APIView):
         return no_store_response(serializer.data)
 
 
+ALLOWED_ORDERING_FIELDS = {'created_at', '-created_at', 'cat_name', '-cat_name'}
+DEFAULT_ORDERING = '-created_at'
+DEFAULT_GEO_RADIUS_KM = 10.0
+MAX_GEO_RADIUS_KM = 100.0
+# Approximate km per degree latitude
+KM_PER_DEGREE_LAT = 111.0
+
+
 class LostCatReportPublicListView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -443,18 +451,130 @@ class LostCatReportPublicListView(APIView):
             normalized_status = status_filter.strip().upper()
             if normalized_status not in PUBLIC_STATUS_VALUES:
                 raise ValidationError({'status': ['Use a valid report status.']})
-            return queryset.filter(status=normalized_status)
+            queryset = queryset.filter(status=normalized_status)
+        elif active is None:
+            queryset = queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+        else:
+            normalized_active = active.strip().lower()
+            if normalized_active in TRUE_QUERY_VALUES:
+                queryset = queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+            elif normalized_active in FALSE_QUERY_VALUES:
+                queryset = queryset.filter(status__in=RESOLVED_REPORT_STATUSES)
+            else:
+                raise ValidationError({'active': ['Use true or false.']})
 
-        if active is None:
-            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
+        queryset = self._apply_search(queryset)
+        queryset = self._apply_filters(queryset)
+        queryset = self._apply_geo_filter(queryset)
+        queryset = self._apply_ordering(queryset)
 
-        normalized_active = active.strip().lower()
-        if normalized_active in TRUE_QUERY_VALUES:
-            return queryset.filter(status__in=ACTIVE_SEARCH_STATUSES)
-        if normalized_active in FALSE_QUERY_VALUES:
-            return queryset.filter(status__in=RESOLVED_REPORT_STATUSES)
+        return queryset
 
-        raise ValidationError({'active': ['Use true or false.']})
+    def _apply_search(self, queryset):
+        search = self.request.query_params.get('search', '').strip()
+        if not search:
+            return queryset
+
+        from django.db.models import Q
+
+        return queryset.filter(
+            Q(cat_name__icontains=search)
+            | Q(description__icontains=search)
+            | Q(breed__icontains=search)
+            | Q(coat_color__icontains=search)
+            | Q(last_seen_landmark__icontains=search)
+        )
+
+    def _apply_filters(self, queryset):
+        params = self.request.query_params
+
+        breed = params.get('breed', '').strip()
+        if breed:
+            queryset = queryset.filter(breed__iexact=breed)
+
+        coat_color = params.get('coat_color', '').strip()
+        if coat_color:
+            queryset = queryset.filter(coat_color__iexact=coat_color)
+
+        gender = params.get('gender', '').strip()
+        if gender:
+            queryset = queryset.filter(gender__iexact=gender)
+
+        city = params.get('city', '').strip()
+        if city:
+            queryset = queryset.filter(last_seen_address__icontains=city)
+
+        return queryset
+
+    def _apply_geo_filter(self, queryset):
+        params = self.request.query_params
+        lat_str = params.get('lat', '').strip()
+        lng_str = params.get('lng', '').strip()
+
+        if not lat_str or not lng_str:
+            return queryset
+
+        try:
+            lat = float(lat_str)
+            lng = float(lng_str)
+        except (ValueError, TypeError):
+            raise ValidationError({
+                'lat': ['Provide valid numeric latitude and longitude.'],
+            })
+
+        if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+            raise ValidationError({
+                'lat': ['Latitude must be between -90 and 90.'],
+                'lng': ['Longitude must be between -180 and 180.'],
+            })
+
+        radius_km_str = params.get('radius_km', '').strip()
+        if radius_km_str:
+            try:
+                radius_km = float(radius_km_str)
+            except (ValueError, TypeError):
+                raise ValidationError({
+                    'radius_km': ['Provide a valid numeric radius.'],
+                })
+            if radius_km <= 0:
+                raise ValidationError({
+                    'radius_km': ['Radius must be positive.'],
+                })
+            radius_km = min(radius_km, MAX_GEO_RADIUS_KM)
+        else:
+            radius_km = DEFAULT_GEO_RADIUS_KM
+
+        import math
+
+        delta_lat = radius_km / KM_PER_DEGREE_LAT
+        # Adjust longitude delta for latitude
+        cos_lat = math.cos(math.radians(lat))
+        if cos_lat > 0:
+            delta_lng = radius_km / (KM_PER_DEGREE_LAT * cos_lat)
+        else:
+            delta_lng = 180.0
+
+        min_lat = lat - delta_lat
+        max_lat = lat + delta_lat
+        min_lng = lng - delta_lng
+        max_lng = lng + delta_lng
+
+        queryset = queryset.filter(
+            last_seen_lat__isnull=False,
+            last_seen_lng__isnull=False,
+            last_seen_lat__gte=min_lat,
+            last_seen_lat__lte=max_lat,
+            last_seen_lng__gte=min_lng,
+            last_seen_lng__lte=max_lng,
+        )
+
+        return queryset
+
+    def _apply_ordering(self, queryset):
+        ordering = self.request.query_params.get('ordering', '').strip()
+        if ordering and ordering in ALLOWED_ORDERING_FIELDS:
+            return queryset.order_by(ordering)
+        return queryset.order_by(DEFAULT_ORDERING)
 
     @extend_schema(
         responses={
