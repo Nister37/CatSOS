@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from django.utils.csp import CSP
 
 
 def env_bool(name, default=False):
@@ -57,7 +58,9 @@ def load_local_env(env_path):
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
 
-        os.environ[name] = value
+        # Deployment and test-runner environment variables must take precedence
+        # over developer-local defaults from .env.
+        os.environ.setdefault(name, value)
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -107,6 +110,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'config.middleware.RequestIdMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -141,12 +146,26 @@ AUTH_USER_MODEL = 'accounts.User'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv('POSTGRES_DB'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['POSTGRES_DB'],
+            'USER': os.getenv('POSTGRES_USER', 'postgres'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+            'PORT': env_int('POSTGRES_PORT', 5432),
+            'CONN_MAX_AGE': env_int('POSTGRES_CONN_MAX_AGE', 60),
+            'CONN_HEALTH_CHECKS': True,
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -303,6 +322,54 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Backend API for the CatSOS application.',
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'LanguageCodeEnum': 'accounts.languages.PreferredLanguage',
+    },
+}
+
+SECURE_CSP = {
+    'default-src': [CSP.SELF],
+    'script-src': [CSP.SELF, CSP.UNSAFE_INLINE, 'https://cdn.jsdelivr.net'],
+    'style-src': [CSP.SELF, CSP.UNSAFE_INLINE, 'https://cdn.jsdelivr.net'],
+    'img-src': [CSP.SELF, 'data:'],
+    'font-src': [CSP.SELF, 'https://cdn.jsdelivr.net'],
+    'connect-src': [CSP.SELF],
+    'object-src': [CSP.NONE],
+    'base-uri': [CSP.SELF],
+    'form-action': [CSP.SELF],
+    'frame-ancestors': [CSP.NONE],
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'request_context': {
+            '()': 'config.request_context.RequestContextFilter',
+        },
+    },
+    'formatters': {
+        'plain': {
+            'format': '%(levelname)s %(name)s [%(request_id)s] %(message)s',
+        },
+        'json': {
+            '()': 'config.request_context.JsonFormatter',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'filters': ['request_context'],
+            'formatter': 'json' if not DEBUG else 'plain',
+        },
+    },
+    'loggers': {
+        'catsos': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+    },
 }
 
 # --- Production security hardening (active when DEBUG is False) ---
@@ -319,4 +386,4 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    REFERRER_POLICY = 'same-origin'
+    SECURE_REFERRER_POLICY = 'same-origin'
