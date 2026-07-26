@@ -18,6 +18,22 @@ PATHS = (
 )
 
 
+def validate_configuration():
+    if REQUEST_COUNT < 2:
+        raise SystemExit(
+            'LOAD_TEST_REQUEST_COUNT must be at least 2 to calculate p95 '
+            f'(got {REQUEST_COUNT})'
+        )
+    if CONCURRENCY < 1:
+        raise SystemExit(
+            f'LOAD_TEST_CONCURRENCY must be at least 1 (got {CONCURRENCY})'
+        )
+    if P95_BUDGET_MS <= 0:
+        raise SystemExit(
+            f'LOAD_TEST_P95_BUDGET_MS must be greater than 0 (got {P95_BUDGET_MS})'
+        )
+
+
 def fetch(index):
     started_at = time.monotonic()
     request = Request(
@@ -32,6 +48,7 @@ def fetch(index):
 
 
 def main():
+    validate_configuration()
     durations = []
     failures = []
     with ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:
