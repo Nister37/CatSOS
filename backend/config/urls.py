@@ -50,5 +50,33 @@ urlpatterns = [
     ),
 ]
 
+versioned_api_patterns = [
+    path('admin/', include('reports.admin_urls')),
+    path('me/', CurrentUserView.as_view(), name='account-me'),
+    path(
+        'me/profile-picture/',
+        ProfilePictureView.as_view(),
+        name='account-profile-picture',
+    ),
+    path('profiles/<int:pk>/', PublicProfileView.as_view(), name='account-public-profile'),
+    path('auth/', include('accounts.urls')),
+    path('', include('ai.urls')),
+    path('', include('assistant.urls')),
+    path('', include('reports.urls')),
+    path('', include('sightings.urls')),
+    path('', include('notifications.urls')),
+    path('', include('posters.urls')),
+    path('', include('points.urls')),
+    path('', include('maps.urls')),
+    path('', include('api.urls')),
+]
+
+urlpatterns += [
+    path(
+        'api/v1/',
+        include((versioned_api_patterns, 'api-v1'), namespace='api-v1'),
+    ),
+]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

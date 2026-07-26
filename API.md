@@ -1,5 +1,16 @@
 # CatSOS API
 
+## Versioning
+
+New integrations should use the versioned `/api/v1/` prefix. Existing `/api/`
+routes remain available for the current frontend and already printed QR links.
+The v1 routes currently expose the same contracts; incompatible future changes
+must be introduced under a new version rather than silently changing v1.
+
+Every API response includes `X-Request-ID`. A caller may supply a request ID
+containing 1–64 letters, digits, dots, underscores, or hyphens. Invalid values
+are replaced. Include this ID when reporting an API failure.
+
 Base URL for local development:
 
 ```text
@@ -902,6 +913,15 @@ page=1
 page_size=20
 active=true
 status=MISSING
+search=luna
+breed=Domestic shorthair
+coat_color=black
+gender=FEMALE
+city=Warsaw
+lat=52.2297
+lng=21.0122
+radius_km=10
+ordering=-updated_at
 ```
 
 Filtering behavior:
@@ -910,6 +930,15 @@ Filtering behavior:
 - `active=true` returns `MISSING` and `RECENTLY_SEEN`.
 - `active=false` returns `FOUND` and `CLOSED`.
 - `status=<value>` returns that exact status and overrides the default active-only behavior.
+- `search` performs a case-insensitive search over cat name, description, breed,
+  coat color, and landmark.
+- `breed`, `coat_color`, and `gender` are exact case-insensitive filters.
+- `city` searches the stored last-seen address but does not expose that address
+  in the response.
+- `lat` and `lng` together enable an approximate radius filter. `radius_km`
+  defaults to `10` and is capped at `100`.
+- `ordering` accepts `created_at`, `-created_at`, `updated_at`, `-updated_at`,
+  `disappeared_at`, `-disappeared_at`, `cat_name`, or `-cat_name`.
 - Invalid `active` or `status` values return `400 Bad Request`.
 
 Success response:
@@ -1848,6 +1877,39 @@ If the provider account is already linked to another CatSOS user:
   "provider": ["This SSO provider account is already linked to another user."]
 }
 ```
+
+## Maps And Nearby Help
+
+<a id="get-apimapsnearby-help"></a>
+### Find Nearby Vets And Shelters
+
+`GET /api/maps/nearby-help/`
+
+This public endpoint reads OpenStreetMap data through Overpass. It does not
+require authentication.
+
+Query parameters:
+
+```text
+lat=52.2297
+lng=21.0122
+radius_km=10
+```
+
+- `lat` and `lng` are required and must be valid coordinates.
+- `radius_km` is optional, defaults to `10`, must be at least `1`, and is capped
+  by `DJANGO_NEARBY_HELP_MAX_RADIUS_KM` (30 by default).
+- Responses are throttled and may be served from the nearby-help cache.
+- Provider failures return `200` with an empty `places` list and a warning so
+  the report flow remains usable.
+
+Success responses contain normalized `places`, a reliability `warning`, and
+`attribution` set to `© OpenStreetMap contributors`. Each place contains its
+OSM ID/type, name, category, coordinates, distance, optional contact/opening
+details, address summary, and quality score.
+
+Invalid parameters return field-based `400 Bad Request` errors. Rate limiting
+returns `429 Too Many Requests`.
 
 ## Schema And Docs
 

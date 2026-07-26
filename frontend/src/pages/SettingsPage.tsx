@@ -83,7 +83,7 @@ export function SettingsPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-xl px-margin-mobile">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-28 pb-xl px-margin-mobile">
         {/* Background decorations */}
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
           <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]" />

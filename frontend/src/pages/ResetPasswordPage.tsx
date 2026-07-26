@@ -32,7 +32,7 @@ export function ResetPasswordPage() {
     return (
       <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-grow flex items-center justify-center px-margin-mobile">
+        <main id="main-content" tabIndex={-1} className="flex-grow flex items-center justify-center px-margin-mobile">
           <div className="text-center space-y-md">
             <span className="material-symbols-outlined text-[64px] text-secondary block">link_off</span>
             <h1 className="font-headline-md text-headline-md text-on-surface">Invalid reset link</h1>
@@ -75,7 +75,7 @@ export function ResetPasswordPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow flex items-center justify-center pt-24 pb-xl px-margin-mobile">
+      <main id="main-content" tabIndex={-1} className="flex-grow flex items-center justify-center pt-24 pb-xl px-margin-mobile">
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
           <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]" />
         </div>

@@ -192,7 +192,7 @@ export function ReportSightingPage() {
     <div className="bg-background text-on-background font-body-md scroll-smooth min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-32 pb-xl px-margin-mobile md:px-xl max-w-container-max mx-auto">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-32 pb-xl px-margin-mobile md:px-xl max-w-container-max mx-auto">
         {submitted ? (
           /* Success state */
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-lg">
@@ -387,7 +387,7 @@ export function ReportSightingPage() {
                         onClick={() => setConfidence(level)}
                         className={`flex-1 py-sm rounded-xl border-2 font-label-md text-label-md transition-all ${
                           confidence === level
-                            ? 'border-primary-container bg-primary-container text-on-primary'
+                            ? 'border-primary bg-primary text-on-primary'
                             : 'border-outline-variant bg-surface-container text-on-surface hover:border-primary-container/50'
                         }`}
                       >
@@ -511,7 +511,7 @@ export function ReportSightingPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-primary-container text-on-primary py-md rounded-xl font-headline-md hover:shadow-lg hover:shadow-primary-container/30 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-sm"
+                    className="w-full bg-primary text-on-primary py-md rounded-xl font-headline-md hover:shadow-lg hover:shadow-primary-container/30 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-sm"
                   >
                     {submitting ? (
                       <>

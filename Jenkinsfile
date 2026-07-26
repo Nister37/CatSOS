@@ -51,12 +51,26 @@ pipeline {
     stage('Frontend Runtime Image') {
       steps {
         sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" build frontend-runtime'
+        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" up -d --wait frontend-runtime'
       }
     }
 
     stage('Cypress E2E') {
       steps {
-        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" up --abort-on-container-exit --exit-code-from frontend-e2e frontend-e2e'
+        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" up --abort-on-container-exit --exit-code-from frontend-e2e backend-api frontend-e2e'
+      }
+    }
+
+    stage('Dependency Security') {
+      steps {
+        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" run --rm backend-dependency-scan'
+        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" run --rm frontend-dependency-scan'
+      }
+    }
+
+    stage('Public API Load Smoke') {
+      steps {
+        sh 'docker compose -p "$CI_PROJECT" -f "$CI_COMPOSE" run --rm backend-load'
       }
     }
   }

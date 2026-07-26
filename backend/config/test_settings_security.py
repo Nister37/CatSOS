@@ -52,7 +52,7 @@ print(json.dumps({
     "SECURE_HSTS_PRELOAD": settings.SECURE_HSTS_PRELOAD,
     "SECURE_CONTENT_TYPE_NOSNIFF": settings.SECURE_CONTENT_TYPE_NOSNIFF,
     "X_FRAME_OPTIONS": settings.X_FRAME_OPTIONS,
-    "REFERRER_POLICY": settings.REFERRER_POLICY,
+    "SECURE_REFERRER_POLICY": settings.SECURE_REFERRER_POLICY,
 }))
 """
         result = run_settings_import(
@@ -73,4 +73,37 @@ print(json.dumps({
         self.assertTrue(settings['SECURE_HSTS_PRELOAD'])
         self.assertTrue(settings['SECURE_CONTENT_TYPE_NOSNIFF'])
         self.assertEqual(settings['X_FRAME_OPTIONS'], 'DENY')
-        self.assertEqual(settings['REFERRER_POLICY'], 'same-origin')
+        self.assertEqual(settings['SECURE_REFERRER_POLICY'], 'same-origin')
+
+    def test_production_security_headers_are_emitted(self):
+        script = """
+import json
+import django
+django.setup()
+from django.test import Client
+response = Client().get('/api/health/', secure=True, HTTP_HOST='catsos.example')
+print(json.dumps({
+    "status": response.status_code,
+    "referrer_policy": response.headers.get("Referrer-Policy"),
+    "content_type_options": response.headers.get("X-Content-Type-Options"),
+    "frame_options": response.headers.get("X-Frame-Options"),
+    "hsts": response.headers.get("Strict-Transport-Security"),
+}))
+"""
+        result = run_settings_import(
+            script,
+            {
+                'DJANGO_SETTINGS_MODULE': 'config.settings',
+                'DJANGO_DEBUG': 'false',
+                'DJANGO_SECRET_KEY': 'a-long-production-test-secret-key-with-more-than-50-characters',
+                'DJANGO_ALLOWED_HOSTS': 'catsos.example',
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        headers = json.loads(result.stdout)
+        self.assertEqual(headers['status'], 200)
+        self.assertEqual(headers['referrer_policy'], 'same-origin')
+        self.assertEqual(headers['content_type_options'], 'nosniff')
+        self.assertEqual(headers['frame_options'], 'DENY')
+        self.assertIn('max-age=31536000', headers['hsts'])

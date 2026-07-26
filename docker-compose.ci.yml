@@ -1,6 +1,30 @@
 name: catsos-ci
 
 services:
+  backend-dependency-scan:
+    image: ghcr.io/google/osv-scanner:v2.3.8
+    command: ["scan", "source", "--recursive", "/src/backend"]
+    volumes:
+      - .:/src:ro
+
+  frontend-dependency-scan:
+    image: ghcr.io/google/osv-scanner:v2.3.8
+    command: ["scan", "source", "--recursive", "--config", "/src/frontend/osv-scanner.toml", "/src/frontend"]
+    volumes:
+      - .:/src:ro
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: catsos
+      POSTGRES_USER: catsos
+      POSTGRES_PASSWORD: ci-database-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catsos -d catsos"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   backend-test:
     build:
       context: ./backend
@@ -9,6 +33,13 @@ services:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: ci-backend-secret
       DJANGO_ALLOWED_HOSTS: localhost,backend-test
+      POSTGRES_DB: catsos
+      POSTGRES_USER: catsos
+      POSTGRES_PASSWORD: ci-database-password
+      POSTGRES_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   backend-openapi:
     build:
@@ -19,21 +50,52 @@ services:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: ci-openapi-secret
       DJANGO_ALLOWED_HOSTS: localhost,backend-openapi
+      POSTGRES_DB: catsos
+      POSTGRES_USER: catsos
+      POSTGRES_PASSWORD: ci-database-password
+      POSTGRES_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   backend-api:
     build:
       context: ./backend
       target: development
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python manage.py migrate --noinput && python manage.py seed_demo_scenario --reset && python manage.py runserver 0.0.0.0:8000"
     environment:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: ci-api-secret
       DJANGO_ALLOWED_HOSTS: localhost,backend-api
+      POSTGRES_DB: catsos
+      POSTGRES_USER: catsos
+      POSTGRES_PASSWORD: ci-database-password
+      POSTGRES_HOST: postgres
+      DJANGO_EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+      DJANGO_CORS_ALLOWED_ORIGINS: http://frontend-dev:5173
+      DJANGO_CSRF_TRUSTED_ORIGINS: http://frontend-dev:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=2)\""]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  backend-load:
+    build:
+      context: ./backend
+      target: test
+    command: python load_smoke.py
+    environment:
+      LOAD_TEST_BASE_URL: http://backend-api:8000
+      LOAD_TEST_REQUEST_COUNT: "100"
+      LOAD_TEST_CONCURRENCY: "10"
+      LOAD_TEST_P95_BUDGET_MS: "1500"
+    depends_on:
+      backend-api:
+        condition: service_healthy
 
   frontend-quality:
     build:
@@ -59,11 +121,20 @@ services:
       context: ./frontend
       target: cypress
     command: yarn e2e --config baseUrl=http://frontend-dev:5173
+    environment:
+      BACKEND_API_URL: http://backend-api:8000
     depends_on:
       frontend-dev:
+        condition: service_healthy
+      backend-api:
         condition: service_healthy
 
   frontend-runtime:
     build:
       context: ./frontend
       target: runtime
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { runtimeEnv } from '../config/runtimeEnv';
 
 const SSO_RESULT_KEY = 'catsos-sso-result';
 
@@ -12,47 +13,35 @@ function sendResult(data: { type: string; token?: string; error?: string }) {
 }
 
 export function MicrosoftSsoCallbackPage() {
-  const [status, setStatus] = useState('Processing Microsoft sign-in...');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fragment = window.location.hash.substring(1);
-    const params = new URLSearchParams(fragment);
-
-    // Check for errors first
-    const oauthError = params.get('error');
-    const errorDesc = params.get('error_description');
-    if (oauthError) {
-      const msg = errorDesc || oauthError;
-      setError(msg);
-      sendResult({ type: 'microsoft-error', error: msg });
-      return;
-    }
-
-    // Authorization Code flow: exchange code for tokens
-    const code = params.get('code');
-    if (code) {
-      exchangeCodeForToken(code);
-      return;
-    }
-
-    // Legacy: implicit flow id_token
-    const idToken = params.get('id_token');
-    if (idToken) {
-      sendResult({ type: 'microsoft-token', token: idToken });
-      setStatus('Sign-in successful! This window will close.');
-      setTimeout(() => window.close(), 500);
-      return;
-    }
-
-    setError('No authorization code or token received from Microsoft.');
-    sendResult({ type: 'microsoft-error', error: 'No code or token received.' });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const callback = useMemo(() => {
+    const query = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.substring(1));
+    const get = (name: string) => query.get(name) ?? fragment.get(name);
+    const oauthError = get('error');
+    return {
+      code: get('code'),
+      idToken: get('id_token'),
+      error: oauthError ? get('error_description') || oauthError : null,
+    };
   }, []);
+  const [status, setStatus] = useState(
+    callback.idToken
+      ? 'Sign-in successful! This window will close.'
+      : callback.code
+        ? 'Exchanging authorization code...'
+        : 'Processing Microsoft sign-in...',
+  );
+  const [error, setError] = useState<string | null>(
+    callback.error
+      ?? (!callback.code && !callback.idToken
+        ? 'No authorization code or token received from Microsoft.'
+        : null),
+  );
 
-  async function exchangeCodeForToken(code: string) {
-    const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
-    const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
+  const exchangeCodeForToken = useCallback(async (code: string) => {
+    await Promise.resolve();
+    const clientId = runtimeEnv.VITE_MICROSOFT_CLIENT_ID;
+    const tenantId = runtimeEnv.VITE_MICROSOFT_TENANT_ID || 'common';
     const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
     const codeVerifier = sessionStorage.getItem('catsos-ms-code-verifier') || '';
 
@@ -71,7 +60,6 @@ export function MicrosoftSsoCallbackPage() {
     }
 
     try {
-      setStatus('Exchanging authorization code...');
       const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
       const body = new URLSearchParams({
         client_id: clientId,
@@ -113,7 +101,26 @@ export function MicrosoftSsoCallbackPage() {
       setError(msg);
       sendResult({ type: 'microsoft-error', error: msg });
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (callback.error) {
+      sendResult({ type: 'microsoft-error', error: callback.error });
+      return;
+    }
+    if (callback.code) {
+      queueMicrotask(() => {
+        void exchangeCodeForToken(callback.code!);
+      });
+      return;
+    }
+    if (callback.idToken) {
+      sendResult({ type: 'microsoft-token', token: callback.idToken });
+      const closeTimer = window.setTimeout(() => window.close(), 500);
+      return () => window.clearTimeout(closeTimer);
+    }
+    sendResult({ type: 'microsoft-error', error: 'No code or token received.' });
+  }, [callback, exchangeCodeForToken]);
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center' }}>

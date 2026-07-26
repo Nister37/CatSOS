@@ -149,7 +149,7 @@ export function ReportStep2Page() {
     <div className="bg-background text-on-background font-body-md scroll-smooth min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-xl px-margin-mobile">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-28 pb-xl px-margin-mobile">
         <div className="max-w-container-max mx-auto">
           {/* Progress indicator */}
           <div className="mb-lg max-w-3xl mx-auto">

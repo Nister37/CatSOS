@@ -24,13 +24,13 @@ export function LoadMoreButton({
     >
       {loading ? (
         <>
-          <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[18px] animate-spin">sync</span>
           {loadingLabel}
         </>
       ) : (
         <>
           {label}
-          <span className="material-symbols-outlined text-[18px]">expand_more</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[18px]">expand_more</span>
         </>
       )}
     </button>

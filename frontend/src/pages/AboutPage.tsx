@@ -66,7 +66,7 @@ export function AboutPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col overflow-x-hidden">
       <Navbar />
 
-      <main className="flex-grow">
+      <main id="main-content" tabIndex={-1} className="flex-grow">
         {/* Hero */}
         <section className="relative pt-[calc(80px+64px)] pb-24 px-margin-mobile">
           <div className="max-w-container-max mx-auto grid md:grid-cols-2 gap-xl items-center">

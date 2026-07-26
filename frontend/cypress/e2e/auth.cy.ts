@@ -1,102 +1,94 @@
-describe('Login Flow', () => {
-  beforeEach(() => {
-    cy.intercept('POST', '/api/auth/token/', {
+describe('Authentication flows', () => {
+  it('logs in, loads the current user, and returns to the home page', () => {
+    cy.intercept('POST', '**/api/auth/login/', {
       statusCode: 200,
-      body: { access: 'fake-access-token', refresh: 'fake-refresh-token' },
+      body: { access: 'fake-access-token', refresh: 'fake-refresh-token', token_type: 'Bearer' },
     }).as('login');
-    cy.intercept('GET', '/api/me/', {
+    cy.intercept('GET', '**/api/me/', {
       statusCode: 200,
-      body: { id: 1, email: 'user@example.com', display_name: 'Test User' },
+      body: {
+        id: 1,
+        email: 'user@example.com',
+        first_name: 'Test',
+        last_name: 'User',
+        avatar_fallback: 'TU',
+        profile_picture_url: null,
+      },
     }).as('getMe');
-  });
 
-  it('logs in with valid credentials and redirects to dashboard', () => {
     cy.visit('/login');
     cy.findByLabelText(/email/i).type('user@example.com');
     cy.findByLabelText(/password/i).type('SecurePass123!');
-    cy.findByRole('button', { name: /log in|sign in/i }).click();
+    cy.get('form').findByRole('button', { name: /log in/i }).click();
 
-    cy.wait('@login');
-    cy.location('pathname').should('eq', '/dashboard');
+    cy.wait(['@login', '@getMe']);
+    cy.location('pathname').should('eq', '/');
   });
-});
 
-describe('Login Validation', () => {
-  it('shows errors when submitting empty fields', () => {
+  it('validates empty login fields without sending a request', () => {
+    cy.intercept('POST', '**/api/auth/login/').as('login');
     cy.visit('/login');
-    cy.findByRole('button', { name: /log in|sign in/i }).click();
+    cy.get('form').findByRole('button', { name: /log in/i }).click();
 
-    cy.findByText(/email.*required|please enter.*email/i).should('be.visible');
-    cy.findByText(/password.*required|please enter.*password/i).should('be.visible');
+    cy.findAllByRole('alert')
+      .should('have.length', 2)
+      .first()
+      .should('contain.text', 'Enter a valid email address');
+    cy.get('@login.all').should('have.length', 0);
   });
 
-  it('shows error for invalid credentials', () => {
-    cy.intercept('POST', '/api/auth/token/', {
+  it('shows a safe invalid-credentials error', () => {
+    cy.intercept('POST', '**/api/auth/login/', {
       statusCode: 401,
-      body: { detail: 'No active account found with the given credentials' },
+      body: { non_field_errors: ['Invalid email or password.'] },
     }).as('loginFail');
 
     cy.visit('/login');
     cy.findByLabelText(/email/i).type('wrong@example.com');
     cy.findByLabelText(/password/i).type('WrongPassword1!');
-    cy.findByRole('button', { name: /log in|sign in/i }).click();
+    cy.get('form').findByRole('button', { name: /log in/i }).click();
 
     cy.wait('@loginFail');
-    cy.findByText(/invalid.*credentials|no active account|incorrect/i).should('be.visible');
+    cy.findByRole('alert').should('contain.text', 'Invalid email or password.');
   });
-});
 
-describe('Signup Flow', () => {
-  beforeEach(() => {
-    cy.intercept('POST', '/api/auth/register/', {
+  it('registers and routes to email verification', () => {
+    cy.intercept('POST', '**/api/auth/register/', {
       statusCode: 201,
-      body: { id: 2, email: 'newuser@example.com', display_name: 'New User' },
+      body: {
+        detail: 'Verification required.',
+        email_verification_required: true,
+        resend_available_in_seconds: 120,
+        user: { id: 2, email: 'newuser@example.com' },
+      },
     }).as('signup');
-    cy.intercept('POST', '/api/auth/token/', {
-      statusCode: 200,
-      body: { access: 'fake-access-token', refresh: 'fake-refresh-token' },
-    }).as('autoLogin');
-    cy.intercept('GET', '/api/me/', {
-      statusCode: 200,
-      body: { id: 2, email: 'newuser@example.com', display_name: 'New User' },
-    }).as('getMe');
-  });
 
-  it('signs up with valid data and redirects to dashboard', () => {
     cy.visit('/signup');
-    cy.findByLabelText(/email/i).type('newuser@example.com');
+    cy.findByLabelText(/^email$/i).type('newuser@example.com');
     cy.findByLabelText(/^password$/i).type('SecurePass123!');
-    cy.findByLabelText(/confirm password|repeat password/i).type('SecurePass123!');
-    cy.findByRole('button', { name: /sign up|create account|register/i }).click();
+    cy.findByLabelText(/confirm password/i).type('SecurePass123!');
+    cy.get('form').findByRole('button', { name: /create account/i }).click();
 
     cy.wait('@signup');
-    cy.location('pathname').should('eq', '/dashboard');
+    cy.location('pathname').should('eq', '/verify-email');
   });
-});
 
-describe('Protected Routes', () => {
-  const protectedPaths = ['/dashboard', '/my-reports', '/settings'];
-
-  protectedPaths.forEach((path) => {
-    it(`redirects unauthenticated user from ${path} to /login`, () => {
+  for (const path of ['/my-reports', '/settings', '/notifications']) {
+    it(`redirects unauthenticated users from ${path}`, () => {
       cy.visit(path);
       cy.location('pathname').should('eq', '/login');
     });
-  });
-});
+  }
 
-describe('Login a11y', () => {
-  it('passes automated accessibility checks on the login page', () => {
-    cy.visit('/login');
-    cy.injectAxe();
-    cy.checkA11y();
-  });
-});
-
-describe('Signup a11y', () => {
-  it('passes automated accessibility checks on the signup page', () => {
-    cy.visit('/signup');
-    cy.injectAxe();
-    cy.checkA11y();
-  });
+  for (const path of ['/login', '/signup']) {
+    it(`has no automated accessibility violations on ${path}`, () => {
+      cy.visit(path);
+      cy.get('.page-motion').should('have.css', 'opacity', '1');
+      cy.get('.page-motion > *').each(($element) => {
+        cy.wrap($element).should('have.css', 'opacity', '1');
+      });
+      cy.injectAxe();
+      cy.checkA11y();
+    });
+  }
 });

@@ -49,7 +49,7 @@ export function SightingsMapSearchPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col scroll-smooth">
       <Navbar />
 
-      <main className="flex-grow pt-20 relative overflow-hidden flex flex-col items-center justify-center">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-20 relative overflow-hidden flex flex-col items-center justify-center">
         {/* Background map watermark */}
         <div
           ref={watermarkRef}

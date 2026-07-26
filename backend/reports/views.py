@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -28,6 +29,7 @@ from .serializers import (
     LostCatReportStatusUpdateSerializer,
     LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
+    get_relevant_sightings_queryset,
 )
 from .services import (
     change_report_status,
@@ -443,7 +445,14 @@ class LostCatReportPublicListView(APIView):
     def get_queryset(self):
         queryset = LostCatReport.objects.exclude(
             moderation_status=LostCatReport.ModerationStatus.HIDDEN,
-        ).prefetch_related('photos')
+        ).prefetch_related(
+            'photos',
+            Prefetch(
+                'sightings',
+                queryset=get_relevant_sightings_queryset(),
+                to_attr='public_relevant_sightings',
+            ),
+        )
         status_filter = self.request.query_params.get('status')
         active = self.request.query_params.get('active')
 

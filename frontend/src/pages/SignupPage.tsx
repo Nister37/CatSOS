@@ -47,7 +47,7 @@ export function SignupPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="min-h-screen pt-32 pb-xl px-margin-mobile flex items-center justify-center relative overflow-hidden">
+      <main id="main-content" tabIndex={-1} className="min-h-screen pt-32 pb-xl px-margin-mobile flex items-center justify-center relative overflow-hidden">
         {/* Background decoration */}
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary-container opacity-5 blur-[120px] rounded-full" />
         <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-on-background opacity-5 blur-[120px] rounded-full" />

@@ -303,7 +303,7 @@ export function NotificationsPage() {
     <div className="bg-background text-on-background font-body-md scroll-smooth min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
         <div className="max-w-2xl mx-auto space-y-xl">
           <div className="motion-reveal flex items-end justify-between gap-md">
             <div>
