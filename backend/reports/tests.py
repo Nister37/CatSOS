@@ -1570,6 +1570,32 @@ class LostCatReportCreateApiTests(APITestCase):
         self.assertNotIn('image', card['main_photo'])
         self.assertNotIn('path', card['main_photo'])
 
+    def test_public_report_list_query_count_does_not_grow_with_reports(self):
+        for index in range(5):
+            report = self._create_report(
+                self.owner,
+                cat_name=f'Query count cat {index}',
+                status=LostCatReport.Status.MISSING,
+            )
+            create_sighting(
+                report=report,
+                submitted_by=self.other_user,
+                validated_data={
+                    'seen_at': timezone.now() - timedelta(minutes=index),
+                    'location_description': f'Location {index}',
+                    'latitude': 52.2,
+                    'longitude': 21.0,
+                    'confidence': Sighting.Confidence.MEDIUM,
+                    'notes': 'Query-count regression test.',
+                },
+            )
+
+        with self.assertNumQueries(4):
+            response = self.client.get(self._public_list_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 5)
+
     def test_public_report_list_prefers_confirmed_sighting_over_newer_pending(self):
         report = self._create_report(
             self.owner,

@@ -105,6 +105,12 @@ Report owners can review all sightings for their own reports through `/api/repor
 
 Auth endpoints and public profile responses return `Cache-Control: no-store` and are protected by scoped DRF throttles or cache-backed reset limits. Verification-code resend cooldowns and password reset rate limits return `429 Too Many Requests` with `Retry-After`.
 
+All API responses include a bounded `X-Request-ID` that is also attached to
+structured production logs. Production responses enforce a Content Security
+Policy alongside the existing HSTS, nosniff, frame, and referrer policies.
+Versioned aliases are available under `/api/v1/`; existing `/api/` public links
+remain stable for printed QR codes.
+
 The public maps endpoint `/api/maps/nearby-help/` returns nearby veterinary clinics, animal shelters, and pet-related places via the Overpass API. It validates latitude, longitude, and radius, caps the search radius, caches responses, handles Overpass timeout/failure gracefully, and includes OpenStreetMap attribution with a "call before visiting" warning. See `backend/.env.example` for Overpass configuration.
 
 The public assistant endpoint `/api/assistant/found-cat/decision-tree/` returns a static decision tree for the "I found a cat" guidance flow. See [docs/ASSISTANT.md](docs/ASSISTANT.md).
