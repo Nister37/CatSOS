@@ -1,3 +1,26 @@
+type AxeViolation = {
+  id: string;
+  impact?: string | null;
+  nodes: Array<{ target: string[] }>;
+};
+
+const failWithViolationDetails = (violations: AxeViolation[]) => {
+  if (violations.length > 0) {
+    throw new Error(JSON.stringify(violations.map(({ id, impact, nodes }) => ({
+      id,
+      impact,
+      targets: nodes.map((node) => node.target),
+    }))));
+  }
+};
+
+const waitForPageMotion = () => {
+  cy.get('.page-motion').should('have.css', 'opacity', '1');
+  cy.get('.page-motion > *').each(($element) => {
+    cy.wrap($element).should('have.css', 'opacity', '1');
+  });
+};
+
 describe('CatSOS SPA', () => {
   it('renders the dashboard and passes automated accessibility checks', () => {
     cy.visit('/');
@@ -29,11 +52,13 @@ describe('CatSOS SPA', () => {
 
   it('passes automated accessibility checks on public auth routes', () => {
     cy.visit('/login');
+    waitForPageMotion();
     cy.injectAxe();
-    cy.checkA11y();
+    cy.checkA11y(undefined, undefined, failWithViolationDetails);
 
     cy.visit('/signup');
+    waitForPageMotion();
     cy.injectAxe();
-    cy.checkA11y();
+    cy.checkA11y(undefined, undefined, failWithViolationDetails);
   });
 });

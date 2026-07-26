@@ -9,6 +9,7 @@ export const TileLayer = () => null;
 export const CircleMarker = MockLeafletElement;
 export const Marker = MockLeafletElement;
 export const Popup = MockLeafletElement;
+export const Tooltip = MockLeafletElement;
 
 export const useMap = () => ({
   flyTo: () => {},

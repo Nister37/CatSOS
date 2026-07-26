@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { fetchMissingCatsPage } from '../services/reportsApi';
 import { renderWithProviders } from '../test/renderWithProviders';
 import { MissingCatsPage } from './MissingCatsPage';
 
@@ -57,7 +58,14 @@ jest.mock('../services/reportsApi', () => ({
   fetchReportDetail: jest.fn().mockResolvedValue(REPORT_DETAIL),
 }));
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  (fetchMissingCatsPage as jest.Mock).mockReset().mockResolvedValue({
+    results: [CAT_WHISKERS],
+    count: 1,
+    hasNext: false,
+  });
+});
 
 describe('MissingCatsPage', () => {
   it('renders cat cards after data loads', async () => {
@@ -80,9 +88,7 @@ describe('MissingCatsPage', () => {
   });
 
   it('shows an empty state when no reports are returned', async () => {
-    const { fetchMissingCatsPage, fetchPublicReports } = jest.requireMock('../services/reportsApi');
-    fetchMissingCatsPage.mockResolvedValueOnce({ results: [], count: 0, hasNext: false });
-    fetchPublicReports.mockResolvedValueOnce([]);
+    (fetchMissingCatsPage as jest.Mock).mockResolvedValue({ results: [], count: 0, hasNext: false });
 
     renderWithProviders(<MissingCatsPage />);
 
@@ -92,18 +98,27 @@ describe('MissingCatsPage', () => {
   it('shows Load More and fetches the next page when clicked', async () => {
     const user = userEvent.setup();
     const CAT_SHADOW = { ...CAT_WHISKERS, public_id: 'abc-2', cat_name: 'Shadow' };
-    const { fetchMissingCatsPage } = jest.requireMock('../services/reportsApi');
-    fetchMissingCatsPage
-      .mockResolvedValueOnce({ results: [CAT_WHISKERS], count: 2, hasNext: true })
-      .mockResolvedValueOnce({ results: [CAT_SHADOW], count: 2, hasNext: false });
+    (fetchMissingCatsPage as jest.Mock).mockImplementation((page: number, pageSize: number) => {
+      if (pageSize === 24) {
+        return Promise.resolve({ results: [CAT_WHISKERS], count: 1, hasNext: false });
+      }
+      return Promise.resolve(
+        page === 1
+          ? { results: [CAT_WHISKERS], count: 2, hasNext: true }
+          : { results: [CAT_SHADOW], count: 2, hasNext: false },
+      );
+    });
 
     renderWithProviders(<MissingCatsPage />);
 
-    const loadMore = await screen.findByRole('button', { name: /load more/i });
+    await waitFor(() => expect(fetchMissingCatsPage).toHaveBeenCalledTimes(2));
+    expect(fetchMissingCatsPage).toHaveBeenNthCalledWith(1, 1, 24);
+    expect(fetchMissingCatsPage).toHaveBeenNthCalledWith(2, 1, 12);
+    const loadMore = await screen.findByRole('button', { name: /^load more$/i });
     await user.click(loadMore);
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^load more$/i })).not.toBeInTheDocument());
     expect(screen.getByText('Shadow')).toBeInTheDocument();
-    expect(fetchMissingCatsPage).toHaveBeenCalledTimes(2);
+    expect(fetchMissingCatsPage).toHaveBeenCalledTimes(3);
   });
 });

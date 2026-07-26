@@ -1,19 +1,39 @@
 const mockReports = [
   {
-    id: 'report-uuid-1',
+    public_id: 'report-uuid-1',
     cat_name: 'Luna',
-    status: 'MISSING',
+    breed: 'Domestic shorthair',
+    coat_color: 'Black and white',
     description: 'Black and white tuxedo cat',
-    main_photo: '/media/photos/luna.jpg',
-  },
-  {
-    id: 'report-uuid-2',
-    cat_name: 'Miso',
+    location_summary: 'Near the community garden',
+    last_seen_landmark: 'North entrance',
+    disappeared_at: '2026-07-25T18:00:00Z',
+    approximate_location: { latitude: 51.507, longitude: -0.128 },
+    reward_amount: null,
     status: 'MISSING',
-    description: 'Orange tabby cat',
-    main_photo: '/media/photos/miso.jpg',
+    found_message: '',
+    resolved_at: null,
+    is_active_search: true,
+    main_photo: null,
+    updated_at: '2026-07-26T08:00:00Z',
   },
 ];
+
+type AxeViolation = {
+  id: string;
+  impact?: string | null;
+  nodes: Array<{ target: string[] }>;
+};
+
+const failWithViolationDetails = (violations: AxeViolation[]) => {
+  if (violations.length > 0) {
+    throw new Error(JSON.stringify(violations.map(({ id, impact, nodes }) => ({
+      id,
+      impact,
+      targets: nodes.map((node) => node.target),
+    }))));
+  }
+};
 
 const setAuthToken = (win: Cypress.AUTWindow) => {
   win.localStorage.setItem(
@@ -22,115 +42,79 @@ const setAuthToken = (win: Cypress.AUTWindow) => {
   );
 };
 
+const visitAuthenticated = () => {
+  cy.visit('/report-sighting', {
+    onBeforeLoad: (win) => {
+      setAuthToken(win);
+      cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
+        (success: PositionCallback) => {
+          success({
+            coords: { latitude: 51.5074, longitude: -0.1278, accuracy: 10 } as GeolocationCoordinates,
+            timestamp: Date.now(),
+          });
+        },
+      );
+    },
+  });
+};
+
 describe('Report Sighting Flow', () => {
   beforeEach(() => {
-    cy.intercept('GET', '/api/reports/*', {
+    cy.intercept('GET', '**/api/public/reports/?page_size=50', {
       statusCode: 200,
-      body: { count: 2, next: null, previous: null, results: mockReports },
+      body: { count: 1, next: null, previous: null, results: mockReports },
     }).as('getReports');
-    cy.intercept('GET', '/api/me/', {
+    cy.intercept('GET', '**/api/me/', {
       statusCode: 200,
       body: { id: 1, email: 'helper@example.com', display_name: 'Helper User' },
-    }).as('getMe');
-    cy.intercept('POST', '/api/reports/report-uuid-1/sightings/', {
+    });
+    cy.intercept('GET', 'https://nominatim.openstreetmap.org/reverse*', {
+      statusCode: 200,
+      body: { display_name: 'Community Garden', address: { road: 'Garden Road', city: 'London' } },
+    }).as('reverseGeocode');
+    cy.intercept('POST', '**/api/public/reports/report-uuid-1/sightings/', {
       statusCode: 201,
       body: { id: 'sighting-uuid-1', report: 'report-uuid-1', confidence: 'HIGH' },
     }).as('createSighting');
   });
 
-  it('submits a sighting with cat selection, location, and confidence', () => {
-    cy.visit('/report-sighting', {
-      onBeforeLoad: (win) => {
-        setAuthToken(win);
-        cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
-          (success: PositionCallback) => {
-            success({
-              coords: { latitude: 51.5074, longitude: -0.1278, accuracy: 10 } as GeolocationCoordinates,
-              timestamp: Date.now(),
-            });
-          },
-        );
-      },
-    });
-
+  it('submits a sighting with cat selection, map location, and confidence', () => {
+    visitAuthenticated();
     cy.wait('@getReports');
 
-    // Select a cat from the list
-    cy.findByText(/luna/i).click();
-
-    // Set location on the map (click map or confirm auto-detected location)
-    cy.findByLabelText(/street address|location|where/i).should('be.visible');
-
-    // Set confidence level
-    cy.findByRole('group', { name: /confidence/i })
-      .contains(/high|certain/i)
-      .click();
-
-    // Submit the sighting
+    cy.findByText('Luna').click();
+    cy.get('.leaflet-container').click('center');
+    cy.wait('@reverseGeocode');
+    cy.findByLabelText('Address').should('have.value', 'Garden Road, London');
+    cy.findByRole('button', { name: /certain/i }).click();
     cy.findByRole('button', { name: /submit.*sighting|report sighting/i }).click();
 
-    cy.wait('@createSighting');
-    cy.findByText(/sighting.*submitted|thank you/i).should('be.visible');
-  });
-});
-
-describe('Sighting Validation', () => {
-  beforeEach(() => {
-    cy.intercept('GET', '/api/reports/*', {
-      statusCode: 200,
-      body: { count: 2, next: null, previous: null, results: mockReports },
-    }).as('getReports');
-    cy.intercept('GET', '/api/me/', {
-      statusCode: 200,
-      body: { id: 1, email: 'helper@example.com', display_name: 'Helper User' },
-    }).as('getMe');
-  });
-
-  it('cannot submit without selecting a cat', () => {
-    cy.visit('/report-sighting', {
-      onBeforeLoad: (win) => {
-        setAuthToken(win);
-        cy.stub(win.navigator.geolocation, 'getCurrentPosition').callsFake(
-          (success: PositionCallback) => {
-            success({
-              coords: { latitude: 51.5074, longitude: -0.1278, accuracy: 10 } as GeolocationCoordinates,
-              timestamp: Date.now(),
-            });
-          },
-        );
-      },
+    cy.wait('@createSighting').its('request.body').should((body: FormData | Record<string, string>) => {
+      expect(body).not.to.eq(undefined);
     });
+    cy.findByText(/sighting reported/i).should('be.visible');
+  });
 
+  it('shows validation when the cat or map location is missing', () => {
+    visitAuthenticated();
     cy.wait('@getReports');
 
-    // Try to submit without selecting a cat
     cy.findByRole('button', { name: /submit.*sighting|report sighting/i }).click();
+    cy.findByText(/please select which cat/i).should('be.visible');
 
-    cy.findByText(/select.*cat|choose.*cat|cat.*required/i).should('be.visible');
-  });
-});
-
-describe('Report Sighting a11y', () => {
-  beforeEach(() => {
-    cy.intercept('GET', '/api/reports/*', {
-      statusCode: 200,
-      body: { count: 2, next: null, previous: null, results: mockReports },
-    }).as('getReports');
-    cy.intercept('GET', '/api/me/', {
-      statusCode: 200,
-      body: { id: 1, email: 'helper@example.com', display_name: 'Helper User' },
-    }).as('getMe');
+    cy.findByText('Luna').click();
+    cy.findByRole('button', { name: /submit.*sighting|report sighting/i }).click();
+    cy.findByText(/tap the map/i).should('be.visible');
   });
 
-  it('passes automated accessibility checks on the report sighting page', () => {
-    cy.visit('/report-sighting', {
-      onBeforeLoad: (win) => {
-        setAuthToken(win);
-      },
-    });
-
+  it('passes automated accessibility checks', () => {
+    visitAuthenticated();
     cy.wait('@getReports');
+    cy.get('.page-motion').should('have.css', 'opacity', '1');
+    cy.get('.page-motion > *').each(($element) => {
+      cy.wrap($element).should('have.css', 'opacity', '1');
+    });
     cy.injectAxe();
-    cy.checkA11y();
+    cy.checkA11y(undefined, undefined, failWithViolationDetails);
   });
 });

@@ -60,6 +60,10 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+SQLite is used when `POSTGRES_DB` is empty. To use PostgreSQL, set
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and
+`POSTGRES_PORT`; Django then uses PostgreSQL with connection health checks.
+
 Useful local URLs:
 
 - Health check: `http://localhost:8000/api/health/`
@@ -582,8 +586,25 @@ Run Django checks and unit tests:
 ```powershell
 cd backend
 python manage.py check
-python manage.py test
+python -m pytest
 ```
+
+The Django test runner remains supported with `python manage.py test`.
+
+Opt-in provider smoke tests are disabled during normal deterministic test runs:
+
+```powershell
+$env:RUN_EXTERNAL_SMOKE_TESTS = "1"
+python -m pytest config/test_external_services.py
+```
+
+Overpass needs no credential. Gemma, SMTP, and SSO tests run only when their
+environment variables are present. Use dedicated test accounts and ephemeral
+provider tokens; never reuse production user data.
+
+The CI stack additionally runs backend tests against PostgreSQL, a real
+frontend-to-Django Cypress workflow, and a 100-request public API load smoke
+test with a 1.5-second p95 budget.
 
 Generate and validate OpenAPI:
 
