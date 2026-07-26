@@ -35,11 +35,17 @@ export function SheltersPage() {
   const [places, setPlaces] = useState<NearbyHelpPlace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(() =>
+    navigator.geolocation ? null : [51.2194, 4.4025],
+  );
   const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
 
   // Get user location
   useEffect(() => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
       () => setUserLocation([51.2194, 4.4025]), // Default: Antwerp
@@ -50,8 +56,6 @@ export function SheltersPage() {
   // Fetch real data from Overpass API
   useEffect(() => {
     if (!userLocation) return;
-    setLoading(true);
-    setError(false);
     fetchNearbyHelp(userLocation[0], userLocation[1], 15)
       .then((response) => setPlaces(response.places))
       .catch(() => { setError(true); setPlaces([]); })
@@ -70,17 +74,13 @@ export function SheltersPage() {
     });
   }, [search, filter, places]);
 
-  useEffect(() => {
-    setVisibleCount(VISIBLE_STEP);
-  }, [search, filter, places]);
-
   const visiblePlaces = filtered.slice(0, visibleCount);
   const canLoadMore = visibleCount < filtered.length;
 
   return (
     <div className="bg-background text-on-background font-body-md scroll-smooth">
       <Navbar />
-      <main className="pt-24 pb-xl min-h-screen max-w-container-max mx-auto px-margin-mobile md:px-lg">
+      <main id="main-content" tabIndex={-1} className="pt-24 pb-xl min-h-screen max-w-container-max mx-auto px-margin-mobile md:px-lg">
         {/* Hero */}
         <section className="motion-reveal mb-lg">
           <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background mb-base">
@@ -115,7 +115,10 @@ export function SheltersPage() {
               placeholder="Search by name or city..."
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setVisibleCount(VISIBLE_STEP);
+              }}
               aria-label="Search shelters and veterinary clinics"
             />
           </div>
@@ -128,7 +131,10 @@ export function SheltersPage() {
               <button
                 key={type}
                 type="button"
-                onClick={() => setFilter(type)}
+                onClick={() => {
+                  setFilter(type);
+                  setVisibleCount(VISIBLE_STEP);
+                }}
                 aria-pressed={filter === type}
                 className={`flex-1 md:flex-none px-6 py-3 rounded-lg font-label-md text-label-md transition-all ${
                   filter === type

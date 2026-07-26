@@ -9,7 +9,7 @@ export function HomePage() {
   return (
     <div className="bg-background text-on-background font-body-md scroll-smooth">
       <Navbar />
-      <main className="pt-20">
+      <main id="main-content" tabIndex={-1} className="pt-20">
         <Hero />
         <FeatureCards />
         <RecentlyReported />

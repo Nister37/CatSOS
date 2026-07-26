@@ -44,7 +44,7 @@ export function ReportStep1Page() {
         />
       </div>
 
-      <main className="flex-grow pt-28 pb-xl px-margin-mobile">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-28 pb-xl px-margin-mobile">
         <div className="max-w-3xl mx-auto">
           {/* Header */}
           <div className="text-center mb-xl">

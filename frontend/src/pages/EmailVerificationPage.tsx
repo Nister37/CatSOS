@@ -103,7 +103,7 @@ export function EmailVerificationPage() {
     return (
       <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-grow flex items-center justify-center px-margin-mobile">
+        <main id="main-content" tabIndex={-1} className="flex-grow flex items-center justify-center px-margin-mobile">
           <div className="text-center">
             <p className="font-body-md text-body-md text-secondary mb-md">No email address found.</p>
             <Link className="text-primary font-bold hover:underline" to="/signup">
@@ -120,7 +120,7 @@ export function EmailVerificationPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow flex items-center justify-center pt-24 pb-xl px-margin-mobile">
+      <main id="main-content" tabIndex={-1} className="flex-grow flex items-center justify-center pt-24 pb-xl px-margin-mobile">
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
           <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px]" />
         </div>

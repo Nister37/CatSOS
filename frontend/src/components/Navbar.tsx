@@ -6,7 +6,7 @@ import { signOut } from '../features/auth/authSlice';
 import { fetchUnreadCount } from '../services/notificationsApi';
 
 const NAV_LINKS = [
-  { label: 'Report Missing', to: '/report-missing' },
+  { label: 'Missing Cats', to: '/missing' },
   { label: 'Sightings Map', to: '/map' },
   { label: 'Shelters & Vets', to: '/shelters' },
   { label: 'About', to: '/about' },

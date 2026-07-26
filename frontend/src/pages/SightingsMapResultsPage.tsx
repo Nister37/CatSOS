@@ -41,15 +41,6 @@ const NEARBY_HELP_COLORS: Record<NearbyHelpType, { color: string; fillColor: str
   pet_help: { color: '#c2410c', fillColor: '#f97316', label: 'Pet-related', icon: 'pets' },
 };
 
-function timeAgo(isoString: string): string {
-  const diff = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
 // ─── Unified inner map component (lives inside a single MapContainer) ─────────
 
 interface MapContentProps {
@@ -386,7 +377,7 @@ export function SightingsMapResultsPage() {
     <div className="bg-background text-on-background font-body-md scroll-smooth">
       <Navbar />
 
-      <main className="pt-20 min-h-screen">
+      <main id="main-content" tabIndex={-1} className="pt-20 min-h-screen">
         {/* Hero */}
         <section className="max-w-container-max mx-auto px-margin-mobile md:px-xl pt-xl pb-md">
           <div className="flex flex-col md:flex-row justify-between items-end gap-md">

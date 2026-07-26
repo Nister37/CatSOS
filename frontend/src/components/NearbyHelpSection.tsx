@@ -117,8 +117,6 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
   const [filterPetHelp, setFilterPetHelp] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     fetchNearbyHelp(lat, lng, radiusKm)
       .then((response) => {
         setData(response);
@@ -130,6 +128,13 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
         setLoading(false);
       });
   }, [lat, lng, radiusKm]);
+
+  const selectRadius = (radius: number) => {
+    if (radius === radiusKm) return;
+    setLoading(true);
+    setError(null);
+    setRadiusKm(radius);
+  };
 
   const filteredPlaces: NearbyHelpPlace[] = useMemo(() => {
     if (!data) return [];
@@ -156,7 +161,7 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
             <button
               key={r}
               type="button"
-              onClick={() => setRadiusKm(r)}
+              onClick={() => selectRadius(r)}
               aria-pressed={radiusKm === r}
               className={`px-md py-xs rounded-lg font-label-md text-label-md transition-all ${
                 radiusKm === r

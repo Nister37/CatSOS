@@ -113,7 +113,7 @@ export function MissingCatsPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-20">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-20">
         {/* Page header */}
         <div className="motion-reveal px-margin-mobile md:px-xl max-w-container-max mx-auto pt-xl pb-lg">
           <p className="font-label-md text-label-md text-primary uppercase tracking-widest mb-sm">
@@ -259,13 +259,13 @@ export function MissingCatsPage() {
                   >
                     {loadingMore ? (
                       <>
-                        <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[18px] animate-spin">sync</span>
                         Loading…
                       </>
                     ) : (
                       <>
                         Load more
-                        <span className="material-symbols-outlined text-[18px]">expand_more</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-[18px]">expand_more</span>
                       </>
                     )}
                   </button>

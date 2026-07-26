@@ -75,7 +75,7 @@ export function TermsPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
+      <main id="main-content" tabIndex={-1} className="flex-grow pt-28 pb-xl px-margin-mobile md:px-xl">
         <div className="max-w-3xl mx-auto">
 
           <div className="mb-xl">
