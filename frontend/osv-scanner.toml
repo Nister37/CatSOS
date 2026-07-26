@@ -1,0 +1,9 @@
+[[IgnoredVulns]]
+id = "GHSA-qwww-vcr4-c8h2"
+ignoreUntil = 2026-09-01
+reason = "CatSOS is a Vite SPA and does not use React Router's unstable RSC APIs, the only affected code path. Reassess when the fixed release is available."
+
+[[IgnoredVulns]]
+id = "GHSA-mh99-v99m-4gvg"
+ignoreUntil = 2026-09-01
+reason = "Affected brace-expansion 1.x/2.x versions are transitive test/build dependencies. CatSOS passes only repository-controlled glob patterns; forcing brace-expansion 5 into old minimatch versions is incompatible. Reassess when parent packages publish compatible upgrades."
