@@ -74,7 +74,14 @@ These are framework defaults in this project, not custom endpoint behavior.
 | `POST` | [`/api/ai/improve-description/`](#post-apiaiimprove-description) | JWT | `200` | AI-suggested cleanup of a lost-cat description. |
 | `POST` | [`/api/ai/public-summary/`](#post-apiaipublic-summary) | JWT | `200` | AI-suggested short public summary for a report. |
 | `GET` | [`/api/assistant/found-cat/decision-tree/`](#get-apiassistantfound-catdecision-tree) | Public | `200` | Static decision tree for the "I found a cat" assistant. |
+| `POST` | [`/api/assistant/intake/`](#post-apiassistantintake) | Public | `201` | Submit intake triage report for a found cat. |
+| `GET` | [`/api/reports/trending-nearby/`](#get-apireportstrending-nearby) | Public | `200` | Browse nearby trending search clusters and activity based on user geolocation. |
+| `GET` | [`/api/public/stats/`](#get-apipublicstats) | Public | `200` | Summary statistics of reported, active, and reunited cats. |
 | `GET` | [`/api/maps/nearby-help/`](#get-apimapsnearby-help) | Public | `200` | Nearby vets, shelters, and pet-related places via Overpass. |
+| `GET` | [`/api/admin/reports/`](#get-apiadminreports) | Staff | `200` | List all reports with moderation filter for admin review. |
+| `PATCH` | [`/api/admin/reports/{id}/moderation/`](#patch-apiadminreportsidmoderation) | Staff | `200` | Update report moderation status (APPROVED, HIDDEN, PENDING). |
+| `PATCH` | [`/api/admin/sightings/{id}/moderation/`](#patch-apiadminsightingsidmoderation) | Staff | `200` | Update sighting verification status (PENDING, USEFUL, FALSE). |
+| `GET` | [`/api/admin/stats/`](#get-apiadminstats) | Staff | `200` | View system moderation and report health statistics. |
 | `GET` | [`/api/points/leaderboard/`](#get-apipointsleaderboard) | Public | `200` | Paginated public-safe contributor leaderboard. |
 | `POST` | [`/api/me/profile-picture/`](#post-apimeprofile-picture) | JWT | `200` | Upload or replace the authenticated user's profile picture. |
 | `DELETE` | [`/api/me/profile-picture/`](#delete-apimeprofile-picture) | JWT | `204` | Delete the authenticated user's profile picture. |
@@ -2341,6 +2348,147 @@ When a throttle limit is exceeded, DRF returns:
 
 ```text
 HTTP 429 Too Many Requests
+```
+
+<a id="post-apiassistantintake"></a>
+### Assistant Found Cat Intake
+
+`POST /api/assistant/intake/`
+
+Submit structured intake triage details and optional photo when finding a lost or abandoned cat.
+
+Success response (`201 Created`):
+
+```json
+{
+  "id": "c1f7a28e-5b1b-4d92-95e2-45e69bf6df4a",
+  "status": "SUBMITTED",
+  "condition": "HEALTHY",
+  "found_location": "Central Park, West Entrance",
+  "contact_email": "finder@example.com",
+  "created_at": "2026-11-14T01:30:00Z"
+}
+```
+
+<a id="get-apireportstrending-nearby"></a>
+### Trending Nearby Reports
+
+`GET /api/reports/trending-nearby/?lat=52.2297&lng=21.0122&radius_km=15`
+
+Returns clusters of recent sightings and searches around a geographical area to surface urgent community searches.
+
+Success response (`200 OK`):
+
+```json
+{
+  "count": 3,
+  "radius_km": 15.0,
+  "user_location": {
+    "lat": 52.2297,
+    "lng": 21.0122,
+    "source": "client"
+  },
+  "trends": [
+    {
+      "id": "cluster-mokotow",
+      "label": "Mokotów Cluster",
+      "query": "Mokotów",
+      "count": 7,
+      "distance_km": 2.4,
+      "lat": 52.205,
+      "lng": 21.021
+    }
+  ]
+}
+```
+
+<a id="get-apipublicstats"></a>
+### Public Platform Statistics
+
+`GET /api/public/stats/`
+
+Aggregate counters summarizing total reported cats, active searches, verified sightings, and successful reunions.
+
+Success response (`200 OK`):
+
+```json
+{
+  "total_reports": 142,
+  "active_searches": 38,
+  "cats_reunited": 104,
+  "community_volunteers": 520
+}
+```
+
+<a id="get-apiadminreports"></a>
+### Admin Reports Moderation List
+
+`GET /api/admin/reports/?moderation_status=PENDING&page=1`
+
+Staff-only endpoint to audit and moderate submitted reports.
+
+Success response (`200 OK`):
+
+```json
+[
+  {
+    "id": "b47c0a91-49b4-4b5f-a39c-3a6d7f02d41a",
+    "cat_name": "Luna",
+    "moderation_status": "PENDING",
+    "created_at": "2026-11-14T01:00:00Z",
+    "owner_email": "owner@example.com"
+  }
+]
+```
+
+<a id="patch-apiadminreportsidmoderation"></a>
+### Admin Report Moderation Action
+
+`PATCH /api/admin/reports/{id}/moderation/`
+
+Staff-only endpoint to approve, flag, or hide a report from public feeds.
+
+Request body:
+
+```json
+{
+  "moderation_status": "APPROVED",
+  "moderation_note": "Verified clear cat photo and description"
+}
+```
+
+<a id="patch-apiadminsightingsidmoderation"></a>
+### Admin Sighting Moderation Action
+
+`PATCH /api/admin/sightings/{id}/moderation/`
+
+Staff-only endpoint to set sighting verification status (`PENDING`, `USEFUL`, `FALSE`).
+
+Request body:
+
+```json
+{
+  "verification_status": "USEFUL",
+  "verification_note": "Confirmed matching collar and coat pattern"
+}
+```
+
+<a id="get-apiadminstats"></a>
+### Admin Moderation Overview Stats
+
+`GET /api/admin/stats/`
+
+Staff-only metrics for pending moderation queues and platform health.
+
+Success response (`200 OK`):
+
+```json
+{
+  "pending_reports_count": 4,
+  "pending_sightings_count": 9,
+  "hidden_reports_count": 1,
+  "total_users": 650
+}
 ```
 
 ## Automated Backend Checks

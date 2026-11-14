@@ -1,67 +1,139 @@
-# CatSOS
+# CatSOS 🐱
 
-CatSOS is a training-oriented full-stack workspace for a Django REST API and a React SPA.
+> Community-driven lost and found cat reunion platform featuring interactive sighting maps, volunteer search alerts, AI description enhancement, and automated poster generation.
 
-## Project layout
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.14-blue" alt="Python" />
+  <img src="https://img.shields.io/badge/django-6.0-green" alt="Django" />
+  <img src="https://img.shields.io/badge/react-19-cyan" alt="React" />
+  <img src="https://img.shields.io/badge/leaflet-1.9-brightgreen" alt="Leaflet" />
+  <img src="https://img.shields.io/badge/docker-compose-blueviolet" alt="Docker" />
+</p>
 
-```text
-backend/   Django, Django REST Framework, OpenAPI
-frontend/  React SPA, Vite, Yarn, Jest, Cypress, accessibility tooling
-jenkins/   Jenkins image and setup docs for the shared CI server
-```
+---
 
-## Start Here
+## 🌟 What is CatSOS?
 
-- Backend entry point: [backend/README.md](backend/README.md)
-- Frontend entry point: [frontend/README.md](frontend/README.md)
-- Full API reference: [API.md](API.md)
-- Git and pull request workflow: [GIT.md](GIT.md)
-- Postman collection: [postman/POSTMAN.md](postman/POSTMAN.md)
-- Jenkins setup and usage: [jenkins/README.md](jenkins/README.md)
+When a beloved cat goes missing, every hour counts. **CatSOS** provides neighborhood communities, cat owners, and volunteer searchers with a unified platform to coordinate search efforts:
 
-## Docker Entry Points
+- 🗺️ **Interactive Geolocation Maps**: Plot and track lost cat reports, sightings, and nearby veterinary clinics / shelters with Leaflet.
+- 📸 **Photo Sighting Verification**: Upload sightings with photos and map pins; owners can verify leads as pending, useful, or false.
+- 📄 **Automated PDF Poster & QR Generator**: Instantly generate ready-to-print flyers with QR codes pointing to live report updates.
+- 🤖 **AI-Assisted Descriptions**: Optional Gemma AI cleanup of lost-cat details and automatic multilingual translation suggestions.
+- 🌳 **"I Found a Cat" Decision Tree**: Step-by-step triage assistant guiding finders on safe handling, scanning for microchips, and shelter intake.
+- 🌐 **Multilingual & Accessible**: Native support for English, Polish, Dutch, and French with WCAG AAA accessibility standards.
 
-There are three Compose files on purpose: `docker-compose.yml` is the small local development stack, `docker-compose.ci.yml` builds the CI test stack, and `docker-compose.jenkins.yml` runs the Jenkins server.
+---
 
-Run the app stack:
+## 🛠️ Tech Stack
 
-```powershell
+| Layer | Technologies |
+|---|---|
+| **Backend** | Python 3.14, Django 6.0, Django REST Framework, drf-spectacular (OpenAPI 3.0) |
+| **Frontend** | React 19, Vite, Redux Toolkit, Leaflet / React-Leaflet, Tailwind CSS |
+| **Authentication** | JWT, TOTP Authenticator 2FA, OAuth SSO (Google, Microsoft) |
+| **Database & Maps** | SQLite 3 (Dev) / PostgreSQL (Prod), Overpass OpenStreetMap API |
+| **Testing** | Django Test Runner (410+ tests), Jest, React Testing Library, Cypress, Cypress Axe |
+
+---
+
+## 🚀 Quickstart (One Command)
+
+The fastest way to launch CatSOS with both backend and frontend running:
+
+### 1. Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Git](https://git-scm.com/)
+
+### 2. Launch
+```bash
+# 1. Clone repository
+git clone https://github.com/Nister37/CatSOS.git
+cd CatSOS
+
+# 2. Configure local environment
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+
+# 3. Start containers
 docker compose up --build
 ```
 
-Run CI-like checks through Docker builders:
+### 3. Open in Browser
+- 🌐 **Web Client**: [http://localhost:5173](http://localhost:5173)
+- 🔌 **Backend REST API**: [http://localhost:8000/api/](http://localhost:8000/api/)
+- 📖 **Interactive Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
+
+---
+
+## 💻 Local Development Setup
+
+If you wish to develop without Docker:
+
+### 1. Backend Setup
+```powershell
+cd backend
+
+# Create & activate virtualenv
+python -m venv .venv
+.\.venv\Scripts\activate   # Linux/macOS: source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy configuration
+cp .env.example .env
+
+# Run migrations & start server
+python manage.py migrate
+python manage.py runserver 0.0.0.0:8000
+```
+
+### 2. Frontend Setup
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Copy configuration
+cp .env.example .env
+
+# Start Vite development server
+npm run dev
+```
+
+---
+
+## 🧪 Testing
+
+CatSOS maintains comprehensive test coverage across both backend and frontend:
 
 ```powershell
-docker compose -f docker-compose.ci.yml run --rm backend-test
-docker compose -f docker-compose.ci.yml run --rm frontend-quality
+# Run backend Django tests (412 tests)
+python backend/manage.py test
+
+# Validate OpenAPI schema against DRF Spectacular
+python backend/manage.py spectacular --validate
+
+# Run frontend tests with coverage (318 tests)
+npm --prefix frontend test
+
+# Run frontend accessibility (A11y) audit
+npm --prefix frontend run a11y
+
+# Run production build check
+npm --prefix frontend run build
 ```
 
-Start local Jenkins for the same CI pipeline:
+---
 
-```powershell
-docker compose -f docker-compose.jenkins.yml up --build jenkins
-```
+## 📚 Deep Dive Documentation
 
-Run the full Jenkins pipeline before merging any backend or frontend branch into `main`. See [jenkins/README.md](jenkins/README.md) for the Jenkins UI flow and the equivalent local Docker Compose commands.
-
-CI containers and tools:
-
-```text
-backend-test      Python 3.14, Django checks, Django tests
-backend-openapi   Python 3.14, Django, drf-spectacular
-backend-api       Python 3.14, Django development server
-frontend-quality  Node 26, Yarn 1, ESLint, Jest, TypeScript
-frontend-dev      Node 26, Yarn 1, Vite development server
-frontend-e2e      Cypress, Node, Yarn, Testing Library Cypress, Cypress Axe
-frontend-runtime  Node/Yarn/TypeScript/Vite build, nginx runtime
-```
-
-Jenkins server:
-
-```text
-jenkins           Jenkins LTS, JDK 21, Docker CLI, Docker Compose plugin
-```
-
-Detailed setup lives in each layer's `docs/SETUP.md`; development conventions live in each `docs/TUTORIAL.md`.
-
-Backend password recovery uses email reset links and enrolled authenticator-app TOTP. Configure the reset-link origin, email backend, and TOTP defaults in `backend/.env`; SMS password recovery is intentionally not implemented because it adds cost and weaker security.
+- 📜 **Full REST API Reference**: [API.md](API.md)
+- 🏗️ **Architecture & Domain Design**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 💻 **Backend Guide**: [backend/README.md](backend/README.md)
+- 🎨 **Frontend Guide**: [frontend/README.md](frontend/README.md)
+- 📮 **Postman Collection & Flows**: [postman/POSTMAN.md](postman/POSTMAN.md)
+- 🚀 **CI/CD & Jenkins Pipeline**: [jenkins/README.md](jenkins/README.md)
+- 🌿 **Git & Branching Workflow**: [GIT.md](GIT.md)
