@@ -1,4 +1,4 @@
-# CatSOS 🐱
+# CatSOS
 
 > Community-driven lost and found cat reunion platform featuring interactive sighting maps, volunteer search alerts, AI description enhancement, and automated poster generation.
 
@@ -12,20 +12,20 @@
 
 ---
 
-## 🌟 What is CatSOS?
+## Overview
 
 When a beloved cat goes missing, every hour counts. **CatSOS** provides neighborhood communities, cat owners, and volunteer searchers with a unified platform to coordinate search efforts:
 
-- 🗺️ **Interactive Geolocation Maps**: Plot and track lost cat reports, sightings, and nearby veterinary clinics / shelters with Leaflet.
-- 📸 **Photo Sighting Verification**: Upload sightings with photos and map pins; owners can verify leads as pending, useful, or false.
-- 📄 **Automated PDF Poster & QR Generator**: Instantly generate ready-to-print flyers with QR codes pointing to live report updates.
-- 🤖 **AI-Assisted Descriptions**: Optional Gemma AI cleanup of lost-cat details and automatic multilingual translation suggestions.
-- 🌳 **"I Found a Cat" Decision Tree**: Step-by-step triage assistant guiding finders on safe handling, scanning for microchips, and shelter intake.
-- 🌐 **Multilingual & Accessible**: Native support for English, Polish, Dutch, and French with WCAG AAA accessibility standards.
+- **Interactive Geolocation Maps**: Plot and track lost cat reports, sightings, and nearby veterinary clinics / shelters with Leaflet.
+- **Photo Sighting Verification**: Upload sightings with photos and map pins; owners can verify leads as pending, useful, or false.
+- **Automated PDF Poster & QR Generator**: Instantly generate ready-to-print flyers with QR codes pointing to live report updates.
+- **AI-Assisted Descriptions**: Optional Gemma AI cleanup of lost-cat details and automatic multilingual translation suggestions.
+- **Found Cat Decision Tree**: Step-by-step triage assistant guiding finders on safe handling, scanning for microchips, and shelter intake.
+- **Multilingual & Accessible**: Native support for English, Polish, Dutch, and French with WCAG AAA accessibility standards.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technologies |
 |---|---|
@@ -37,13 +37,13 @@ When a beloved cat goes missing, every hour counts. **CatSOS** provides neighbor
 
 ---
 
-## 🚀 Quickstart (One Command)
+## Quickstart (Docker Compose)
 
 The fastest way to launch CatSOS with both backend and frontend running:
 
 ### 1. Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Git](https://git-scm.com/)
+- Docker Desktop
+- Git
 
 ### 2. Launch
 ```bash
@@ -59,14 +59,14 @@ cp frontend/.env.example frontend/.env
 docker compose up --build
 ```
 
-### 3. Open in Browser
-- 🌐 **Web Client**: [http://localhost:5173](http://localhost:5173)
-- 🔌 **Backend REST API**: [http://localhost:8000/api/](http://localhost:8000/api/)
-- 📖 **Interactive Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
+### 3. Service URLs
+- **Web Client**: [http://localhost:5173](http://localhost:5173)
+- **Backend REST API**: [http://localhost:8000/api/](http://localhost:8000/api/)
+- **Interactive Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
 
 ---
 
-## 💻 Local Development Setup
+## Local Development Setup
 
 If you wish to develop without Docker:
 
@@ -105,7 +105,7 @@ npm run dev
 
 ---
 
-## 🧪 Testing
+## Testing
 
 CatSOS maintains comprehensive test coverage across both backend and frontend:
 
@@ -128,12 +128,12 @@ npm --prefix frontend run build
 
 ---
 
-## 📚 Deep Dive Documentation
+## Deep Dive Documentation
 
-- 📜 **Full REST API Reference**: [API.md](API.md)
-- 🏗️ **Architecture & Domain Design**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- 💻 **Backend Guide**: [backend/README.md](backend/README.md)
-- 🎨 **Frontend Guide**: [frontend/README.md](frontend/README.md)
-- 📮 **Postman Collection & Flows**: [postman/POSTMAN.md](postman/POSTMAN.md)
-- 🚀 **CI/CD & Jenkins Pipeline**: [jenkins/README.md](jenkins/README.md)
-- 🌿 **Git & Branching Workflow**: [GIT.md](GIT.md)
+- **Full REST API Reference**: [API.md](API.md)
+- **Architecture & Domain Design**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Backend Guide**: [backend/README.md](backend/README.md)
+- **Frontend Guide**: [frontend/README.md](frontend/README.md)
+- **Postman Collection & Flows**: [postman/POSTMAN.md](postman/POSTMAN.md)
+- **CI/CD & Jenkins Pipeline**: [jenkins/README.md](jenkins/README.md)
+- **Git & Branching Workflow**: [GIT.md](GIT.md)
