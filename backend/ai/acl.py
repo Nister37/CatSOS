@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import logging
+import math
 import re
 from typing import Any
 
@@ -87,10 +88,12 @@ class AIAnalysisResult:
 
 def _normalize_score(value: Any) -> float:
     """Convert arbitrary numeric or string score into a float [0.0, 1.0]."""
-    if value is None:
+    if value is None or isinstance(value, bool):
         return 0.0
     try:
         val = float(value)
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
         # Handle percentage (e.g. 85 -> 0.85, 99.5 -> 0.995)
         if val > 1.0 and val <= 100.0:
             val = val / 100.0
@@ -112,11 +115,11 @@ def _normalize_breed_name(raw: Any) -> str:
     # Condense multiple spaces
     cleaned = ' '.join(cleaned.split())
 
-    # Common abbreviation or title casing
+    # Title casing with article/preposition awareness
     words = cleaned.split()
     capitalized_words = []
-    for w in words:
-        if w.lower() in {'and', 'or', 'of', 'in', 'with'}:
+    for i, w in enumerate(words):
+        if i > 0 and w.lower() in {'and', 'or', 'of', 'in', 'with', 'the', 'a', 'an'}:
             capitalized_words.append(w.lower())
         else:
             capitalized_words.append(w.capitalize())
@@ -167,6 +170,8 @@ class AIAntiCorruptionLayer:
           {'label': 'Siamese', 'score': 0.92}
           {'breed': 'Maine Coon', 'confidence': 88.0}
           {'class_name': 'Domestic Shorthair', 'probability': 0.75}
+          {'description': 'Siamese cat', 'score': 0.95} (Google Cloud Vision)
+          {'Name': 'Cat', 'Confidence': 98.5} (AWS Rekognition)
         """
         if not raw:
             return None
@@ -178,30 +183,31 @@ class AIAntiCorruptionLayer:
         if not isinstance(raw, dict):
             return None
 
-        raw_label = (
-            raw.get('label')
-            or raw.get('breed')
-            or raw.get('breed_name')
-            or raw.get('class_name')
-            or raw.get('name')
-            or raw.get('category')
-            or raw.get('prediction')
-            or ''
+        candidate_label_keys = (
+            'label', 'breed', 'breed_name', 'class_name', 'name', 'category',
+            'prediction', 'description', 'displayName', 'display_name',
+            'Name', 'Label', 'Description', 'Breed', 'BreedName'
         )
+        raw_label = ''
+        for k in candidate_label_keys:
+            if k in raw and raw[k] is not None and str(raw[k]).strip():
+                raw_label = str(raw[k]).strip()
+                break
+
         if not raw_label:
             return None
 
-        raw_score = (
-            raw.get('score')
-            if 'score' in raw
-            else raw.get('confidence')
-            if 'confidence' in raw
-            else raw.get('probability')
-            if 'probability' in raw
-            else raw.get('certainty')
-            if 'certainty' in raw
-            else raw.get('weight', 1.0)
+        candidate_score_keys = (
+            'score', 'confidence', 'probability', 'certainty', 'topicality',
+            'Score', 'Confidence', 'Probability', 'Certainty'
         )
+        raw_score = None
+        for k in candidate_score_keys:
+            if k in raw and raw[k] is not None:
+                raw_score = raw[k]
+                break
+        if raw_score is None:
+            raw_score = raw.get('weight', 1.0)
 
         breed_name = _normalize_breed_name(raw_label)
         confidence = _normalize_score(raw_score)
@@ -226,19 +232,29 @@ class AIAntiCorruptionLayer:
         if isinstance(payload, list):
             items = payload
         elif isinstance(payload, dict):
-            for candidate_key in ('predictions', 'breeds', 'candidates', 'labels', 'results', 'data', 'classes'):
+            for candidate_key in (
+                'predictions', 'breeds', 'candidates', 'labels', 'labelAnnotations',
+                'Labels', 'results', 'data', 'classes', 'items', 'responses'
+            ):
                 val = payload.get(candidate_key)
                 if isinstance(val, list):
                     items = val
                     break
             if not items:
                 # Might be a single prediction object or key-value dictionary { 'Siamese': 0.9, 'Tabby': 0.1 }
-                if any(k in payload for k in ('breed', 'breed_name', 'label', 'class_name')):
+                candidate_keys = (
+                    'breed', 'breed_name', 'label', 'class_name', 'description',
+                    'Name', 'Label', 'displayName'
+                )
+                if any(k in payload for k in candidate_keys):
                     items = [payload]
                 else:
                     # Check if dict represents {breed_name: score}
                     for k, v in payload.items():
-                        if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.', '', 1).isdigit()):
+                        if not isinstance(v, bool) and (
+                            isinstance(v, (int, float))
+                            or (isinstance(v, str) and v.replace('.', '', 1).isdigit())
+                        ):
                             items.append({'label': k, 'score': v})
 
         predictions: list[BreedPrediction] = []
@@ -264,30 +280,28 @@ class AIAntiCorruptionLayer:
 
         threshold = match_threshold if match_threshold is not None else self.match_threshold
 
-        target_id = (
-            raw.get('target_id')
-            or raw.get('report_id')
-            or raw.get('id')
-            or raw.get('candidate_id')
-            or raw.get('match_id')
-            or raw.get('photo_id')
-        )
+        target_id = None
+        for k in (
+            'target_id', 'report_id', 'id', 'candidate_id', 'match_id',
+            'photo_id', 'TargetId', 'ReportId', 'Id'
+        ):
+            if k in raw and raw[k] is not None:
+                target_id = raw[k]
+                break
         target_id_str = str(target_id) if target_id is not None else None
 
         # Determine similarity score
         raw_score = None
-        if 'similarity' in raw:
-            raw_score = raw['similarity']
-        elif 'similarity_score' in raw:
-            raw_score = raw['similarity_score']
-        elif 'score' in raw:
-            raw_score = raw['score']
-        elif 'confidence' in raw:
-            raw_score = raw['confidence']
-        elif 'distance' in raw:
-            # Distance: lower is more similar, invert normalized distance
-            dist = _normalize_score(raw['distance'])
-            raw_score = 1.0 - dist
+        for k in ('similarity', 'similarity_score', 'score', 'confidence', 'Similarity', 'Score'):
+            if k in raw and raw[k] is not None:
+                raw_score = raw[k]
+                break
+        if raw_score is None:
+            for dist_k in ('distance', 'Distance'):
+                if dist_k in raw and raw[dist_k] is not None:
+                    dist = _normalize_score(raw[dist_k])
+                    raw_score = 1.0 - dist
+                    break
 
         similarity = _normalize_score(raw_score) if raw_score is not None else 0.0
         confidence = _normalize_score(raw.get('confidence', similarity))

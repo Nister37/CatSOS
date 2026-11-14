@@ -30,12 +30,19 @@ class AIModelACLTests(SimpleTestCase):
         self.assertEqual(_normalize_score(150), 1.0)
         self.assertEqual(_normalize_score('invalid'), 0.0)
         self.assertEqual(_normalize_score(None), 0.0)
+        # Boolean and non-finite guards
+        self.assertEqual(_normalize_score(True), 0.0)
+        self.assertEqual(_normalize_score(False), 0.0)
+        self.assertEqual(_normalize_score(float('nan')), 0.0)
+        self.assertEqual(_normalize_score(float('inf')), 0.0)
+        self.assertEqual(_normalize_score(float('-inf')), 0.0)
 
     def test_breed_name_normalization(self):
         self.assertEqual(_normalize_breed_name('maine_coon'), 'Maine Coon')
         self.assertEqual(_normalize_breed_name('n02123045_tabby'), 'Tabby')
         self.assertEqual(_normalize_breed_name('british_shorthair_cat'), 'British Shorthair Cat')
         self.assertEqual(_normalize_breed_name('  siamese   '), 'Siamese')
+        self.assertEqual(_normalize_breed_name('of_the_forest'), 'Of the Forest')
         self.assertEqual(_normalize_breed_name(''), 'Unknown')
         self.assertEqual(_normalize_breed_name(None), 'Unknown')
 
@@ -151,3 +158,32 @@ class AIModelACLTests(SimpleTestCase):
         # Handled gracefully without raising unhandled errors
         self.assertIsInstance(res_malformed, AIAnalysisResult)
         self.assertEqual(len(res_malformed.visual_matches), 0)
+
+    def test_visual_match_with_numeric_zero_target_id(self):
+        match = self.acl.translate_visual_match({'target_id': 0, 'similarity': 0.88})
+        self.assertIsNotNone(match)
+        self.assertEqual(match.target_id, '0')
+
+    def test_cloud_vision_and_rekognition_payload_translations(self):
+        # Google Cloud Vision format
+        g_payload = {
+            'labelAnnotations': [
+                {'description': 'Siamese cat', 'score': 0.96},
+                {'description': 'Domestic short-haired cat', 'score': 0.75},
+            ]
+        }
+        g_res = self.acl.translate_ai_response(g_payload)
+        self.assertIsNotNone(g_res.primary_breed)
+        self.assertEqual(g_res.primary_breed.breed_name, 'Siamese Cat')
+        self.assertEqual(len(g_res.top_breeds), 2)
+
+        # AWS Rekognition format
+        aws_payload = {
+            'Labels': [
+                {'Name': 'Persian', 'Confidence': 94.2},
+            ]
+        }
+        aws_res = self.acl.translate_ai_response(aws_payload)
+        self.assertIsNotNone(aws_res.primary_breed)
+        self.assertEqual(aws_res.primary_breed.breed_name, 'Persian')
+        self.assertAlmostEqual(aws_res.primary_breed.confidence, 0.942)

@@ -13,11 +13,17 @@ class Coordinate:
     longitude: float
 
     def __post_init__(self):
+        if isinstance(self.latitude, bool) or isinstance(self.longitude, bool):
+            raise ValueError(f'Coordinate values cannot be boolean: lat={self.latitude!r}, lng={self.longitude!r}')
+
         try:
             lat = float(self.latitude)
             lng = float(self.longitude)
         except (ValueError, TypeError) as exc:
             raise ValueError(f'Invalid coordinate numbers: lat={self.latitude}, lng={self.longitude}') from exc
+
+        if math.isnan(lat) or math.isinf(lat) or math.isnan(lng) or math.isinf(lng):
+            raise ValueError(f'Coordinate values must be finite numbers: lat={self.latitude}, lng={self.longitude}')
 
         if not (-90.0 <= lat <= 90.0):
             raise ValueError(f'Latitude {lat} out of range [-90.0, 90.0]')
@@ -115,47 +121,65 @@ class Location:
         }
 
 
+def _safe_float(val: Any) -> float | None:
+    """Safely convert value to finite float or return None."""
+    if val is None or isinstance(val, bool):
+        return None
+    try:
+        f = float(val)
+        return None if math.isnan(f) or math.isinf(f) else f
+    except (ValueError, TypeError):
+        return None
+
+
 def _extract_element_coordinates(element: dict[str, Any]) -> tuple[float | None, float | None]:
     """Extract lat/lng from raw OpenStreetMap element dictionary."""
     if not isinstance(element, dict):
         return None, None
 
     if element.get('type') == 'node':
-        lat = element.get('lat')
-        lon = element.get('lon') if 'lon' in element else element.get('lng')
+        lat = _safe_float(element.get('lat'))
+        lon = _safe_float(element.get('lon') if 'lon' in element else element.get('lng'))
         if lat is not None and lon is not None:
-            return float(lat), float(lon)
+            return lat, lon
 
     center = element.get('center')
     if isinstance(center, dict):
-        lat = center.get('lat')
-        lon = center.get('lon') if 'lon' in center else center.get('lng')
+        lat = _safe_float(center.get('lat'))
+        lon = _safe_float(center.get('lon') if 'lon' in center else center.get('lng'))
         if lat is not None and lon is not None:
-            return float(lat), float(lon)
+            return lat, lon
 
     bounds = element.get('bounds')
     if isinstance(bounds, dict):
-        minlat, maxlat = bounds.get('minlat'), bounds.get('maxlat')
-        minlon, maxlon = (
-            bounds.get('minlon', bounds.get('minlng')),
-            bounds.get('maxlon', bounds.get('maxlng')),
-        )
+        minlat = _safe_float(bounds.get('minlat'))
+        maxlat = _safe_float(bounds.get('maxlat'))
+        minlon = _safe_float(bounds.get('minlon', bounds.get('minlng')))
+        maxlon = _safe_float(bounds.get('maxlon', bounds.get('maxlng')))
         if minlat is not None and maxlat is not None and minlon is not None and maxlon is not None:
-            return (float(minlat) + float(maxlat)) / 2.0, (float(minlon) + float(maxlon)) / 2.0
+            return (minlat + maxlat) / 2.0, (minlon + maxlon) / 2.0
 
     geometry = element.get('geometry')
     if isinstance(geometry, list) and geometry:
-        lats = [float(pt['lat']) for pt in geometry if isinstance(pt, dict) and pt.get('lat') is not None]
+        lats = [
+            _safe_float(pt['lat'])
+            for pt in geometry
+            if isinstance(pt, dict) and pt.get('lat') is not None
+        ]
         lons = [
-            float(pt.get('lon', pt.get('lng')))
+            _safe_float(pt.get('lon', pt.get('lng')))
             for pt in geometry
             if isinstance(pt, dict) and (pt.get('lon') is not None or pt.get('lng') is not None)
         ]
-        if lats and lons:
-            return sum(lats) / len(lats), sum(lons) / len(lons)
+        valid_lats = [x for x in lats if x is not None]
+        valid_lons = [x for x in lons if x is not None]
+        if valid_lats and valid_lons and len(valid_lats) == len(valid_lons):
+            return sum(valid_lats) / len(valid_lats), sum(valid_lons) / len(valid_lons)
 
-    if element.get('lat') is not None and (element.get('lon') is not None or element.get('lng') is not None):
-        return float(element['lat']), float(element.get('lon', element.get('lng')))
+    lat = _safe_float(element.get('lat'))
+    lon = _safe_float(element.get('lon', element.get('lng')))
+    if lat is not None and lon is not None:
+        return lat, lon
 
     return None, None
 
@@ -215,6 +239,8 @@ def _classify_osm_tags(tags: dict[str, Any]) -> str:
 
 def _compute_quality_score(tags: dict[str, Any]) -> int:
     """Compute data quality score based on richness of OSM tags."""
+    if not isinstance(tags, dict):
+        return 0
     score = 0
     if tags.get('phone') or tags.get('contact:phone'):
         score += 3
@@ -287,7 +313,7 @@ class MapsAntiCorruptionLayer:
         except ValueError:
             return None
 
-        tags: dict[str, Any] = element.get('tags', {})
+        tags: dict[str, Any] = element.get('tags') if isinstance(element.get('tags'), dict) else {}
         place_type = _classify_osm_tags(tags)
         quality = _compute_quality_score(tags)
 
@@ -341,8 +367,16 @@ class MapsAntiCorruptionLayer:
         if not isinstance(result, dict):
             return None
 
-        lat = result.get('lat')
-        lon = result.get('lon') or result.get('lng')
+        lat_raw = result.get('lat') if result.get('lat') is not None else result.get('latitude')
+        lon_raw = (
+            result.get('lon')
+            if result.get('lon') is not None
+            else result.get('lng')
+            if result.get('lng') is not None
+            else result.get('longitude')
+        )
+        lat = _safe_float(lat_raw)
+        lon = _safe_float(lon_raw)
         if lat is None or lon is None:
             return None
 

@@ -35,6 +35,14 @@ class MapsACLTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             Coordinate('invalid', 20.0)
 
+        # Boolean rejected
+        with self.assertRaises(ValueError):
+            Coordinate(True, False)
+
+        # Non-finite rejected
+        with self.assertRaises(ValueError):
+            Coordinate(float('nan'), 20.0)
+
     def test_coordinate_haversine_distance(self):
         # Warsaw to Krakow (~252 km)
         krakow = Coordinate(50.0647, 19.9450)
@@ -164,3 +172,34 @@ class MapsACLTests(SimpleTestCase):
         self.assertEqual(extract_coordinate({'latitude': 52.0, 'longitude': 21.0}), Coordinate(52.0, 21.0))
         with self.assertRaises(ValueError):
             extract_coordinate('not-a-coord')
+
+    def test_translate_osm_element_null_tags_and_invalid_coords(self):
+        # Element with null tags
+        loc_null_tags = self.acl.translate_osm_element({'type': 'node', 'lat': 52.0, 'lon': 21.0, 'tags': None})
+        self.assertIsNotNone(loc_null_tags)
+        self.assertEqual(loc_null_tags.coordinate.latitude, 52.0)
+        self.assertEqual(loc_null_tags.name, '')
+
+        # Element with non-numeric lat string
+        loc_invalid = self.acl.translate_osm_element({'type': 'node', 'lat': 'invalid', 'lon': 21.0})
+        self.assertIsNone(loc_invalid)
+
+    def test_translate_geocoding_generic_latitude_longitude(self):
+        generic_payload = {
+            'place_id': 12345,
+            'name': 'Animal Rescue Center',
+            'latitude': '52.2500',
+            'longitude': '21.0300',
+            'type': 'shelter',
+            'address': {
+                'road': 'Dluga',
+                'house_number': '5',
+                'city': 'Warszawa',
+            },
+        }
+        loc = self.acl.translate_geocoding_result(generic_payload)
+        self.assertIsNotNone(loc)
+        self.assertEqual(loc.name, 'Animal Rescue Center')
+        self.assertEqual(loc.coordinate.latitude, 52.25)
+        self.assertEqual(loc.coordinate.longitude, 21.03)
+        self.assertEqual(loc.place_type, 'shelter')

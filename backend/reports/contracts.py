@@ -21,6 +21,23 @@ class ContractValidationError(Exception):
         super().__init__(f'Contract validation failed: {message}')
 
 
+def _to_bool(value: Any, default: bool = False) -> bool:
+    """Safely convert loose JSON types or strings ('false', '0', 'no') into boolean."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in ('true', '1', 'yes', 't', 'y'):
+            return True
+        if norm in ('false', '0', 'no', 'f', 'n', ''):
+            return False
+    return bool(value)
+
+
 @dataclass(frozen=True)
 class AnimalDetailsV1:
     name: str
@@ -42,6 +59,12 @@ class AnimalDetailsV1:
         object.__setattr__(self, 'gender', norm_gender)
         object.__setattr__(self, 'name', str(self.name or '').strip())
         object.__setattr__(self, 'species', str(self.species or 'cat').strip().lower())
+        object.__setattr__(self, 'has_microchip', _to_bool(self.has_microchip, False))
+        if self.age_years is not None:
+            try:
+                object.__setattr__(self, 'age_years', int(self.age_years))
+            except (ValueError, TypeError):
+                object.__setattr__(self, 'age_years', None)
 
 
 @dataclass(frozen=True)
@@ -52,17 +75,25 @@ class LocationDetailsV1:
     longitude: float | None = None
 
     def __post_init__(self):
-        if self.latitude is not None:
+        if self.latitude is not None and not (isinstance(self.latitude, str) and not self.latitude.strip()):
+            if isinstance(self.latitude, bool):
+                raise ValueError('Latitude cannot be boolean')
             lat = float(self.latitude)
             if not (-90.0 <= lat <= 90.0):
                 raise ValueError(f'Latitude {lat} out of range [-90.0, 90.0]')
             object.__setattr__(self, 'latitude', round(lat, 6))
+        else:
+            object.__setattr__(self, 'latitude', None)
 
-        if self.longitude is not None:
+        if self.longitude is not None and not (isinstance(self.longitude, str) and not self.longitude.strip()):
+            if isinstance(self.longitude, bool):
+                raise ValueError('Longitude cannot be boolean')
             lng = float(self.longitude)
             if not (-180.0 <= lng <= 180.0):
                 raise ValueError(f'Longitude {lng} out of range [-180.0, 180.0]')
             object.__setattr__(self, 'longitude', round(lng, 6))
+        else:
+            object.__setattr__(self, 'longitude', None)
 
 
 @dataclass(frozen=True)
@@ -72,6 +103,9 @@ class ContactDetailsV1:
     contact_phone: str = ''
     contact_email: str = ''
 
+    def __post_init__(self):
+        object.__setattr__(self, 'authorized_for_shelters', _to_bool(self.authorized_for_shelters, True))
+
 
 @dataclass(frozen=True)
 class RewardDetailsV1:
@@ -79,6 +113,14 @@ class RewardDetailsV1:
     amount: float | None = None
     currency: str = 'EUR'
     note: str = ''
+
+    def __post_init__(self):
+        object.__setattr__(self, 'offered', _to_bool(self.offered, False))
+        if self.amount is not None:
+            try:
+                object.__setattr__(self, 'amount', round(float(self.amount), 2))
+            except (ValueError, TypeError):
+                object.__setattr__(self, 'amount', None)
 
 
 @dataclass(frozen=True)
@@ -135,7 +177,7 @@ class PetIncidentContractV1:
         if errors:
             raise ContractValidationError(errors)
 
-        animal_raw = data.get('animal', {})
+        animal_raw = data.get('animal') or {}
         animal = AnimalDetailsV1(
             name=animal_raw.get('name', ''),
             species=animal_raw.get('species', 'cat'),
@@ -144,13 +186,13 @@ class PetIncidentContractV1:
             eye_color=animal_raw.get('eye_color', ''),
             gender=animal_raw.get('gender', 'UNKNOWN'),
             age_years=animal_raw.get('age_years'),
-            has_microchip=bool(animal_raw.get('has_microchip', False)),
+            has_microchip=_to_bool(animal_raw.get('has_microchip', False), False),
             chip_number=str(animal_raw.get('chip_number') or ''),
             collar_description=animal_raw.get('collar_description', ''),
             distinguishing_features=animal_raw.get('distinguishing_features', ''),
         )
 
-        loc_raw = data.get('location', {})
+        loc_raw = data.get('location') or {}
         location = LocationDetailsV1(
             address=loc_raw.get('address', ''),
             landmark=loc_raw.get('landmark', ''),
@@ -158,23 +200,31 @@ class PetIncidentContractV1:
             longitude=loc_raw.get('longitude'),
         )
 
-        contact_raw = data.get('contact', {})
+        contact_raw = data.get('contact') or {}
         contact = ContactDetailsV1(
-            authorized_for_shelters=bool(contact_raw.get('authorized_for_shelters', True)),
+            authorized_for_shelters=_to_bool(contact_raw.get('authorized_for_shelters', True), True),
             contact_name=contact_raw.get('contact_name', ''),
             contact_phone=contact_raw.get('contact_phone', ''),
             contact_email=contact_raw.get('contact_email', ''),
         )
 
-        reward_raw = data.get('reward', {})
+        reward_raw = data.get('reward') or {}
+        raw_amt = reward_raw.get('amount')
+        parsed_amt = None
+        if raw_amt is not None and str(raw_amt).strip():
+            try:
+                parsed_amt = round(float(raw_amt), 2)
+            except (ValueError, TypeError):
+                parsed_amt = None
+
         reward = RewardDetailsV1(
-            offered=bool(reward_raw.get('offered', False)),
-            amount=float(reward_raw['amount']) if reward_raw.get('amount') is not None else None,
+            offered=_to_bool(reward_raw.get('offered', False), False),
+            amount=parsed_amt,
             currency=reward_raw.get('currency', 'EUR'),
             note=reward_raw.get('note', ''),
         )
 
-        photos_raw = data.get('photos', [])
+        photos_raw = data.get('photos') or []
         photos = tuple(str(p) for p in photos_raw if p)
 
         return cls(
@@ -374,6 +424,18 @@ def validate_pet_incident_payload(data: Any) -> list[str]:
     status = data.get('status')
     if status and str(status).upper().strip() not in VALID_STATUSES:
         errors.append(f"Invalid status '{status}'. Must be one of {sorted(VALID_STATUSES)}")
+
+    reward = data.get('reward')
+    if reward is not None and not isinstance(reward, dict):
+        errors.append("Field 'reward' must be an object if provided")
+
+    contact = data.get('contact')
+    if contact is not None and not isinstance(contact, dict):
+        errors.append("Field 'contact' must be an object if provided")
+
+    photos = data.get('photos')
+    if photos is not None and not isinstance(photos, (list, tuple)):
+        errors.append("Field 'photos' must be a list if provided")
 
     return errors
 

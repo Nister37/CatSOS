@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.test import TestCase
 
 from reports.contracts import (
@@ -144,6 +145,56 @@ class PublishedLanguageContractTests(TestCase):
 
         with self.assertRaises(ContractValidationError):
             deserialize_pet_incident_v1(invalid_payload)
+
+    def test_payload_with_null_and_string_boolean_fields(self):
+        payload_with_nulls = {
+            'schema_version': 'v1',
+            'incident_id': str(uuid4()),
+            'incident_type': 'LOST',
+            'status': 'ACTIVE',
+            'animal': {
+                'name': 'Whiskers',
+                'has_microchip': 'false',
+                'age_years': '4',
+            },
+            'location': {
+                'address': 'Oak Street 12',
+                'latitude': 52.22,
+                'longitude': 21.01,
+            },
+            'summary': 'Lost ginger cat',
+            'description': 'Friendly cat lost near oak street',
+            'reported_at': '2026-11-14T00:00:00Z',
+            'reward': None,
+            'contact': None,
+            'photos': None,
+        }
+        contract = deserialize_pet_incident_v1(payload_with_nulls)
+        self.assertIsNotNone(contract)
+        self.assertFalse(contract.animal.has_microchip)
+        self.assertEqual(contract.animal.age_years, 4)
+        self.assertFalse(contract.reward.offered)
+        self.assertTrue(contract.contact.authorized_for_shelters)
+        self.assertEqual(contract.photos, ())
+
+        # Test string boolean variations for reward and contact
+        payload_string_bools = {
+            'schema_version': 'v1',
+            'incident_id': str(uuid4()),
+            'incident_type': 'LOST',
+            'status': 'ACTIVE',
+            'animal': {'name': 'Whiskers'},
+            'location': {'address': 'Oak Street 12'},
+            'summary': 'Summary',
+            'description': 'Description',
+            'reported_at': '2026-11-14T00:00:00Z',
+            'reward': {'offered': 'false', 'amount': ''},
+            'contact': {'authorized_for_shelters': 'no'},
+        }
+        contract_bools = deserialize_pet_incident_v1(payload_string_bools)
+        self.assertFalse(contract_bools.reward.offered)
+        self.assertIsNone(contract_bools.reward.amount)
+        self.assertFalse(contract_bools.contact.authorized_for_shelters)
 
 
 class DomainEventsTests(TestCase):
@@ -297,3 +348,30 @@ class DomainEventsTests(TestCase):
             self.assertEqual(signal_received[0].found_message, 'Found in neighbor garden!')
         finally:
             cat_reunited_signal.disconnect(signal_handler)
+
+    def test_domain_event_publish_on_commit_in_transaction(self):
+        received = []
+        dispatcher = EventDispatcher()
+        dispatcher.subscribe(ReportCreatedEvent, lambda e: received.append(e))
+
+        with patch('reports.events.event_dispatcher', dispatcher):
+            # 1. When transaction successfully commits
+            with self.captureOnCommitCallbacks(execute=True):
+                with transaction.atomic():
+                    evt = ReportCreatedEvent(report_id='100', cat_name='Mittens')
+                    publish_domain_event(evt, on_commit=True)
+            self.assertEqual(len(received), 1)
+            self.assertEqual(received[0].cat_name, 'Mittens')
+
+            # 2. When transaction rolls back
+            received.clear()
+            try:
+                with transaction.atomic():
+                    evt2 = ReportCreatedEvent(report_id='200', cat_name='Tiger')
+                    publish_domain_event(evt2, on_commit=True)
+                    raise RuntimeError('Simulated database failure')
+            except RuntimeError:
+                pass
+
+            # Because transaction was rolled back, the on_commit handler must never run
+            self.assertEqual(len(received), 0)

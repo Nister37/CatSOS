@@ -4,6 +4,7 @@ import logging
 from typing import Any, Callable
 from uuid import uuid4
 
+from django.db import transaction
 from django.dispatch import Signal
 from django.utils import timezone
 
@@ -32,6 +33,12 @@ class ReportCreatedEvent(DomainEvent):
     status: str = ''
     location_summary: str = ''
 
+    def __post_init__(self):
+        if self.report_id is None:
+            object.__setattr__(self, 'report_id', '')
+        if self.cat_name is None:
+            object.__setattr__(self, 'cat_name', '')
+
 
 @dataclass(frozen=True)
 class SightingVerifiedEvent(DomainEvent):
@@ -44,6 +51,12 @@ class SightingVerifiedEvent(DomainEvent):
     previous_status: str = ''
     location_summary: str = ''
 
+    def __post_init__(self):
+        if self.sighting_id is None:
+            object.__setattr__(self, 'sighting_id', '')
+        if self.verification_status is None:
+            object.__setattr__(self, 'verification_status', '')
+
 
 @dataclass(frozen=True)
 class CatReunitedEvent(DomainEvent):
@@ -54,6 +67,12 @@ class CatReunitedEvent(DomainEvent):
     found_message: str = ''
     previous_status: str = ''
     status: str = 'FOUND'
+
+    def __post_init__(self):
+        if self.found_message is None:
+            object.__setattr__(self, 'found_message', '')
+        if self.report_id is None:
+            object.__setattr__(self, 'report_id', '')
 
 
 class EventDispatcher:
@@ -82,10 +101,17 @@ class EventDispatcher:
         """Clear all registered event handlers (useful in test teardown)."""
         self._subscribers.clear()
 
-    def publish(self, event: DomainEvent) -> list[Any]:
+    def publish(self, event: DomainEvent, on_commit: bool = False) -> list[Any]:
         """
         Publish an event to all registered in-memory subscribers and emit the corresponding Django signal.
+        If on_commit is True and an active transaction is open, defer publication until transaction commit.
         """
+        if on_commit:
+            connection = transaction.get_connection()
+            if connection.in_atomic_block:
+                transaction.on_commit(lambda: self.publish(event, on_commit=False))
+                return []
+
         results = []
         event_cls = event.__class__
 
@@ -101,27 +127,31 @@ class EventDispatcher:
 
         # 2. Django signal dispatch
         try:
+            responses = []
             if isinstance(event, ReportCreatedEvent):
-                report_created_signal.send(
+                responses = report_created_signal.send_robust(
                     sender=event_cls,
                     event=event,
                     report=event.report,
                     actor=event.actor,
                 )
             elif isinstance(event, SightingVerifiedEvent):
-                sighting_verified_signal.send(
+                responses = sighting_verified_signal.send_robust(
                     sender=event_cls,
                     event=event,
                     sighting=event.sighting,
                     actor=event.actor,
                 )
             elif isinstance(event, CatReunitedEvent):
-                cat_reunited_signal.send(
+                responses = cat_reunited_signal.send_robust(
                     sender=event_cls,
                     event=event,
                     report=event.report,
                     actor=event.actor,
                 )
+            for receiver, response in responses:
+                if isinstance(response, Exception):
+                    logger.exception('Error in signal receiver %r for domain event %r: %s', receiver, event, response)
         except Exception as exc:
             logger.exception('Error sending Django signal for domain event %r: %s', event, exc)
 
@@ -132,9 +162,9 @@ class EventDispatcher:
 event_dispatcher = EventDispatcher()
 
 
-def publish_domain_event(event: DomainEvent) -> list[Any]:
+def publish_domain_event(event: DomainEvent, on_commit: bool = False) -> list[Any]:
     """Convenience helper to publish a domain event via the global dispatcher."""
-    return event_dispatcher.publish(event)
+    return event_dispatcher.publish(event, on_commit=on_commit)
 
 
 # ==============================================================================
