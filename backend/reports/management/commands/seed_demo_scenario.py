@@ -182,7 +182,7 @@ SCENARIO_REPORTS = (
         found_message=(
             'Felix is home safe! He was found napping in a garden shed '
             'three streets away. Special thanks to Tom who spotted him '
-            'through the CatSOS app. 🐱'
+            'through the CatSOS app.'
         ),
     ),
 )
@@ -586,7 +586,7 @@ class Command(BaseCommand):
                 event_type=InAppNotification.EventType.REPORT_STATUS_CHANGED,
                 defaults={
                     'actor': owner,
-                    'title': 'Felix is found! 🎉',
+                    'title': 'Felix is found!',
                     'message': 'You marked Felix as found. The report is now resolved.',
                     'action_url': f'/reports/{felix_report.public_id}',
                     'is_read': True,

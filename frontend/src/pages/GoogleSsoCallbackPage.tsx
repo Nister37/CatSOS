@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 /**
  * Handles the Google OAuth redirect callback.
@@ -77,7 +77,7 @@ export function GoogleSsoCallbackPage() {
 
             {isRedirectUriError && (
               <div className="mt-md p-md bg-amber-50 border border-amber-300 rounded-lg text-left w-full">
-                <p className="font-bold text-amber-800 text-sm mb-sm">⚠️ Configuration Required</p>
+                <p className="font-bold text-amber-800 text-sm mb-sm">Configuration Required</p>
                 <p className="text-amber-700 text-xs mb-sm">
                   Go to <strong>Google Cloud Console → APIs &amp; Services → Credentials</strong> and edit your OAuth 2.0 Client ID:
                 </p>
