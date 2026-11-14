@@ -150,6 +150,28 @@ def _send_account_email(*, purpose, subject, message, recipient_list, raise_on_e
             },
             exc_info=True,
         )
+        if getattr(settings, 'DEBUG', False):
+            logger.warning(
+                'DEBUG mode active: Falling back to console email delivery. Message for %s [%s]:\n%s',
+                recipient_list,
+                subject,
+                message,
+            )
+            try:
+                from django.core.mail import get_connection, EmailMessage
+
+                console_backend = get_connection('django.core.mail.backends.console.EmailBackend')
+                email_obj = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=recipient_list,
+                    connection=console_backend,
+                )
+                console_backend.send_messages([email_obj])
+            except Exception:
+                pass
+            return True
         if raise_on_error:
             raise EmailDeliveryError from exc
         return False
@@ -412,6 +434,7 @@ def reset_password_with_totp(*, email, code, new_password, request_ip=None):
         email__iexact=normalized_email,
         is_active=True,
         is_totp_enabled=True,
+        is_email_verified=True,
     ).first()
 
     if user is None or not user.has_usable_password() or not verify_user_totp_code(user=user, code=code):

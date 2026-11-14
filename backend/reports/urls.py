@@ -12,7 +12,10 @@ from .views import (
     LostCatReportStatusView,
     LostCatReportTimelineView,
     LostCatReportTranslationSuggestionView,
+    PublicStatsView,
 )
+from sightings.views import TrendingNearbyView
+
 
 urlpatterns = [
     path('reports/', LostCatReportListCreateView.as_view(), name='lost-report-list'),
@@ -66,4 +69,25 @@ urlpatterns = [
         LostCatReportPublicDetailView.as_view(),
         name='lost-report-public-detail',
     ),
+    path(
+        'public/stats/',
+        PublicStatsView.as_view(),
+        name='lost-report-public-stats',
+    ),
+    path(
+        'reports/public/stats/',
+        PublicStatsView.as_view(),
+        name='lost-report-public-stats-alias',
+    ),
+    path(
+        'reports/trending-nearby/',
+        TrendingNearbyView.as_view(),
+        name='lost-report-trending-nearby',
+    ),
+    path(
+        'public/reports/trending/',
+        TrendingNearbyView.as_view(),
+        name='lost-report-public-trending',
+    ),
 ]
+

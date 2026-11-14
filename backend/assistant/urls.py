@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import FoundCatDecisionTreeView
+from .views import FoundCatDecisionTreeView, IntakeReportCreateView
 
 
 urlpatterns = [
@@ -8,5 +8,10 @@ urlpatterns = [
         'assistant/found-cat/decision-tree/',
         FoundCatDecisionTreeView.as_view(),
         name='found-cat-decision-tree',
+    ),
+    path(
+        'assistant/intake/',
+        IntakeReportCreateView.as_view(),
+        name='assistant-intake',
     ),
 ]

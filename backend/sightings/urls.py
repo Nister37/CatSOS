@@ -6,6 +6,7 @@ from .views import (
     ReportSightingListView,
     ReportSightingVerificationView,
     ReportVolunteerSearchListView,
+    TrendingNearbyView,
 )
 
 urlpatterns = [
@@ -34,4 +35,10 @@ urlpatterns = [
         PublicReportVolunteerSearchCreateView.as_view(),
         name='public-report-volunteer-search-create',
     ),
+    path(
+        'sightings/trending-nearby/',
+        TrendingNearbyView.as_view(),
+        name='sightings-trending-nearby',
+    ),
 ]
+

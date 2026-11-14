@@ -1,6 +1,7 @@
 import re
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.html import strip_tags
 from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from rest_framework import serializers
@@ -89,10 +90,18 @@ def get_report_main_photo(report):
 
 
 def get_latest_relevant_sighting(report):
+    prefetched_sightings = getattr(report, 'public_relevant_sightings', None)
+    if prefetched_sightings is not None:
+        return prefetched_sightings[0] if prefetched_sightings else None
+
+    return get_relevant_sightings_queryset(report=report).first()
+
+
+def get_relevant_sightings_queryset(*, report=None):
     from sightings.models import Sighting
 
-    return (
-        report.sightings.filter(
+    queryset = (
+        Sighting.objects.filter(
             verification_status__in=(
                 Sighting.VerificationStatus.USEFUL,
                 Sighting.VerificationStatus.PENDING,
@@ -109,8 +118,10 @@ def get_latest_relevant_sighting(report):
             )
         )
         .order_by('latest_sighting_rank', '-seen_at', '-created_at')
-        .first()
     )
+    if report is not None:
+        queryset = queryset.filter(report=report)
+    return queryset
 
 
 class LostCatReportLatestSightingSerializer(serializers.Serializer):
@@ -283,6 +294,10 @@ class LostCatReportWriteSerializer(serializers.ModelSerializer):
                 }
             )
 
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
+
         return attrs
 
     @transaction.atomic
@@ -336,6 +351,10 @@ class LostCatReportStatusUpdateSerializer(serializers.Serializer):
                     ]
                 }
             )
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
+
         return attrs
 
 

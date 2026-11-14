@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -15,13 +15,18 @@ from .serializers import (
     SightingOwnerSerializer,
     SightingSerializer,
     SightingVerificationUpdateSerializer,
+    TrendingNearbyQuerySerializer,
+    TrendingNearbyResponseSerializer,
     VolunteerSearchSerializer,
 )
 from .services import (
     create_sighting,
+    get_trending_nearby,
+    is_public_ip,
     mark_volunteer_searching,
     update_sighting_verification,
 )
+
 
 ACTIVE_SEARCH_STATUSES = (
     LostCatReport.Status.MISSING,
@@ -246,3 +251,53 @@ class ReportVolunteerSearchListView(ReportSightingBaseView):
             context={'request': request},
         )
         return set_no_store_headers(paginator.get_paginated_response(serializer.data))
+
+
+def get_client_ip(request):
+    for header in ('HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP'):
+        val = request.META.get(header)
+        if val and is_public_ip(val):
+            return val.strip()
+
+    xff = request.META.get('HTTP_X_FORWARDED_FOR')
+    if xff:
+        for ip in xff.split(','):
+            ip_clean = ip.strip()
+            if is_public_ip(ip_clean):
+                return ip_clean
+        return xff.split(',')[0].strip()
+
+    return request.META.get('REMOTE_ADDR', '')
+
+
+class TrendingNearbyView(APIView):
+    """Return genuine trending areas/neighborhoods/cities nearby with sighting counts (<= 100km)."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'lost_report_read'
+
+    @extend_schema(
+        parameters=[TrendingNearbyQuerySerializer],
+        responses={
+            200: TrendingNearbyResponseSerializer,
+        },
+    )
+    def get(self, request):
+        query_serializer = TrendingNearbyQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+
+        user_lat = query_serializer.validated_data.get('lat')
+        user_lng = query_serializer.validated_data.get('lng')
+        radius_km = query_serializer.validated_data.get('radius_km', 100.0)
+        ip = query_serializer.validated_data.get('ip') or get_client_ip(request)
+
+        data = get_trending_nearby(
+            user_lat=user_lat,
+            user_lng=user_lng,
+            ip=ip,
+            radius_km=radius_km,
+        )
+        response_serializer = TrendingNearbyResponseSerializer(data)
+        return no_store_response(response_serializer.data)
+
