@@ -80,6 +80,7 @@ export function EmailVerificationPage() {
             firstName: me.first_name,
             lastName: me.last_name,
             avatarFallback: me.avatar_fallback,
+            profilePictureUrl: me.profile_picture_url,
           },
           accessToken: authRes.access,
           refreshToken: authRes.refresh,

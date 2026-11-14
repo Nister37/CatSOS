@@ -29,7 +29,7 @@ export function SightingsMap({ sightings, center }: SightingsMapProps) {
     <MapContainer
       center={center}
       zoom={13}
-      scrollWheelZoom={false}
+      scrollWheelZoom={true}
       className="w-full h-full"
       aria-label="Map of active cat sightings"
     >

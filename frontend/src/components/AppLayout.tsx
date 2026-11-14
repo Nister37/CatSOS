@@ -1,21 +1,13 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import type { ChangeEvent } from 'react';
-
-import { Link } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { signOut } from '../features/auth/authSlice';
-import { setLanguage, type SupportedLanguage } from '../features/language/languageSlice';
+import { LanguageSelector } from './LanguageSelector';
 import { NotificationList } from './NotificationList';
 
 export function AppLayout() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
-  const language = useAppSelector((state) => state.language.current);
-
-  const handleLanguageChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    dispatch(setLanguage(event.target.value as SupportedLanguage));
-  };
 
   return (
     <div className="app-shell">
@@ -36,14 +28,7 @@ export function AppLayout() {
           </NavLink>
         </nav>
         <div className="toolbar" aria-label="Session controls">
-          <label htmlFor="language-select" className="sr-only">
-            Language
-          </label>
-          <select id="language-select" value={language} onChange={handleLanguageChange}>
-            <option value="en">EN</option>
-            <option value="pl">PL</option>
-            <option value="nl">NL</option>
-          </select>
+          <LanguageSelector id="language-select" variant="toolbar" ariaLabel="Language" />
           {user ? (
             <button type="button" onClick={() => dispatch(signOut())}>
               Sign out ({user.firstName || user.email})

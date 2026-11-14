@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom';
 import { MissingCatCard } from './MissingCatCard';
 import { CatDetailModal } from './CatDetailModal';
 import { fetchPublicReports, type PublicReport } from '../services/reportsApi';
+import { useTranslation } from '../i18n/useTranslation';
 
 export function RecentlyReported() {
+  const { t } = useTranslation();
   const [cats, setCats] = useState<PublicReport[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -22,7 +24,7 @@ export function RecentlyReported() {
           <div className="flex flex-col md:flex-row justify-between items-end mb-xl gap-md">
             <div>
               <h2 className="font-headline-lg text-headline-lg text-on-background mb-xs">
-                Recently Reported
+                {t('home.recentlyReported')}
               </h2>
               <p className="font-body-lg text-body-lg text-secondary">
                 Keep an eye out for these neighbors in your area.
@@ -43,7 +45,7 @@ export function RecentlyReported() {
               : cats.map((cat) => (
                   <button
                     key={cat.public_id}
-                    className="text-left w-full rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-container"
+                    className="text-left w-full min-w-0 max-w-full overflow-hidden rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-container cursor-pointer"
                     onClick={() => setSelectedId(cat.public_id)}
                   >
                     <MissingCatCard

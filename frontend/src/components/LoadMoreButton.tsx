@@ -1,4 +1,4 @@
-type LoadMoreButtonProps = {
+﻿type LoadMoreButtonProps = {
   onClick: () => void;
   loading?: boolean;
   disabled?: boolean;

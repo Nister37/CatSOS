@@ -5,6 +5,7 @@ import { ssoLogin, getMe } from '../api/auth';
 import { setCredentials, setAccessToken } from '../features/auth/authSlice';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import { useAppDispatch } from '../app/hooks';
+import { runtimeEnv } from '../config/runtimeEnv';
 
 /**
  * SSO timeout in milliseconds. If neither postMessage nor localStorage
@@ -35,7 +36,7 @@ const SSO_RESULT_KEY = 'catsos-sso-result';
  * 2. Poll localStorage for a result set by the callback page (COOP fallback)
  * 3. Use a timeout to eventually clean up if neither mechanism fires
  */
-export function useSsoLogin() {
+export function useSsoLogin(redirectTo = '/') {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [ssoLoading, setSsoLoading] = useState<'google' | 'microsoft' | null>(null);
@@ -63,27 +64,39 @@ export function useSsoLogin() {
               firstName: me.first_name,
               lastName: me.last_name,
               avatarFallback: me.avatar_fallback,
+              profilePictureUrl: me.profile_picture_url,
             },
             accessToken: authRes.access,
             refreshToken: authRes.refresh,
           }),
         );
         dispatch(addNotification('Welcome!', 'success'));
-        navigate('/');
+        navigate(redirectTo, { replace: true });
       } catch (err: unknown) {
-        const apiError = err as Record<string, string | string[]>;
+        const apiError = err as Record<string, unknown>;
+        const getFirstError = (val: unknown): string | null => {
+          if (typeof val === 'string' && val.trim().length > 0) return val;
+          if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && val[0].trim().length > 0) {
+            return val[0];
+          }
+          return null;
+        };
         const detail =
-          typeof apiError?.detail === 'string'
-            ? apiError.detail
-            : Array.isArray(apiError?.non_field_errors)
-              ? apiError.non_field_errors[0]
-              : `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in failed. Please try again.`;
+          getFirstError(apiError?.token) ??
+          getFirstError(apiError?.email) ??
+          getFirstError(apiError?.non_field_errors) ??
+          getFirstError(apiError?.detail) ??
+          getFirstError(apiError?.error) ??
+          getFirstError((err as { message?: unknown })?.message) ??
+          getFirstError(apiError?.provider) ??
+          `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in failed. Please try again.`;
+        setSsoError(detail);
         dispatch(addNotification(detail, 'error'));
       } finally {
         setSsoLoading(null);
       }
     },
-    [dispatch, navigate],
+    [dispatch, navigate, redirectTo],
   );
 
   /**
@@ -221,7 +234,7 @@ export function useSsoLogin() {
 
   const loginWithGoogle = useCallback(() => {
     setSsoError(null);
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = runtimeEnv.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       const msg = 'Google SSO is not configured. Set VITE_GOOGLE_CLIENT_ID in frontend/.env. See .env.example for details.';
       setSsoError(msg);
@@ -272,7 +285,7 @@ export function useSsoLogin() {
 
   const loginWithMicrosoft = useCallback(() => {
     setSsoError(null);
-    const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
+    const clientId = runtimeEnv.VITE_MICROSOFT_CLIENT_ID;
     if (!clientId) {
       const msg = 'Microsoft SSO is not configured. Set VITE_MICROSOFT_CLIENT_ID in frontend/.env. See .env.example for details.';
       setSsoError(msg);
@@ -282,7 +295,7 @@ export function useSsoLogin() {
 
     setSsoLoading('microsoft');
 
-    const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
+    const tenantId = runtimeEnv.VITE_MICROSOFT_TENANT_ID || 'common';
     const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
     const scope = 'openid email profile';
     const nonce = crypto.randomUUID();
@@ -290,6 +303,11 @@ export function useSsoLogin() {
     // Use Authorization Code with PKCE (recommended by Microsoft, doesn't require implicit grant)
     const codeVerifier = crypto.randomUUID() + crypto.randomUUID();
     sessionStorage.setItem('catsos-ms-code-verifier', codeVerifier);
+    try {
+      localStorage.setItem('catsos-ms-code-verifier', codeVerifier);
+    } catch {
+      // ignore storage errors
+    }
 
     // Generate code_challenge from code_verifier using SHA-256
     crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier)).then((hash) => {

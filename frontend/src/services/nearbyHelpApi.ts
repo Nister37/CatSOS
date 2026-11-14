@@ -1,8 +1,12 @@
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+import { runtimeEnv } from '../config/runtimeEnv';
 
-export type NearbyHelpType = 'vet' | 'shelter' | 'pet_help';
+const BASE_URL = runtimeEnv.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+export type NearbyHelpType = 'vet' | 'shelter' | 'cat_cafe' | 'pet_help';
 
 export type NearbyHelpPlace = {
+  osm_id?: number;
+  osm_type?: string;
   id: string;
   type: NearbyHelpType;
   name: string | null;
@@ -41,3 +45,31 @@ export async function fetchNearbyHelp(
 
   return res.json() as Promise<NearbyHelpResponse>;
 }
+
+export function buildGoogleMapsUrl(place: {
+  name?: string | null;
+  address?: string | null;
+  lat: number;
+  lng: number;
+}): string {
+  const name = place.name?.trim();
+  const address = place.address?.trim();
+  const genericNames = ['unnamed place', 'unnamed', 'unknown', 'n/a', '-'];
+  const genericAddresses = ['unnamed address', 'unnamed', 'unknown', 'n/a', '-'];
+  const isGenericName = !name || genericNames.includes(name.toLowerCase());
+  const isGenericAddress = !address || genericAddresses.includes(address.toLowerCase());
+
+  if (!isGenericName && name && !isGenericAddress && address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${name}, ${address}`)}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+}
+
+export function isSafeHttpUrl(url?: string | null): boolean {
+  if (!url) {
+    return false;
+  }
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed);
+}
+

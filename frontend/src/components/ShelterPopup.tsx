@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { ShelterLocation } from '../data/shelters';
+import { buildGoogleMapsUrl } from '../services/nearbyHelpApi';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface PopupProps {
   location: ShelterLocation;
@@ -87,7 +89,7 @@ function PopupShell({
           <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-outline-variant/20">
             <div>
               <span className="inline-block px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider mb-1">
-                {location.type === 'vet' ? 'Veterinary' : 'Shelter'}
+                {location.type === 'vet' ? 'Veterinary' : location.type === 'cat_cafe' ? 'Cat Cafe' : 'Shelter'}
               </span>
               <h3 className="font-headline-md text-headline-md text-on-background leading-tight">
                 {location.name}
@@ -97,9 +99,9 @@ function PopupShell({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="shrink-0 mt-0.5 p-1.5 rounded-full hover:bg-surface-container transition-colors text-secondary"
+              className="shrink-0 w-8 h-8 aspect-square flex items-center justify-center rounded-full hover:bg-surface-container transition-colors text-secondary p-0"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[20px] select-none leading-none">close</span>
             </button>
           </div>
 
@@ -112,6 +114,7 @@ function PopupShell({
 }
 
 export function DetailsPopup({ location, onClose }: PopupProps) {
+  const { t } = useTranslation();
   const rows = [
     { label: 'Mon – Fri', value: location.hours.weekdays },
     { label: 'Saturday', value: location.hours.saturday },
@@ -140,7 +143,7 @@ export function DetailsPopup({ location, onClose }: PopupProps) {
         </div>
         <div className="flex-1">
           <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">
-            Opening Hours
+            {t('shelters.openingHours')}
           </p>
           <div className="space-y-1.5">
             {rows.map(({ label, value }) => (
@@ -155,6 +158,24 @@ export function DetailsPopup({ location, onClose }: PopupProps) {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Google Maps link */}
+      <div className="pt-2 border-t border-surface-container">
+        <a
+          href={buildGoogleMapsUrl({
+            name: location.name,
+            address: location.address,
+            lat: location.position[0],
+            lng: location.position[1],
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">directions</span>
+          <span>{t('shelters.openInGoogleMaps')}</span>
+        </a>
       </div>
     </PopupShell>
   );

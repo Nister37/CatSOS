@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
@@ -10,11 +10,19 @@ import { useSsoLogin } from '../api/useSsoLogin';
 import { setCredentials, setAccessToken } from '../features/auth/authSlice';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import { useAppDispatch } from '../app/hooks';
+import { useTranslation } from '../i18n/useTranslation';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError } = useSsoLogin();
+  const location = useLocation();
+  const requestedPath = (location.state as { from?: unknown } | null)?.from;
+  const redirectTo =
+    typeof requestedPath === 'string' && requestedPath.startsWith('/') && !requestedPath.startsWith('//')
+      ? requestedPath
+      : '/';
+  const { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError } = useSsoLogin(redirectTo);
 
   const {
     register,
@@ -38,21 +46,42 @@ export function LoginPage() {
             firstName: me.first_name,
             lastName: me.last_name,
             avatarFallback: me.avatar_fallback,
+            profilePictureUrl: me.profile_picture_url,
           },
           accessToken: authRes.access,
           refreshToken: authRes.refresh,
         }),
       );
-      dispatch(addNotification('Welcome back!', 'success'));
-      navigate('/');
+      dispatch(addNotification(t('auth.welcomeBack'), 'success'));
+      navigate(redirectTo, { replace: true });
     } catch (err: unknown) {
-      const apiError = err as Record<string, string[]>;
-      if (Array.isArray(apiError.email)) {
-        setError('email', { message: apiError.email[0] });
-      } else if (Array.isArray(apiError.non_field_errors)) {
-        setError('root', { message: apiError.non_field_errors[0] });
+      const apiError = err as Record<string, unknown>;
+      const getFirstError = (val: unknown): string | null => {
+        if (typeof val === 'string' && val.trim().length > 0) return val;
+        if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && val[0].trim().length > 0) {
+          return val[0];
+        }
+        return null;
+      };
+
+      const emailErr = getFirstError(apiError?.email);
+      const passwordErr = getFirstError(apiError?.password);
+      const detailErr = getFirstError(apiError?.detail);
+      const nonFieldErr = getFirstError(apiError?.non_field_errors);
+      const errorMsg = getFirstError(apiError?.error) ?? getFirstError((err as { message?: unknown })?.message);
+
+      if (emailErr) {
+        setError('email', { message: emailErr });
+      } else if (passwordErr) {
+        setError('password', { message: passwordErr });
+      } else if (detailErr) {
+        setError('root', { message: detailErr });
+      } else if (nonFieldErr) {
+        setError('root', { message: nonFieldErr });
+      } else if (errorMsg) {
+        setError('root', { message: errorMsg });
       } else {
-        setError('root', { message: 'Login failed. Please try again.' });
+        setError('root', { message: t('auth.loginFailed') });
       }
     }
   };
@@ -73,10 +102,10 @@ export function LoginPage() {
             {/* Headline */}
             <div className="text-center mb-lg">
               <h1 className="font-headline-lg text-headline-lg text-on-background mb-xs">
-                Welcome Back
+                {t('auth.loginTitle')}
               </h1>
               <p className="font-body-md text-body-md text-secondary">
-                Helping you keep your community safe.
+                {t('auth.loginSubtitle')}
               </p>
             </div>
 
@@ -87,7 +116,7 @@ export function LoginPage() {
                   className="font-label-md text-label-md text-on-surface-variant"
                   htmlFor="email"
                 >
-                  Email Address
+                  {t('auth.email')}
                 </label>
                 <input
                   id="email"
@@ -111,13 +140,13 @@ export function LoginPage() {
                     className="font-label-md text-label-md text-on-surface-variant"
                     htmlFor="password"
                   >
-                    Password
+                    {t('auth.password')}
                   </label>
                   <Link
                     to="/forgot-password"
                     className="font-label-sm text-label-sm text-primary hover:underline"
                   >
-                    Forgot?
+                    {t('auth.forgotPassword')}
                   </Link>
                 </div>
                 <input
@@ -147,7 +176,7 @@ export function LoginPage() {
                 disabled={isSubmitting}
                 className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg hover:brightness-110 active:scale-[0.98] transition-all shadow-sm flex justify-center items-center gap-base disabled:opacity-60"
               >
-                {isSubmitting ? 'Logging in…' : 'Log In'}
+                {isSubmitting ? t('auth.loggingIn') : t('auth.logIn')}
                 {!isSubmitting && (
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 )}
@@ -157,7 +186,7 @@ export function LoginPage() {
             {/* Divider */}
             <div className="w-full flex items-center gap-md my-lg">
               <div className="h-[1px] flex-grow bg-surface-container" />
-              <span className="font-label-sm text-label-sm text-tertiary">or continue with</span>
+              <span className="font-label-sm text-label-sm text-tertiary">{t('auth.orContinueWith')}</span>
               <div className="h-[1px] flex-grow bg-surface-container" />
             </div>
 
@@ -190,7 +219,7 @@ export function LoginPage() {
                   />
                 </svg>
               )}
-              Continue with Google
+              {t('auth.continueWithGoogle')}
             </button>
 
             {/* Microsoft SSO */}
@@ -210,7 +239,7 @@ export function LoginPage() {
                   <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
                 </svg>
               )}
-              Continue with Microsoft
+              {t('auth.continueWithMicrosoft')}
             </button>
 
             {/* SSO configuration error */}
@@ -223,9 +252,9 @@ export function LoginPage() {
             {/* Sign up redirect */}
             <div className="mt-xl text-center">
               <p className="font-body-md text-body-md text-tertiary">
-                Don't have an account?{' '}
+                {t('auth.noAccount')}{' '}
                 <Link className="text-primary font-bold hover:underline" to="/signup">
-                  Sign Up
+                  {t('auth.signUp')}
                 </Link>
               </p>
             </div>
@@ -235,7 +264,7 @@ export function LoginPage() {
           <div className="mt-lg flex justify-center items-center gap-xs text-tertiary">
             <span className="material-symbols-outlined text-[16px]">verified_user</span>
             <span className="font-label-sm text-label-sm uppercase tracking-widest">
-              Secure Connection
+              {t('auth.secureConnection')}
             </span>
           </div>
         </div>

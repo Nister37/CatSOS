@@ -1,4 +1,4 @@
-import { combineReducers, configureStore } from '@reduxjs/toolkit';
+﻿import { combineReducers, configureStore } from '@reduxjs/toolkit';
 
 import authReducer from '../features/auth/authSlice';
 import languageReducer, { getInitialLanguageState } from '../features/language/languageSlice';

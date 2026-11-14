@@ -1,7 +1,9 @@
-import { store } from '../app/store';
+﻿import { store } from '../app/store';
 import { setAccessToken, signOut } from '../features/auth/authSlice';
 
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+import { runtimeEnv } from '../config/runtimeEnv';
+
+const BASE_URL = runtimeEnv.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 let isRefreshing = false;
 let waiters: Array<(token: string | null) => void> = [];

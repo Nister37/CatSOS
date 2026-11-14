@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import { MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
@@ -468,9 +468,9 @@ export function ReportSightingPage() {
                           type="button"
                           onClick={resetUpload}
                           aria-label="Remove photo"
-                          className="absolute top-4 right-4 bg-on-background/80 text-white rounded-full p-2 hover:bg-on-background transition-colors"
+                          className="absolute top-4 right-4 w-9 h-9 aspect-square flex items-center justify-center bg-on-background/80 text-white rounded-full hover:bg-on-background transition-colors p-0"
                         >
-                          <span className="material-symbols-outlined">close</span>
+                          <span className="material-symbols-outlined text-[20px] select-none leading-none">close</span>
                         </button>
                       </div>
                     ) : (

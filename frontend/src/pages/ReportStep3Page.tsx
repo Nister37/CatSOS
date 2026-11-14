@@ -11,6 +11,7 @@ import { reportStep3Schema, type ReportStep3Data } from '../schemas/reportStep3S
 import type { ReportStep1Data } from '../schemas/reportStep1Schema';
 import type { ReportStep2Data } from '../schemas/reportStep2Schema';
 import { createReport } from '../services/reportsApi';
+import { generatePublicSummary, type AISuggestionResponse } from '../services/aiApi';
 
 type RouterState = {
   step1?: ReportStep1Data;
@@ -26,10 +27,13 @@ export function ReportStep3Page() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [aiSummarySuggestion, setAiSummarySuggestion] = useState<AISuggestionResponse | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<ReportStep3Data>({
     resolver: zodResolver(reportStep3Schema),
@@ -40,8 +44,27 @@ export function ReportStep3Page() {
       notifyPush: true,
       notifySms: true,
       notifyEmail: false,
+      publicSummary: '',
     },
   });
+
+  const handleGeneratePublicSummary = async () => {
+    setIsGeneratingSummary(true);
+    try {
+      const res = await generatePublicSummary({
+        cat_name: state?.step1?.catName,
+        coat_color: state?.step1?.coatColor,
+        last_seen_landmark: state?.step2?.landmark,
+        description: state?.step1?.description,
+      });
+      setAiSummarySuggestion(res);
+      dispatch(addNotification('Gemma AI public summary ready.', 'success'));
+    } catch {
+      dispatch(addNotification('Could not generate public summary at this time.', 'error'));
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const onSubmit = async (step3: ReportStep3Data) => {
     setIsSubmitting(true);
@@ -229,6 +252,88 @@ export function ReportStep3Page() {
                     <p id="email-error" role="alert" className="text-error text-label-sm">
                       {errors.email.message}
                     </p>
+                  )}
+                </div>
+
+                {/* Public broadcast summary with Gemma AI */}
+                <div className="space-y-xs pt-base border-t border-surface-container">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="publicSummary"
+                      className="block font-label-md text-label-md text-on-surface"
+                    >
+                      Public Broadcast Summary <span className="text-secondary font-normal">(Optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePublicSummary}
+                      disabled={isGeneratingSummary}
+                      className="text-xs font-bold text-primary hover:text-primary-container flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">
+                        {isGeneratingSummary ? 'progress_activity' : 'auto_awesome'}
+                      </span>
+                      {isGeneratingSummary ? 'Generating...' : 'Generate with Gemma AI'}
+                    </button>
+                  </div>
+                  <p className="font-label-sm text-label-sm text-secondary">
+                    A concise, privacy-safe 1-2 sentence alert shown on public maps and feed cards without private owner details.
+                  </p>
+                  <textarea
+                    id="publicSummary"
+                    rows={2}
+                    maxLength={240}
+                    placeholder="e.g. Missing friendly orange tabby near Central Park. Please check sheds and garages."
+                    aria-invalid={Boolean(errors.publicSummary)}
+                    aria-describedby={errors.publicSummary ? 'publicSummary-error' : undefined}
+                    className="w-full bg-surface-container-low border-none rounded-xl p-sm font-body-md text-body-md focus:ring-2 focus:ring-on-background transition-all outline-none resize-none"
+                    {...register('publicSummary')}
+                  />
+                  {errors.publicSummary && (
+                    <p id="publicSummary-error" role="alert" className="text-error text-label-sm">
+                      {errors.publicSummary.message}
+                    </p>
+                  )}
+
+                  {aiSummarySuggestion && (
+                    <div className="mt-2 p-md bg-primary-container/10 border border-primary-container/30 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                          <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                          <span>Gemma AI Suggestion</span>
+                        </div>
+                        <span className="text-[10px] uppercase font-bold text-secondary">Review before applying</span>
+                      </div>
+                      <p className="text-body-sm font-body-sm text-on-surface bg-white p-sm rounded-lg border border-surface-container">
+                        {aiSummarySuggestion.suggestion}
+                      </p>
+                      <p className="text-[11px] text-secondary italic">
+                        {aiSummarySuggestion.privacy_notice ||
+                          'Private contact details are excluded before AI processing. Review before saving.'}
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setValue('publicSummary', aiSummarySuggestion.suggestion, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            });
+                            setAiSummarySuggestion(null);
+                          }}
+                          className="px-3 py-1 bg-primary text-white rounded-lg text-xs font-bold hover:brightness-105 transition-all cursor-pointer"
+                        >
+                          Apply Suggestion
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAiSummarySuggestion(null)}
+                          className="px-3 py-1 bg-surface-container text-secondary rounded-lg text-xs font-bold hover:bg-surface-container-high transition-all cursor-pointer"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 

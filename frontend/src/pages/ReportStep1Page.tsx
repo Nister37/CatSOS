@@ -3,23 +3,54 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
+import { useAppDispatch } from '../app/hooks';
+import { addNotification } from '../features/notifications/notificationsSlice';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
 import { reportStep1Schema, type ReportStep1Data } from '../schemas/reportStep1Schema';
+import { improveDescription, type AISuggestionResponse } from '../services/aiApi';
 
 export function ReportStep1Page() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [photo, setPhoto] = useState<File | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [aiDescriptionSuggestion, setAiDescriptionSuggestion] = useState<AISuggestionResponse | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<ReportStep1Data>({
     resolver: zodResolver(reportStep1Schema),
     defaultValues: { hasMicrochip: 'no' },
   });
+
+  const handleEnhanceDescription = async () => {
+    const desc = getValues('description')?.trim() || '';
+    if (!desc) {
+      dispatch(
+        addNotification(
+          'Please enter a brief description first so Gemma AI can improve it.',
+          'info',
+        ),
+      );
+      return;
+    }
+    setIsEnhancing(true);
+    try {
+      const res = await improveDescription(desc);
+      setAiDescriptionSuggestion(res);
+      dispatch(addNotification('Gemma AI suggestion ready.', 'success'));
+    } catch {
+      dispatch(addNotification('Could not enhance description at this time.', 'error'));
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
 
   const hasMicrochip = watch('hasMicrochip');
 
@@ -169,12 +200,25 @@ export function ReportStep1Page() {
 
               {/* Description */}
               <div className="space-y-xs">
-                <label
-                  htmlFor="description"
-                  className="block text-label-md font-label-md text-on-background"
-                >
-                  Description
-                </label>
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="description"
+                    className="block text-label-md font-label-md text-on-background"
+                  >
+                    Description
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleEnhanceDescription}
+                    disabled={isEnhancing}
+                    className="text-xs font-bold text-primary hover:text-primary-container flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {isEnhancing ? 'progress_activity' : 'auto_awesome'}
+                    </span>
+                    {isEnhancing ? 'Enhancing...' : 'Enhance Description with Gemma AI'}
+                  </button>
+                </div>
                 <textarea
                   id="description"
                   rows={3}
@@ -188,6 +232,47 @@ export function ReportStep1Page() {
                   <p id="description-error" role="alert" className="text-error text-label-sm">
                     {errors.description.message}
                   </p>
+                )}
+
+                {aiDescriptionSuggestion && (
+                  <div className="mt-2 p-md bg-primary-container/10 border border-primary-container/30 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                        <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                        <span>Gemma AI Suggestion</span>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold text-secondary">Review before applying</span>
+                    </div>
+                    <p className="text-body-sm font-body-sm text-on-surface bg-white p-sm rounded-lg border border-surface-container">
+                      {aiDescriptionSuggestion.suggestion}
+                    </p>
+                    <p className="text-[11px] text-secondary italic">
+                      {aiDescriptionSuggestion.privacy_notice ||
+                        'Private contact details are removed before AI processing. Review before saving.'}
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setValue('description', aiDescriptionSuggestion.suggestion, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          });
+                          setAiDescriptionSuggestion(null);
+                        }}
+                        className="px-3 py-1 bg-primary text-white rounded-lg text-xs font-bold hover:brightness-105 transition-all cursor-pointer"
+                      >
+                        Apply Suggestion
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAiDescriptionSuggestion(null)}
+                        className="px-3 py-1 bg-surface-container text-secondary rounded-lg text-xs font-bold hover:bg-surface-container-high transition-all cursor-pointer"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 

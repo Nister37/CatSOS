@@ -44,8 +44,8 @@ export function App() {
   return (
     <>
       <ScrollToTop />
-      <div key={location.pathname} className="page-motion">
-        <Routes>
+      <div key={location.pathname} className="page-motion page-transition-wrapper">
+        <Routes location={location}>
           <Route index element={<HomePage />} />
           <Route path="report-missing">
             <Route index element={<ReportStep1Page />} />
@@ -77,6 +77,7 @@ export function App() {
           <Route path="generate-poster" element={<RequireAuth><GeneratePosterPage /></RequireAuth>} />
           <Route path="sso/google/callback" element={<GoogleSsoCallbackPage />} />
           <Route path="auth/callback/microsoft" element={<MicrosoftSsoCallbackPage />} />
+          <Route path="sso/microsoft/callback" element={<MicrosoftSsoCallbackPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>

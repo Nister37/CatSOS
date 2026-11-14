@@ -6,6 +6,7 @@ export type AuthUser = {
   firstName: string;
   lastName: string;
   avatarFallback: string;
+  profilePictureUrl?: string | null;
 };
 
 type AuthState = {
@@ -16,24 +17,23 @@ type AuthState = {
 
 const STORAGE_KEY = 'catsos_auth';
 
-function loadPersistedTokens(): Pick<AuthState, 'accessToken' | 'refreshToken'> {
+function loadPersistedAuth(): AuthState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { accessToken: null, refreshToken: null };
-    const { accessToken, refreshToken } = JSON.parse(raw) as Record<string, unknown>;
+    if (!raw) return { user: null, accessToken: null, refreshToken: null };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const user = parsed.user && typeof parsed.user === 'object' ? (parsed.user as AuthUser) : null;
     return {
-      accessToken: typeof accessToken === 'string' ? accessToken : null,
-      refreshToken: typeof refreshToken === 'string' ? refreshToken : null,
+      user,
+      accessToken: typeof parsed.accessToken === 'string' ? parsed.accessToken : null,
+      refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
     };
   } catch {
-    return { accessToken: null, refreshToken: null };
+    return { user: null, accessToken: null, refreshToken: null };
   }
 }
 
-const initialState: AuthState = {
-  user: null,
-  ...loadPersistedTokens(),
-};
+const initialState: AuthState = loadPersistedAuth();
 
 const authSlice = createSlice({
   name: 'auth',
@@ -48,9 +48,26 @@ const authSlice = createSlice({
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken, refreshToken }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, accessToken, refreshToken }));
       } catch {
         /* ignore storage errors */
+      }
+    },
+    updateUser(state, action: PayloadAction<Partial<AuthUser>>) {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              user: state.user,
+              accessToken: state.accessToken,
+              refreshToken: state.refreshToken,
+            }),
+          );
+        } catch {
+          /* ignore storage errors */
+        }
       }
     },
     setAccessToken(
@@ -61,7 +78,10 @@ const authSlice = createSlice({
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken, refreshToken }));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ user: state.user, accessToken, refreshToken }),
+        );
       } catch {
         /* ignore storage errors */
       }
@@ -79,5 +99,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, setAccessToken, signOut } = authSlice.actions;
+export const { setCredentials, setAccessToken, signOut, updateUser } = authSlice.actions;
 export default authSlice.reducer;

@@ -3,14 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { signOut } from '../features/auth/authSlice';
+import { useTranslation } from '../i18n/useTranslation';
 import { fetchUnreadCount } from '../services/notificationsApi';
-
-const NAV_LINKS = [
-  { label: 'Report Missing', to: '/report-missing' },
-  { label: 'Sightings Map', to: '/map' },
-  { label: 'Shelters & Vets', to: '/shelters' },
-  { label: 'About', to: '/about' },
-];
+import { LanguageSelector } from './LanguageSelector';
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -20,6 +15,13 @@ export function Navbar() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
+  const { t } = useTranslation();
+
+  const navLinks = [
+    { label: t('nav.sightingsMap'), to: '/map' },
+    { label: t('nav.shelters'), to: '/shelters' },
+    { label: t('nav.about'), to: '/about' },
+  ];
 
   useEffect(() => {
     if (!user) return;
@@ -53,17 +55,24 @@ export function Navbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-[1000] bg-on-background glass-nav bg-opacity-95 shadow-sm">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:shadow-lg focus:text-primary">Skip to content</a>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:shadow-lg focus:text-primary"
+      >
+        Skip to content
+      </a>
       <nav className="flex justify-between items-center w-full px-margin-mobile md:px-xl max-w-container-max mx-auto h-20">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-base no-underline" onClick={closeMenu}>
-          <span className="material-symbols-outlined text-primary-container text-headline-md">pets</span>
+          <span className="material-symbols-outlined text-primary-container text-headline-md">
+            pets
+          </span>
           <span className="font-headline-md text-headline-md font-bold text-on-primary">CatSOS</span>
         </Link>
 
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-xl">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -80,13 +89,22 @@ export function Navbar() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-md">
+          {/* Language selector */}
+          <LanguageSelector id="navbar-language-select" />
+
           {user && (
             <Link
               to="/notifications"
-              aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+              aria-label={
+                unreadCount > 0
+                  ? `${unreadCount} unread notifications`
+                  : t('nav.notifications')
+              }
               className="relative flex items-center justify-center w-9 h-9 rounded-full hover:bg-on-primary/10 transition-colors"
             >
-              <span className="material-symbols-outlined text-on-primary text-[20px]">notifications</span>
+              <span className="material-symbols-outlined text-on-primary text-[20px]">
+                notifications
+              </span>
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-[3px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -94,6 +112,7 @@ export function Navbar() {
               )}
             </Link>
           )}
+
           {user ? (
             <div ref={userMenuRef} className="relative">
               {/* Avatar button */}
@@ -102,24 +121,45 @@ export function Navbar() {
                 aria-label="User menu"
                 aria-expanded={userMenuOpen}
                 onClick={() => setUserMenuOpen((prev) => !prev)}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-primary-container/20 hover:bg-primary-container/35 transition-colors border border-on-primary/15"
+                className="flex items-center justify-center w-9 h-9 rounded-full bg-primary-container/20 hover:bg-primary-container/35 transition-colors border border-on-primary/15 overflow-hidden"
               >
-                <span className="material-symbols-outlined text-on-primary text-[20px]">
-                  account_circle
-                </span>
+                {user.profilePictureUrl ? (
+                  <img
+                    src={user.profilePictureUrl}
+                    alt={user.firstName ? `${user.firstName} ${user.lastName}`.trim() : user.email}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : user.avatarFallback ? (
+                  <span className="font-bold text-xs text-on-primary leading-none">
+                    {user.avatarFallback}
+                  </span>
+                ) : (
+                  <span className="material-symbols-outlined text-on-primary text-[20px]">
+                    account_circle
+                  </span>
+                )}
               </button>
 
               {/* Dropdown */}
               {userMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+10px)] w-48 bg-on-background rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.18)] border border-on-primary/10 overflow-hidden">
                   {/* User info header */}
-                  <div className="px-md pt-md pb-sm border-b border-on-primary/10">
-                    <p className="font-label-md text-label-md text-on-primary truncate">
-                      {user.firstName ? `${user.firstName} ${user.lastName}`.trim() : user.email}
-                    </p>
-                    <p className="font-label-sm text-label-sm text-on-primary/50 truncate mt-[2px]">
-                      {user.email}
-                    </p>
+                  <div className="px-md pt-md pb-sm border-b border-on-primary/10 flex items-center gap-sm">
+                    {user.profilePictureUrl && (
+                      <img
+                        src={user.profilePictureUrl}
+                        alt="Profile avatar"
+                        className="w-8 h-8 rounded-full object-cover shrink-0 border border-on-primary/20"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-label-md text-label-md text-on-primary truncate">
+                        {user.firstName ? `${user.firstName} ${user.lastName}`.trim() : user.email}
+                      </p>
+                      <p className="font-label-sm text-label-sm text-on-primary/50 truncate mt-[2px]">
+                        {user.email}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Menu items */}
@@ -130,7 +170,7 @@ export function Navbar() {
                       className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
                     >
                       <span className="material-symbols-outlined text-[18px]">notifications</span>
-                      Notifications
+                      {t('nav.notifications')}
                       {unreadCount > 0 && (
                         <span className="ml-auto min-w-[18px] h-[18px] px-[4px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
                           {unreadCount > 9 ? '9+' : unreadCount}
@@ -143,7 +183,7 @@ export function Navbar() {
                       className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
                     >
                       <span className="material-symbols-outlined text-[18px]">pets</span>
-                      My Reports
+                      {t('nav.myReports')}
                     </Link>
                     <Link
                       to="/generate-poster"
@@ -151,7 +191,7 @@ export function Navbar() {
                       className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
                     >
                       <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                      Generate Poster
+                      {t('nav.generatePoster')}
                     </Link>
                     <Link
                       to="/settings"
@@ -159,7 +199,7 @@ export function Navbar() {
                       className="flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
                     >
                       <span className="material-symbols-outlined text-[18px]">settings</span>
-                      Settings
+                      {t('nav.settings')}
                     </Link>
                     <button
                       type="button"
@@ -167,7 +207,7 @@ export function Navbar() {
                       className="w-full flex items-center gap-sm px-md py-sm text-on-primary/80 hover:text-on-primary hover:bg-on-primary/8 transition-colors font-label-md text-label-md"
                     >
                       <span className="material-symbols-outlined text-[18px]">logout</span>
-                      Sign out
+                      {t('nav.signOut')}
                     </button>
                   </div>
                 </div>
@@ -178,14 +218,14 @@ export function Navbar() {
               to="/login"
               className="text-on-primary opacity-60 hover:opacity-100 hover:text-primary-container transition-opacity font-label-md text-label-md"
             >
-              Join
+              {t('nav.join')}
             </Link>
           )}
           <Link
             to="/report-missing"
             className="bg-primary text-on-primary px-md py-sm rounded-xl font-label-md text-label-md font-bold hover:scale-95 duration-100 transition-transform"
           >
-            Report a Missing Cat
+            {t('nav.reportMissing')}
           </Link>
         </div>
 
@@ -210,10 +250,10 @@ export function Navbar() {
 
       {/* Mobile menu */}
       <div
-        className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${menuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}
+        className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${menuOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="flex flex-col px-margin-mobile pb-md border-t border-on-primary/10">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -223,6 +263,15 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
+
+          {/* Mobile language switch */}
+          <div className="flex items-center justify-between py-md border-b border-on-primary/10">
+            <span className="text-on-primary opacity-80 font-label-md text-label-md">
+              {t('nav.language')}
+            </span>
+            <LanguageSelector id="mobile-language-select" />
+          </div>
+
           {user ? (
             <>
               <Link
@@ -231,7 +280,7 @@ export function Navbar() {
                 className="mt-md flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">notifications</span>
-                Notifications
+                {t('nav.notifications')}
                 {unreadCount > 0 && (
                   <span className="ml-1 min-w-[18px] h-[18px] px-[4px] bg-primary rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none">
                     {unreadCount > 9 ? '9+' : unreadCount}
@@ -244,7 +293,7 @@ export function Navbar() {
                 className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">pets</span>
-                My Reports
+                {t('nav.myReports')}
               </Link>
               <Link
                 to="/generate-poster"
@@ -252,7 +301,7 @@ export function Navbar() {
                 className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                Generate Poster
+                {t('nav.generatePoster')}
               </Link>
               <Link
                 to="/settings"
@@ -260,7 +309,7 @@ export function Navbar() {
                 className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">settings</span>
-                Settings
+                {t('nav.settings')}
               </Link>
               <button
                 type="button"
@@ -268,7 +317,7 @@ export function Navbar() {
                 className="flex items-center gap-sm text-on-primary opacity-60 hover:opacity-100 font-label-md text-label-md py-sm"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
-                Sign out
+                {t('nav.signOut')}
               </button>
             </>
           ) : (
@@ -277,7 +326,7 @@ export function Navbar() {
               onClick={closeMenu}
               className="mt-md text-center text-on-primary opacity-60 hover:opacity-100 hover:text-primary-container transition-opacity font-label-md text-label-md py-sm"
             >
-              Join
+              {t('nav.join')}
             </Link>
           )}
         </div>

@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { deleteAccount, deleteProfilePicture, updateProfile, uploadProfilePicture } from '../api/auth';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { signOut, updateUser } from '../features/auth/authSlice';
 import { addNotification, dismissNotification } from '../features/notifications/notificationsSlice';
 import type { NotificationTone } from '../features/notifications/notificationsSlice';
 
@@ -45,14 +49,77 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('notifications');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const notifications = useAppSelector((state) => state.notifications.items);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Image must be under 5MB.');
+      dispatch(addNotification('Profile picture must be under 5MB.', 'error'));
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoError('Please select a JPEG, PNG, or WebP image.');
+      dispatch(addNotification('Unsupported image format. Use JPEG, PNG, or WebP.', 'error'));
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      setPhotoError(null);
+      const updated = await uploadProfilePicture(file);
+      dispatch(
+        updateUser({
+          profilePictureUrl: updated.profile_picture_url,
+          avatarFallback: updated.avatar_fallback,
+        }),
+      );
+      dispatch(addNotification('Profile picture updated successfully.', 'success'));
+    } catch {
+      setPhotoError('Failed to upload picture. Please try again.');
+      dispatch(addNotification('Failed to upload profile picture.', 'error'));
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoDelete = async () => {
+    try {
+      setUploadingPhoto(true);
+      setPhotoError(null);
+      const updated = await deleteProfilePicture();
+      dispatch(
+        updateUser({
+          profilePictureUrl: updated.profile_picture_url,
+          avatarFallback: updated.avatar_fallback,
+        }),
+      );
+      dispatch(addNotification('Profile picture removed.', 'info'));
+    } catch {
+      dispatch(addNotification('Failed to remove profile picture.', 'error'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -63,9 +130,42 @@ export function SettingsPage() {
     },
   });
 
-  const onSave = async () => {
-    await new Promise((r) => setTimeout(r, 500));
-    dispatch(addNotification('Profile editing will be available once the backend endpoint is ready.', 'info'));
+  const onSave = async (data: ProfileFormData) => {
+    try {
+      const updated = await updateProfile({
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+      });
+      dispatch(
+        updateUser({
+          firstName: updated.first_name,
+          lastName: updated.last_name,
+        }),
+      );
+      reset({
+        firstName: updated.first_name,
+        lastName: updated.last_name,
+        email: user?.email ?? data.email,
+      });
+      dispatch(addNotification('Profile updated successfully.', 'success'));
+    } catch {
+      dispatch(addNotification('Failed to update profile. Please try again.', 'error'));
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true);
+      await deleteAccount();
+      dispatch(signOut());
+      dispatch(addNotification('Your account has been deleted.', 'info'));
+      setShowDeleteModal(false);
+      navigate('/');
+    } catch {
+      dispatch(addNotification('Failed to delete account. Please try again.', 'error'));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
@@ -93,8 +193,18 @@ export function SettingsPage() {
         <div className="w-full max-w-[640px] mx-auto">
           {/* Profile header */}
           <div className="flex items-center gap-md mb-lg">
-            <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-primary text-[28px]">account_circle</span>
+            <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {user?.profilePictureUrl ? (
+                <img
+                  src={user.profilePictureUrl}
+                  alt={displayName}
+                  className="w-full h-full object-cover rounded-full"
+                />
+              ) : user?.avatarFallback ? (
+                <span className="font-bold text-primary font-headline-sm">{user.avatarFallback}</span>
+              ) : (
+                <span className="material-symbols-outlined text-primary text-[28px]">account_circle</span>
+              )}
             </div>
             <div className="min-w-0">
               <h1 className="font-headline-md text-headline-md text-on-background truncate">
@@ -188,9 +298,9 @@ export function SettingsPage() {
                           type="button"
                           aria-label="Dismiss notification"
                           onClick={() => dispatch(dismissNotification(notification.id))}
-                          className="flex-shrink-0 text-secondary hover:text-on-background transition-colors p-xs rounded-lg hover:bg-black/5"
+                          className="shrink-0 w-8 h-8 aspect-square flex items-center justify-center text-secondary hover:text-on-background transition-colors rounded-full hover:bg-black/5 p-0"
                         >
-                          <span className="material-symbols-outlined text-[18px]">close</span>
+                          <span className="material-symbols-outlined text-[18px] select-none leading-none">close</span>
                         </button>
                       </div>
                     );
@@ -208,6 +318,80 @@ export function SettingsPage() {
                 <div className="flex items-center gap-xs mb-lg">
                   <span className="material-symbols-outlined text-primary text-[20px]">person</span>
                   <h2 className="font-headline-md text-headline-md text-on-background">Profile</h2>
+                </div>
+
+                {/* Profile Picture change section */}
+                <div className="flex flex-col sm:flex-row items-center gap-md p-md bg-surface-container-low rounded-xl mb-lg border border-surface-container">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
+                    {user?.profilePictureUrl ? (
+                      <img
+                        src={user.profilePictureUrl}
+                        alt="Profile picture"
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : user?.avatarFallback ? (
+                      <span className="font-bold text-primary text-xl font-headline-md">
+                        {user.avatarFallback}
+                      </span>
+                    ) : (
+                      <span className="material-symbols-outlined text-primary text-[36px]">
+                        account_circle
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 text-center sm:text-left min-w-0">
+                    <p className="font-headline-sm text-sm font-bold text-on-background">Profile Picture</p>
+                    <p className="font-body-sm text-xs text-secondary mt-0.5">
+                      JPG, PNG, or WebP up to 5MB.
+                    </p>
+                    {photoError && (
+                      <p className="text-error text-xs mt-1" role="alert">
+                        {photoError}
+                      </p>
+                    )}
+                    <div className="mt-2.5 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handlePhotoSelect}
+                        className="sr-only"
+                        id="profile-picture-input"
+                        aria-label="Upload profile picture"
+                      />
+                      <button
+                        type="button"
+                        disabled={uploadingPhoto}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-xs font-bold hover:brightness-105 active:scale-95 transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        {uploadingPhoto ? (
+                          <>
+                            <span className="material-symbols-outlined text-[16px] animate-spin">
+                              progress_activity
+                            </span>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[16px]">upload</span>
+                            {user?.profilePictureUrl ? 'Change Photo' : 'Upload Photo'}
+                          </>
+                        )}
+                      </button>
+                      {user?.profilePictureUrl && (
+                        <button
+                          type="button"
+                          disabled={uploadingPhoto}
+                          onClick={handlePhotoDelete}
+                          className="px-3.5 py-1.5 rounded-lg border border-error/30 text-error font-label-md text-xs font-bold hover:bg-error/5 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <form onSubmit={handleSubmit(onSave)} noValidate className="space-y-md">
@@ -260,19 +444,23 @@ export function SettingsPage() {
                   </div>
 
                   <div className="flex flex-col gap-xs">
-                    <label
-                      className="font-label-md text-label-md text-on-surface-variant"
-                      htmlFor="email"
-                    >
-                      Email Address
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label
+                        className="font-label-md text-label-md text-on-surface-variant"
+                        htmlFor="email"
+                      >
+                        Email Address
+                      </label>
+                      <span className="text-xs text-secondary">Verified</span>
+                    </div>
                     <input
                       id="email"
                       type="email"
+                      readOnly
                       placeholder="name@example.com"
                       aria-invalid={Boolean(errors.email)}
                       aria-describedby={errors.email ? 'email-error' : undefined}
-                      className="bg-surface-container-low border-2 border-transparent rounded-lg px-md py-sm font-body-md text-body-md transition-all duration-200 focus:outline-none focus:border-on-background focus:bg-white"
+                      className="bg-surface-container-low/60 border-2 border-transparent rounded-lg px-md py-sm font-body-md text-body-md opacity-80 cursor-not-allowed"
                       {...register('email')}
                     />
                     {errors.email && (
@@ -333,10 +521,8 @@ export function SettingsPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() =>
-                    dispatch(addNotification('Account deletion will be available soon.', 'warning'))
-                  }
-                  className="flex items-center gap-xs border-2 border-error/30 text-error px-md py-sm rounded-lg font-label-md text-label-md hover:bg-error/5 hover:border-error/50 transition-all"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="flex items-center gap-xs border-2 border-error/30 text-error px-md py-sm rounded-lg font-label-md text-label-md hover:bg-error/5 hover:border-error/50 transition-all cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">delete_forever</span>
                   Delete Account
@@ -346,6 +532,20 @@ export function SettingsPage() {
           )}
         </div>
       </main>
+
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteAccount}
+        title="Delete Account"
+        description="Are you sure you want to permanently delete your account? All your reports, sightings, and data will be permanently removed. This action cannot be undone."
+        mode="hold-to-confirm"
+        holdDurationMs={5000}
+        holdButtonLabel="Hold to delete account"
+        cancelText="Change my mind"
+        isDanger={true}
+        isLoading={isDeleting}
+      />
 
       <Footer />
     </div>

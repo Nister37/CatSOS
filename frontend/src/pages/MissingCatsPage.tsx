@@ -236,7 +236,7 @@ export function MissingCatsPage() {
                   <button
                     key={cat.public_id}
                     type="button"
-                    className="text-left w-full rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-container"
+                    className="text-left w-full min-w-0 max-w-full overflow-hidden p-0 border-0 bg-transparent cursor-pointer rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-container"
                     onClick={() => openModal(cat.public_id)}
                   >
                     <MissingCatCard

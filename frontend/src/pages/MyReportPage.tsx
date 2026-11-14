@@ -127,6 +127,16 @@ function DetailCard({ report }: DetailCardProps) {
         <p className="font-body-md text-body-md text-secondary">{report.description}</p>
       )}
 
+      {report.public_summary && (
+        <div className="bg-primary-container/10 border border-primary-container/30 rounded-xl p-sm space-y-xs">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+            <span>Public Summary</span>
+          </div>
+          <p className="font-body-md text-body-md text-on-surface">{report.public_summary}</p>
+        </div>
+      )}
+
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
         {rows.map(({ label, value }) => (
           <div key={label} className="bg-surface-container-low rounded-xl p-sm space-y-xs">
@@ -464,7 +474,7 @@ export function MyReportPage() {
                         <MapContainer
                           center={[report.last_seen_lat, report.last_seen_lng]}
                           zoom={13}
-                          scrollWheelZoom={false}
+                          scrollWheelZoom={true}
                           className="w-full h-full"
                           aria-label={`Map showing last known location and sightings of ${report.cat_name}`}
                         >

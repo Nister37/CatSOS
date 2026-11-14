@@ -7,6 +7,7 @@ export const reportStep3Schema = z.object({
   notifyPush: z.boolean(),
   notifySms: z.boolean(),
   notifyEmail: z.boolean(),
+  publicSummary: z.string().max(240, 'Public summary cannot exceed 240 characters').optional(),
 });
 
 export type ReportStep3Data = z.infer<typeof reportStep3Schema>;

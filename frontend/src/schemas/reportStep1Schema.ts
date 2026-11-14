@@ -1,4 +1,4 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 
 export const reportStep1Schema = z.object({
   catName: z.string().min(2, 'Name must be at least 2 characters'),
