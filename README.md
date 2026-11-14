@@ -1,27 +1,33 @@
 # CatSOS
 
-> Community-driven lost and found cat reunion platform featuring interactive sighting maps, volunteer search alerts, AI description enhancement, and automated poster generation.
+> Community-powered search network for lost and spotted cats with interactive maps, volunteer alerts, and automated poster generation.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/python-3.14-blue" alt="Python" />
-  <img src="https://img.shields.io/badge/django-6.0-green" alt="Django" />
-  <img src="https://img.shields.io/badge/react-19-cyan" alt="React" />
-  <img src="https://img.shields.io/badge/leaflet-1.9-brightgreen" alt="Leaflet" />
-  <img src="https://img.shields.io/badge/docker-compose-blueviolet" alt="Docker" />
+  <img src="docs/assets/catsos-logo.svg" alt="CatSOS Logo" width="160" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-%3E%3D3.13-blue" alt="Python" />
+  <img src="https://img.shields.io/badge/Django-6.0-green" alt="Django" />
+  <img src="https://img.shields.io/badge/DRF-Spectacular-teal" alt="DRF Spectacular" />
+  <img src="https://img.shields.io/badge/React-19-cyan" alt="React" />
+  <img src="https://img.shields.io/badge/Leaflet-1.9-brightgreen" alt="Leaflet" />
+  <img src="https://img.shields.io/badge/Docker-Compose-blueviolet" alt="Docker" />
 </p>
 
 ---
 
 ## Overview
 
-When a beloved cat goes missing, every hour counts. **CatSOS** provides neighborhood communities, cat owners, and volunteer searchers with a unified platform to coordinate search efforts:
+When a family cat goes missing, every hour counts. Coordinating local searchers across social media groups and text threads is chaotic and slow.
 
-- **Interactive Geolocation Maps**: Plot and track lost cat reports, sightings, and nearby veterinary clinics / shelters with Leaflet.
-- **Photo Sighting Verification**: Upload sightings with photos and map pins; owners can verify leads as pending, useful, or false.
-- **Automated PDF Poster & QR Generator**: Instantly generate ready-to-print flyers with QR codes pointing to live report updates.
-- **AI-Assisted Descriptions**: Optional Gemma AI cleanup of lost-cat details and automatic multilingual translation suggestions.
-- **Found Cat Decision Tree**: Step-by-step triage assistant guiding finders on safe handling, scanning for microchips, and shelter intake.
-- **Multilingual & Accessible**: Native support for English, Polish, Dutch, and French with WCAG AAA accessibility standards.
+**CatSOS** provides:
+- **Interactive Sighting Maps**: Plot lost cat reports, sightings, and nearby veterinary clinics or shelters in real time with Leaflet.
+- **Photo Sighting Verification**: Upload sightings with photos and map pins; owners confirm or reject leads as pending, useful, or false.
+- **Instant Printable Flyers**: Automatically generate ready-to-print PDF posters with QR codes pointing to live report updates.
+- **AI-Enhanced Descriptions**: Optional Gemma AI cleanup of lost-cat physical traits and automatic multilingual translation suggestions.
+- **Found Cat Decision Tree**: Step-by-step triage guide for safe handling, microchip scanning, and shelter intake.
+- **Multilingual & Accessible**: Native support for English, Polish, Dutch, and French following WCAG AAA accessibility standards.
 
 ---
 
@@ -29,20 +35,20 @@ When a beloved cat goes missing, every hour counts. **CatSOS** provides neighbor
 
 | Layer | Technologies |
 |---|---|
-| **Backend** | Python 3.14, Django 6.0, Django REST Framework, drf-spectacular (OpenAPI 3.0) |
+| **Backend** | Python 3.13+, Django 6.0, Django REST Framework, drf-spectacular (OpenAPI 3.0) |
 | **Frontend** | React 19, Vite, Redux Toolkit, Leaflet / React-Leaflet, Tailwind CSS |
 | **Authentication** | JWT, TOTP Authenticator 2FA, OAuth SSO (Google, Microsoft) |
 | **Database & Maps** | SQLite 3 (Dev) / PostgreSQL (Prod), Overpass OpenStreetMap API |
-| **Testing** | Django Test Runner (410+ tests), Jest, React Testing Library, Cypress, Cypress Axe |
+| **Testing** | Django Test Runner (418 tests), Jest, React Testing Library, Cypress, Cypress Axe |
 
 ---
 
 ## Quickstart (Docker Compose)
 
-The fastest way to launch CatSOS with both backend and frontend running:
+The fastest way to launch the complete CatSOS stack (Backend REST API, Database, and Web UI) is via Docker Compose:
 
 ### 1. Prerequisites
-- Docker Desktop
+- Docker Desktop (Docker Compose v2+)
 - Git
 
 ### 2. Launch
@@ -52,15 +58,14 @@ git clone https://github.com/Nister37/CatSOS.git
 cd CatSOS
 
 # 2. Configure local environment
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+cp .env.example .env
 
-# 3. Start containers
-docker compose up --build
+# 3. Start all services
+docker compose up -d
 ```
 
 ### 3. Service URLs
-- **Web Client**: [http://localhost:5173](http://localhost:5173)
+- **Web Application**: [http://localhost:5173](http://localhost:5173)
 - **Backend REST API**: [http://localhost:8000/api/](http://localhost:8000/api/)
 - **Interactive Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
 
@@ -68,38 +73,38 @@ docker compose up --build
 
 ## Local Development Setup
 
-If you wish to develop without Docker:
+If you prefer running services directly on your host machine:
 
-### 1. Backend Setup
-```powershell
+### 1. Backend Setup (Django API)
+```bash
 cd backend
 
-# Create & activate virtualenv
+# Create and activate virtual environment
 python -m venv .venv
-.\.venv\Scripts\activate   # Linux/macOS: source .venv/bin/activate
+source .venv/bin/activate       # Windows: .\.venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy configuration
+# Configure local environment & run migrations
 cp .env.example .env
-
-# Run migrations & start server
 python manage.py migrate
+
+# Start backend server (Port 8000)
 python manage.py runserver 0.0.0.0:8000
 ```
 
-### 2. Frontend Setup
+### 2. Frontend Setup (React Client)
 ```bash
 cd frontend
 
 # Install dependencies
 npm install
 
-# Copy configuration
+# Configure environment
 cp .env.example .env
 
-# Start Vite development server
+# Start Vite development server (Port 5173)
 npm run dev
 ```
 
@@ -107,22 +112,22 @@ npm run dev
 
 ## Testing
 
-CatSOS maintains comprehensive test coverage across both backend and frontend:
+CatSOS features comprehensive automated test coverage across both backend and frontend:
 
-```powershell
-# Run backend Django tests (412 tests)
+```bash
+# Run backend Django tests (418 tests)
 python backend/manage.py test
 
 # Validate OpenAPI schema against DRF Spectacular
 python backend/manage.py spectacular --validate
 
-# Run frontend tests with coverage (318 tests)
+# Run frontend tests (318 tests)
 npm --prefix frontend test
 
 # Run frontend accessibility (A11y) audit
 npm --prefix frontend run a11y
 
-# Run production build check
+# Run frontend production build check
 npm --prefix frontend run build
 ```
 
@@ -130,10 +135,12 @@ npm --prefix frontend run build
 
 ## Deep Dive Documentation
 
+For advanced architecture, API specifications, and operational guides, see the dedicated documentation in `/docs`:
+- **System Architecture & Domain Design**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Full REST API Reference**: [API.md](API.md)
-- **Architecture & Domain Design**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Backend Guide**: [backend/README.md](backend/README.md)
-- **Frontend Guide**: [frontend/README.md](frontend/README.md)
-- **Postman Collection & Flows**: [postman/POSTMAN.md](postman/POSTMAN.md)
-- **CI/CD & Jenkins Pipeline**: [jenkins/README.md](jenkins/README.md)
+- **Backend Service Guide**: [backend/README.md](backend/README.md)
+- **Frontend Architecture & Components**: [frontend/README.md](frontend/README.md)
+- **Security Audit & Hardening**: [backend/docs/SECURITY_AUDIT.md](backend/docs/SECURITY_AUDIT.md)
+- **Postman Flows & Collection**: [postman/POSTMAN.md](postman/POSTMAN.md)
+- **CI/CD & Jenkins Automation**: [jenkins/README.md](jenkins/README.md)
 - **Git & Branching Workflow**: [GIT.md](GIT.md)
