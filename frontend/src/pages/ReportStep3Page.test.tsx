@@ -4,9 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test/renderWithProviders';
 import { ReportStep3Page } from './ReportStep3Page';
 import { createReport } from '../services/reportsApi';
+import { generatePublicSummary } from '../services/aiApi';
 
 jest.mock('../services/reportsApi', () => ({
   createReport: jest.fn(),
+}));
+
+const mockGeneratePublicSummary = jest.fn();
+jest.mock('../services/aiApi', () => ({
+  generatePublicSummary: (...args: unknown[]) => mockGeneratePublicSummary(...args),
 }));
 
 const mockNavigate = jest.fn();
@@ -189,3 +195,71 @@ describe('ReportStep3Page — submission', () => {
     expect(screen.getByRole('button', { name: /post missing report/i })).not.toBeDisabled();
   });
 });
+
+describe('ReportStep3Page — Gemma AI public summary generation', () => {
+  it('calls generatePublicSummary and applies the suggestion to public summary textarea', async () => {
+    mockGeneratePublicSummary.mockResolvedValueOnce({
+      suggestion: 'Missing friendly black and white cat near Baker Street. Please check gardens.',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: 'Private contact details are excluded before AI processing. Review before saving.',
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReportStep3Page />);
+
+    const generateBtn = screen.getByRole('button', { name: /generate with gemma ai/i });
+    expect(generateBtn).toBeInTheDocument();
+    await user.click(generateBtn);
+
+    expect(mockGeneratePublicSummary).toHaveBeenCalledWith({
+      cat_name: 'Luna',
+      coat_color: 'Black & White',
+      last_seen_landmark: undefined,
+      description: 'Friendly tabby cat',
+    });
+
+    // AI suggestion preview card appears
+    await screen.findByText('Gemma AI Suggestion');
+    expect(
+      screen.getByText('Missing friendly black and white cat near Baker Street. Please check gardens.'),
+    ).toBeInTheDocument();
+
+    // Click Apply Suggestion
+    const applyBtn = screen.getByRole('button', { name: /apply suggestion/i });
+    await user.click(applyBtn);
+
+    // Textarea updated with suggestion
+    const textarea = screen.getByLabelText(/public broadcast summary/i);
+    expect(textarea).toHaveValue(
+      'Missing friendly black and white cat near Baker Street. Please check gardens.',
+    );
+  });
+
+  it('can dismiss the AI suggestion card without changing the textarea', async () => {
+    mockGeneratePublicSummary.mockResolvedValueOnce({
+      suggestion: 'Generated summary',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: '',
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReportStep3Page />);
+
+    const textarea = screen.getByLabelText(/public broadcast summary/i);
+    await user.type(textarea, 'Initial text');
+
+    await user.click(screen.getByRole('button', { name: /generate with gemma ai/i }));
+    await screen.findByText('Gemma AI Suggestion');
+
+    // Click Dismiss
+    await user.click(screen.getByRole('button', { name: /dismiss/i }));
+
+    expect(screen.queryByText('Gemma AI Suggestion')).not.toBeInTheDocument();
+    expect(textarea).toHaveValue('Initial text');
+  });
+});
+

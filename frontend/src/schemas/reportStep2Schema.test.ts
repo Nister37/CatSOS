@@ -1,4 +1,4 @@
-import { reportStep2Schema } from './reportStep2Schema';
+﻿import { reportStep2Schema } from './reportStep2Schema';
 
 describe('reportStep2Schema', () => {
   it('accepts a valid address', () => {

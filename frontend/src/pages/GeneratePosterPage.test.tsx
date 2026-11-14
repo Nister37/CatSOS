@@ -13,11 +13,18 @@ const mockGenerateQRCode = jest.fn().mockResolvedValue({
   content_type: 'image/png',
 });
 const mockFetchOwnedReports = jest.fn();
+const mockGetPosterTextSuggestion = jest.fn();
+const mockGetTranslationSuggestion = jest.fn();
 
 jest.mock('../services/reportsApi', () => ({
   fetchOwnedReports: (...args: unknown[]) => mockFetchOwnedReports(...args),
   generateQRCode: (...args: unknown[]) => mockGenerateQRCode(...args),
   downloadReportPoster: (...args: unknown[]) => mockDownloadReportPoster(...args),
+}));
+
+jest.mock('../services/aiApi', () => ({
+  getPosterTextSuggestion: (...args: unknown[]) => mockGetPosterTextSuggestion(...args),
+  getTranslationSuggestion: (...args: unknown[]) => mockGetTranslationSuggestion(...args),
 }));
 
 const MOCK_REPORT = {
@@ -200,5 +207,55 @@ describe('GeneratePosterPage — actions', () => {
     await user.click(screen.getByRole('button', { name: /whiskers/i }));
     const copyBtn = await screen.findByRole('button', { name: /copy link/i });
     await user.click(copyBtn); // should not throw
+  });
+
+  it('fetches and displays Gemma AI poster wording suggestion', async () => {
+    mockGetPosterTextSuggestion.mockResolvedValueOnce({
+      suggestion: 'MISSING: Whiskers. Orange tabby near park. Scan QR to report.',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: 'Private contact details are removed before AI processing. Review the suggestion before saving.',
+    });
+
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /whiskers/i }));
+
+    const suggestBtn = screen.getByRole('button', { name: /gemma ai: suggest poster wording/i });
+    expect(suggestBtn).toBeInTheDocument();
+    await user.click(suggestBtn);
+
+    expect(mockGetPosterTextSuggestion).toHaveBeenCalledWith('report-uuid-1');
+    expect(
+      await screen.findByText('MISSING: Whiskers. Orange tabby near park. Scan QR to report.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy suggestion/i })).toBeInTheDocument();
+  });
+
+  it('fetches and displays Gemma AI translation suggestion', async () => {
+    mockGetTranslationSuggestion.mockResolvedValueOnce({
+      suggestion: 'ZAGINIONY: Whiskers. Rudy pręgowany kot. Zeskanuj QR.',
+      target_language: 'pl',
+      target_language_label: 'Polish',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: '',
+    });
+
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /whiskers/i }));
+
+    const translateBtn = screen.getByRole('button', { name: /^translate$/i });
+    expect(translateBtn).toBeInTheDocument();
+    await user.click(translateBtn);
+
+    expect(mockGetTranslationSuggestion).toHaveBeenCalledWith('report-uuid-1', 'pl');
+    expect(
+      await screen.findByText('ZAGINIONY: Whiskers. Rudy pręgowany kot. Zeskanuj QR.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy translation/i })).toBeInTheDocument();
   });
 });

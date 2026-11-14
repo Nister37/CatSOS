@@ -281,6 +281,19 @@ class OverpassParsingTests(TestCase):
         expected_ids = {1001, 2001, 3001}
         self.assertEqual(osm_ids, expected_ids)
 
+    @patch('maps.services.urlopen')
+    def test_overpass_mirror_fallback_used_on_primary_failure(self, mock_urlopen):
+        from urllib.error import URLError
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(MOCK_OVERPASS_RESPONSE).encode('utf-8')
+        mock_response.__enter__.return_value = mock_response
+
+        mock_urlopen.side_effect = [URLError('Connection timed out'), mock_response]
+
+        result = fetch_nearby_help(51.05, 3.72, 10)
+        self.assertEqual(len(result['places']), 3)
+        self.assertEqual(mock_urlopen.call_count, 2)
+
 
 @override_settings(
     OVERPASS_API_URL='https://overpass-api.de/api/interpreter',
@@ -316,3 +329,82 @@ class NearbyHelpViewEdgeCases(TestCase):
         self.assertEqual(data['places'], [])
         self.assertIn('warning', data)
         self.assertTrue(len(data['warning']) > 0)
+
+    def test_nearby_help_serializer_validates_website_protocol(self):
+        from .serializers import NearbyHelpPlaceSerializer
+        valid_data = {
+            'osm_id': 123,
+            'osm_type': 'node',
+            'name': 'Safe Vet',
+            'type': 'vet',
+            'lat': 51.0,
+            'lng': 3.0,
+            'distance_km': 1.5,
+            'phone': '123',
+            'website': 'https://example.com',
+            'opening_hours': '',
+            'address': '',
+            'quality_score': 5,
+        }
+        serializer = NearbyHelpPlaceSerializer(data=valid_data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        # Disallowed schemes like javascript:
+        invalid_data = dict(valid_data, website='javascript:alert(1)')
+        serializer = NearbyHelpPlaceSerializer(data=invalid_data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('website', serializer.errors)
+
+    def test_nearby_help_serializer_sanitizes_unsafe_website_in_representation(self):
+        from .serializers import NearbyHelpPlaceSerializer
+        instance = {
+            'osm_id': 123,
+            'osm_type': 'node',
+            'name': 'Safe Vet',
+            'type': 'vet',
+            'lat': 51.0,
+            'lng': 3.0,
+            'distance_km': 1.5,
+            'phone': '123',
+            'website': 'javascript:alert(1)',
+            'opening_hours': '',
+            'address': '',
+            'quality_score': 5,
+        }
+        rep = NearbyHelpPlaceSerializer(instance).data
+        self.assertEqual(rep['website'], '')
+
+    def test_classify_element_detects_cat_cafes(self):
+        self.assertEqual(_classify_element({'amenity': 'cat_cafe'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'cuisine': 'cat_cafe'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'cuisine': 'cat'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'animal': 'cat'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'pet': 'cat'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'theme': 'cat'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Kattencafé Kat-astrofe'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Café des Chats'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Bar à chats'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Kocia Kawiarnia Miau'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Katzencafé Schnurr'}), 'cat_cafe')
+        self.assertEqual(_classify_element({'amenity': 'cafe', 'name': 'Feline Cat Lounge'}), 'cat_cafe')
+
+    def test_nearby_help_serializer_accepts_cat_cafe_type(self):
+        from .serializers import NearbyHelpPlaceSerializer
+        valid_data = {
+            'osm_id': 7001,
+            'osm_type': 'node',
+            'name': 'Cat Cafe Purr',
+            'type': 'cat_cafe',
+            'lat': 51.22,
+            'lng': 4.40,
+            'distance_km': 0.8,
+            'phone': '+32 3 999 8877',
+            'website': 'https://catcafepurr.be',
+            'opening_hours': '10:00-18:00',
+            'address': 'Melkmarkt 17, Antwerp',
+            'quality_score': 8,
+        }
+        serializer = NearbyHelpPlaceSerializer(data=valid_data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['type'], 'cat_cafe')
+

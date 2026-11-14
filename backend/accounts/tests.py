@@ -165,6 +165,18 @@ class AccountAuthApiTests(APITestCase):
             get_user_model().objects.filter(email='smtp-fail@example.com').exists()
         )
 
+    @patch('accounts.services.send_mail')
+    @override_settings(DEBUG=True)
+    def test_register_email_delivery_failure_falls_back_when_debug_true(self, send_mail_mock):
+        send_mail_mock.side_effect = SMTPAuthenticationError(535, b'Invalid username')
+
+        response = self._register(email='debug-fallback@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            get_user_model().objects.filter(email='debug-fallback@example.com').exists()
+        )
+
     def test_register_accepts_preferred_language_and_localizes_verification_email(self):
         response = self._register(
             email='polish@example.com',
@@ -315,6 +327,33 @@ class AccountAuthApiTests(APITestCase):
         self.assertIn('preferred_language', response.data)
         user.refresh_from_db()
         self.assertEqual(user.preferred_language, 'en')
+
+    def test_current_user_delete_deletes_account(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.delete(reverse('account-me'))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        user_model = get_user_model()
+        self.assertFalse(user_model.objects.filter(id=user.id).exists())
+
+    def test_current_user_patch_updates_name_and_profile(self):
+        user = self._create_verified_user()
+        self._authenticate(user)
+
+        response = self.client.patch(
+            reverse('account-me'),
+            {'first_name': 'Alice', 'last_name': 'Smith'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['first_name'], 'Alice')
+        self.assertEqual(response.data['last_name'], 'Smith')
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, 'Alice')
+        self.assertEqual(user.last_name, 'Smith')
 
     def test_current_user_patch_rejects_unknown_fields(self):
         user = self._create_verified_user()
@@ -693,6 +732,31 @@ class AccountAuthApiTests(APITestCase):
             {
                 'email': 'visitor@example.com',
                 'totp_code': '123456',
+                'new_password': 'NewPassword123!',
+                'new_password_confirm': 'NewPassword123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {'detail': PASSWORD_RESET_TOTP_INVALID_DETAIL})
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(TEST_USER_PASSWORD))
+
+    def test_totp_password_reset_rejects_unverified_email_account(self):
+        user = get_user_model().objects.create_user(
+            email='unverified@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=False,
+            is_totp_enabled=True,
+            totp_secret='JBSWY3DPEHPK3PXP',
+        )
+
+        response = self.client.post(
+            reverse('account-password-reset-totp'),
+            {
+                'email': 'unverified@example.com',
+                'totp_code': self._totp_code(user),
                 'new_password': 'NewPassword123!',
                 'new_password_confirm': 'NewPassword123!',
             },

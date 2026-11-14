@@ -1957,3 +1957,28 @@ class ReportPublicListPrivacyTests(APITestCase):
         self.assertNotIn('Private Owner Name', serialized)
         self.assertNotIn('123 Secret Home Street', serialized)
         self.assertNotIn('985112003456789', serialized)
+
+    def test_public_stats_endpoint(self):
+        self._create_report(
+            self.owner,
+            cat_name='Luna',
+            status=LostCatReport.Status.MISSING,
+        )
+        self._create_report(
+            self.owner,
+            cat_name='Oliver',
+            status=LostCatReport.Status.FOUND,
+        )
+
+        response = self.client.get(reverse('lost-report-public-stats'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('active_sightings', response.data)
+        self.assertIn('cats_reunited', response.data)
+        self.assertIn('community_members', response.data)
+        self.assertEqual(response.data['cats_reunited'], 1)
+        self.assertGreaterEqual(response.data['community_members'], 1)
+
+        # Verify alias route /api/reports/public/stats/
+        alias_resp = self.client.get(reverse('lost-report-public-stats-alias'))
+        self.assertEqual(alias_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(alias_resp.data, response.data)

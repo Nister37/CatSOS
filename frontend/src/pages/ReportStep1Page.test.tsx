@@ -7,11 +7,16 @@ import { ReportStep1Page } from './ReportStep1Page';
 // Variables prefixed with 'mock' are accessible inside jest.mock() factories
 // due to Babel's Jest hoisting transform.
 const mockNavigate = jest.fn();
+const mockImproveDescription = jest.fn();
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
   useLocation: () => ({ state: null, pathname: '/report-missing', search: '', hash: '', key: 'default' }),
+}));
+
+jest.mock('../services/aiApi', () => ({
+  improveDescription: (...args: unknown[]) => mockImproveDescription(...args),
 }));
 
 beforeEach(() => jest.clearAllMocks());
@@ -162,3 +167,68 @@ describe('ReportStep1Page — navigation', () => {
     );
   });
 });
+
+describe('ReportStep1Page — Gemma AI description enhancement', () => {
+  it('calls improveDescription and applies the suggestion to description textarea', async () => {
+    mockImproveDescription.mockResolvedValueOnce({
+      suggestion: 'A gentle 3-year-old orange tabby cat with a distinctive white patch on chest.',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: 'Private contact details are removed before AI processing. Review before saving.',
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReportStep1Page />);
+
+    const textarea = screen.getByLabelText(/description/i);
+    await user.type(textarea, 'orange cat friendly');
+
+    const enhanceBtn = screen.getByRole('button', { name: /enhance description with gemma ai/i });
+    expect(enhanceBtn).toBeInTheDocument();
+    await user.click(enhanceBtn);
+
+    expect(mockImproveDescription).toHaveBeenCalledWith('orange cat friendly');
+
+    // AI suggestion preview card appears
+    await screen.findByText('Gemma AI Suggestion');
+    expect(
+      screen.getByText('A gentle 3-year-old orange tabby cat with a distinctive white patch on chest.'),
+    ).toBeInTheDocument();
+
+    // Click Apply Suggestion
+    const applyBtn = screen.getByRole('button', { name: /apply suggestion/i });
+    await user.click(applyBtn);
+
+    // Textarea updated with suggestion
+    expect(textarea).toHaveValue(
+      'A gentle 3-year-old orange tabby cat with a distinctive white patch on chest.',
+    );
+  });
+
+  it('can dismiss the AI suggestion card without changing the textarea', async () => {
+    mockImproveDescription.mockResolvedValueOnce({
+      suggestion: 'Suggested text',
+      generated_by_ai: true,
+      requires_review: true,
+      fallback_reason: '',
+      privacy_notice: '',
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReportStep1Page />);
+
+    const textarea = screen.getByLabelText(/description/i);
+    await user.type(textarea, 'my cat');
+
+    await user.click(screen.getByRole('button', { name: /enhance description with gemma ai/i }));
+    await screen.findByText('Gemma AI Suggestion');
+
+    // Click Dismiss
+    await user.click(screen.getByRole('button', { name: /dismiss/i }));
+
+    expect(screen.queryByText('Gemma AI Suggestion')).not.toBeInTheDocument();
+    expect(textarea).toHaveValue('my cat');
+  });
+});
+

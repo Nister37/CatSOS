@@ -222,3 +222,43 @@ describe('Navbar — mobile menu', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 });
+
+// ─── Profile photo & Language switcher ────────────────────────────────────────
+
+describe('Navbar — avatar and language switching', () => {
+  it('renders profile picture image when profilePictureUrl is provided', () => {
+    const stateWithPhoto = {
+      auth: {
+        user: {
+          id: 2,
+          email: 'catlover@example.com',
+          firstName: 'Alice',
+          lastName: 'Smith',
+          profilePictureUrl: 'https://example.com/alice.jpg',
+        },
+        accessToken: 'tok',
+        refreshToken: 'rtok',
+      },
+    };
+
+    renderWithProviders(<Navbar />, { preloadedState: stateWithPhoto });
+
+    const avatarImg = screen.getByAltText('Alice Smith');
+    expect(avatarImg).toBeInTheDocument();
+    expect(avatarImg).toHaveAttribute('src', 'https://example.com/alice.jpg');
+  });
+
+  it('switches language when language select option changes', async () => {
+    const user = userEvent.setup();
+    const { store } = renderWithProviders(<Navbar />);
+
+    const languageSelects = screen.getAllByRole('combobox', { name: /language/i });
+    expect(languageSelects.length).toBeGreaterThanOrEqual(1);
+
+    await user.selectOptions(languageSelects[0], 'pl');
+
+    expect(store.getState().language.current).toBe('pl');
+    expect(document.documentElement.lang).toBe('pl');
+  });
+});
+

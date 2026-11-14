@@ -2,6 +2,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from .models import IntakeReport
+
 
 class FoundCatDecisionTreeApiTests(APITestCase):
     def _url(self):
@@ -269,3 +271,77 @@ class FoundCatDecisionTreeApiTests(APITestCase):
             'Leave food and water nearby and observe from a distance.',
             scared['guidance'],
         )
+
+
+class IntakeReportApiTests(APITestCase):
+    def _url(self):
+        return reverse('assistant-intake')
+
+    def test_create_intake_report_success_with_camel_case(self):
+        payload = {
+            'catName': 'Whiskers',
+            'reporterEmail': 'reporter@example.com',
+            'urgency': 'high',
+            'description': 'Found near the bus stop shivering in the cold rain.',
+        }
+        response = self.client.post(self._url(), payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response['Pragma'], 'no-cache')
+        self.assertEqual(response.data['catName'], 'Whiskers')
+        self.assertEqual(response.data['reporterEmail'], 'reporter@example.com')
+        self.assertEqual(response.data['urgency'], 'high')
+        self.assertEqual(response.data['status'], 'QUEUED')
+        self.assertIn('id', response.data)
+        self.assertIn('created_at', response.data)
+
+        report = IntakeReport.objects.get(id=response.data['id'])
+        self.assertEqual(report.cat_name, 'Whiskers')
+        self.assertEqual(report.reporter_email, 'reporter@example.com')
+        self.assertEqual(report.urgency, 'high')
+        self.assertEqual(report.status, 'QUEUED')
+
+    def test_create_intake_report_success_with_snake_case(self):
+        payload = {
+            'cat_name': 'Milo',
+            'reporter_email': 'milo.helper@example.com',
+            'urgency': 'low',
+            'description': 'Friendly cat hanging around my porch for 2 days.',
+        }
+        response = self.client.post(self._url(), payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['cat_name'], 'Milo')
+        self.assertEqual(response.data['reporter_email'], 'milo.helper@example.com')
+        self.assertEqual(response.data['urgency'], 'low')
+        self.assertTrue(IntakeReport.objects.filter(cat_name='Milo').exists())
+
+    def test_create_intake_report_validation_errors(self):
+        payload = {
+            'catName': 'M',
+            'reporterEmail': 'not-an-email',
+            'urgency': 'invalid_urgency',
+            'description': 'short',
+        }
+        response = self.client.post(self._url(), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_intake_report_description_too_long(self):
+        payload = {
+            'catName': 'Shadow',
+            'reporterEmail': 'helper@example.com',
+            'urgency': 'medium',
+            'description': 'A' * 501,
+        }
+        response = self.client.post(self._url(), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('description', response.data)
+
+    def test_view_has_assistant_write_throttle_scope(self):
+        from rest_framework.throttling import ScopedRateThrottle
+        from .views import IntakeReportCreateView
+        self.assertEqual(IntakeReportCreateView.throttle_scope, 'assistant_write')
+        self.assertIn(ScopedRateThrottle, IntakeReportCreateView.throttle_classes)
+
+

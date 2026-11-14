@@ -1,4 +1,4 @@
-import reducer, {
+﻿import reducer, {
   DEFAULT_LANGUAGE,
   getInitialLanguageState,
   LANGUAGE_STORAGE_KEY,

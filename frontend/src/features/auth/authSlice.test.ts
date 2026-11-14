@@ -60,6 +60,23 @@ describe('authSlice — setAccessToken', () => {
     const stored = JSON.parse(localStorage.getItem('catsos_auth') ?? '{}');
     expect(stored.accessToken).toBe('new-access');
   });
+
+  it('preserves existing user in localStorage on silent token refresh', () => {
+    const loggedIn = reducer(
+      undefined,
+      setCredentials({ user: mockUser, accessToken: 'old', refreshToken: 'old-r' }),
+    );
+
+    reducer(
+      loggedIn,
+      setAccessToken({ accessToken: 'new-access', refreshToken: 'new-refresh' }),
+    );
+
+    const stored = JSON.parse(localStorage.getItem('catsos_auth') ?? '{}');
+    expect(stored.user).toEqual(mockUser);
+    expect(stored.accessToken).toBe('new-access');
+    expect(stored.refreshToken).toBe('new-refresh');
+  });
 });
 
 describe('authSlice — signOut', () => {
