@@ -1,4 +1,4 @@
-import { reportStep1Schema } from './reportStep1Schema';
+﻿import { reportStep1Schema } from './reportStep1Schema';
 
 describe('reportStep1Schema', () => {
   const base = {

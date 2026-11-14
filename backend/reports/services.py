@@ -5,9 +5,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from notifications.services import (
-    enqueue_report_created_notification,
     enqueue_report_status_changed_notification,
 )
+
+from .events import CatReunitedEvent, ReportCreatedEvent, publish_domain_event
 
 from .models import LostCatReport, LostCatReportPhoto, LostCatReportTimelineEvent
 
@@ -186,7 +187,16 @@ def handle_report_created(*, report, actor):
         report=report,
         actor=actor,
     )
-    enqueue_report_created_notification(report=report, actor=actor)
+    publish_domain_event(
+        ReportCreatedEvent(
+            report_id=str(report.pk),
+            report=report,
+            actor=actor,
+            cat_name=report.cat_name,
+            status=report.status,
+            location_summary=timeline_event.location_summary,
+        )
+    )
     return timeline_event
 
 
@@ -228,11 +238,23 @@ def change_report_status(*, report, actor, new_status, found_message=None):
         to_status=new_status,
         location_summary=build_report_location_summary(report),
     )
-    enqueue_report_status_changed_notification(
-        report=report,
-        old_status=old_status,
-        new_status=new_status,
-        actor=actor,
-    )
+    if new_status == LostCatReport.Status.FOUND:
+        publish_domain_event(
+            CatReunitedEvent(
+                report_id=str(report.pk),
+                report=report,
+                actor=actor,
+                found_message=found_message or report.found_message,
+                previous_status=old_status,
+                status=new_status,
+            )
+        )
+    else:
+        enqueue_report_status_changed_notification(
+            report=report,
+            old_status=old_status,
+            new_status=new_status,
+            actor=actor,
+        )
 
     return report, timeline_event

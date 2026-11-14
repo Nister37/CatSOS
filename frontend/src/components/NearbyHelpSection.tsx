@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 
 import {
   fetchNearbyHelp,
+  buildGoogleMapsUrl,
+  isSafeHttpUrl,
   type NearbyHelpPlace,
   type NearbyHelpResponse,
   type NearbyHelpType,
 } from '../services/nearbyHelpApi';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface NearbyHelpSectionProps {
   lat: number;
@@ -17,12 +20,20 @@ const RADIUS_OPTIONS = [5, 10, 20, 30] as const;
 const TYPE_CONFIG: Record<NearbyHelpType, { label: string; icon: string; bg: string; text: string }> = {
   vet: { label: 'Vet', icon: 'vaccines', bg: 'bg-primary-container/20', text: 'text-primary' },
   shelter: { label: 'Shelter', icon: 'home', bg: 'bg-secondary-container', text: 'text-on-secondary-container' },
+  cat_cafe: { label: 'Cat Cafe', icon: 'local_cafe', bg: 'bg-amber-100', text: 'text-amber-800' },
   pet_help: { label: 'Pet-related', icon: 'pets', bg: 'bg-surface-container', text: 'text-on-surface-variant' },
 };
 
 function PlaceCard({ place }: { place: NearbyHelpPlace }) {
+  const { t } = useTranslation();
   const typeConf = TYPE_CONFIG[place.type] ?? TYPE_CONFIG.pet_help;
-  const osmUrl = `https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lng}#map=16/${place.lat}/${place.lng}`;
+  const typeLabels: Record<NearbyHelpType, string> = {
+    vet: t('shelters.tabVets'),
+    shelter: t('shelters.tabShelters'),
+    cat_cafe: t('shelters.tabCatCafes'),
+    pet_help: t('nearbyHelp.petRelated'),
+  };
+  const googleMapsUrl = buildGoogleMapsUrl(place);
 
   return (
     <div className="bg-white p-md rounded-xl border border-outline-variant/10 shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all">
@@ -33,11 +44,11 @@ function PlaceCard({ place }: { place: NearbyHelpPlace }) {
               className={`inline-flex items-center gap-xs px-sm py-xs rounded-full font-label-sm text-label-sm ${typeConf.bg} ${typeConf.text}`}
             >
               <span className="material-symbols-outlined text-[14px]">{typeConf.icon}</span>
-              {typeConf.label}
+              {typeLabels[place.type] ?? typeConf.label}
             </span>
           </div>
           <h4 className="font-headline-md text-headline-md text-on-background leading-tight">
-            {place.name ?? 'Unnamed place'}
+            {place.name ?? t('shelters.unnamedPlace')}
           </h4>
         </div>
         <span className="font-label-md text-label-md text-on-surface-variant whitespace-nowrap shrink-0">
@@ -61,16 +72,16 @@ function PlaceCard({ place }: { place: NearbyHelpPlace }) {
         </div>
       )}
 
-      {place.website && (
+      {isSafeHttpUrl(place.website) && (
         <div className="flex items-center gap-xs text-secondary font-body-sm text-body-sm mb-xs">
           <span className="material-symbols-outlined text-[16px]">language</span>
           <a
-            href={place.website}
+            href={place.website!}
             target="_blank"
             rel="noopener noreferrer"
             className="text-primary hover:underline truncate"
           >
-            {place.website.replace(/^https?:\/\//, '')}
+            {place.website!.replace(/^https?:\/\//, '')}
           </a>
         </div>
       )}
@@ -84,13 +95,13 @@ function PlaceCard({ place }: { place: NearbyHelpPlace }) {
 
       <div className="mt-sm pt-sm border-t border-surface-container flex items-center gap-sm">
         <a
-          href={osmUrl}
+          href={googleMapsUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-xs px-md py-sm rounded-xl bg-surface-container border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-secondary-container transition-colors"
         >
           <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-          Open in maps
+          {t('shelters.googleMaps')}
         </a>
         {place.phone && (
           <a
@@ -98,7 +109,7 @@ function PlaceCard({ place }: { place: NearbyHelpPlace }) {
             className="inline-flex items-center gap-xs px-md py-sm rounded-xl bg-primary-container text-on-primary font-label-md text-label-md hover:brightness-110 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">call</span>
-            Call
+            {t('shelters.call')}
           </a>
         )}
       </div>
@@ -107,29 +118,43 @@ function PlaceCard({ place }: { place: NearbyHelpPlace }) {
 }
 
 export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
+  const { t } = useTranslation();
   const [radiusKm, setRadiusKm] = useState<number>(10);
-  const [data, setData] = useState<NearbyHelpResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryKey = `${lat}:${lng}:${radiusKm}`;
+  const [result, setResult] = useState<{
+    queryKey: string;
+    data: NearbyHelpResponse | null;
+    error: string | null;
+  } | null>(null);
 
   const [filterVet, setFilterVet] = useState(true);
   const [filterShelter, setFilterShelter] = useState(true);
   const [filterPetHelp, setFilterPetHelp] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let cancelled = false;
     fetchNearbyHelp(lat, lng, radiusKm)
       .then((response) => {
-        setData(response);
+        if (!cancelled) setResult({ queryKey, data: response, error: null });
       })
       .catch(() => {
-        setError('Failed to load nearby places. Please try again later.');
-      })
-      .finally(() => {
-        setLoading(false);
+        if (!cancelled) {
+          setResult({
+            queryKey,
+            data: null,
+            error: 'Failed to load nearby places. Please try again later.',
+          });
+        }
       });
-  }, [lat, lng, radiusKm]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng, queryKey, radiusKm]);
+
+  const loading = result?.queryKey !== queryKey;
+  const data = !loading ? result.data : null;
+  const error = !loading ? result.error : null;
 
   const filteredPlaces: NearbyHelpPlace[] = useMemo(() => {
     if (!data) return [];
@@ -145,7 +170,7 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
     <div className="bg-white rounded-2xl border border-surface-container-highest shadow-sm p-md md:p-lg">
       <div className="flex items-center gap-sm mb-md">
         <span className="material-symbols-outlined text-primary text-[24px]">local_hospital</span>
-        <h2 className="font-headline-md text-headline-md text-on-surface">Nearby Help</h2>
+        <h2 className="font-headline-md text-headline-md text-on-surface">{t('nearbyHelp.title')}</h2>
       </div>
 
       {/* Radius selector */}
@@ -183,7 +208,7 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
           }`}
         >
           <span className="material-symbols-outlined text-[16px]">vaccines</span>
-          Vets
+          {t('shelters.tabVets')}
         </button>
         <button
           type="button"
@@ -196,7 +221,7 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
           }`}
         >
           <span className="material-symbols-outlined text-[16px]">home</span>
-          Shelters
+          {t('shelters.tabShelters')}
         </button>
         <button
           type="button"
@@ -209,7 +234,7 @@ export function NearbyHelpSection({ lat, lng }: NearbyHelpSectionProps) {
           }`}
         >
           <span className="material-symbols-outlined text-[16px]">pets</span>
-          Pet-related
+          {t('nearbyHelp.petRelated')}
         </button>
       </div>
 

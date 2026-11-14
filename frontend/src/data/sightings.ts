@@ -1,4 +1,4 @@
-export type SightingStatus = 'MISSING' | 'RECENTLY_SEEN' | 'FOUND' | 'CLOSED';
+﻿export type SightingStatus = 'MISSING' | 'RECENTLY_SEEN' | 'FOUND' | 'CLOSED';
 
 export interface CatSighting {
   id: string;

@@ -127,6 +127,16 @@ class CurrentUserView(NoStoreAPIView):
         )
         return no_store_response(response_serializer.data)
 
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description='Account permanently deleted'),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+    )
+    def delete(self, request):
+        request.user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class PublicProfileView(NoStoreAPIView):
     authentication_classes = []
@@ -444,6 +454,8 @@ class PasswordResetRequestView(NoStoreAPIView):
 class PasswordResetConfirmView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_password_reset_confirm'
 
     @extend_schema(
         request=PasswordResetConfirmSerializer,
@@ -479,6 +491,8 @@ class PasswordResetConfirmView(NoStoreAPIView):
 class PasswordResetTOTPView(NoStoreAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_password_reset_confirm'
 
     @extend_schema(
         request=PasswordResetTOTPSerializer,
@@ -504,6 +518,11 @@ class PasswordResetTOTPView(NoStoreAPIView):
                 {'detail': PASSWORD_RESET_RATE_LIMIT_DETAIL},
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 headers={'Retry-After': str(60 * 60)},
+            )
+        except PasswordResetInvalidTokenError:
+            return no_store_response(
+                {'detail': PASSWORD_RESET_INVALID_DETAIL},
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         except InvalidTOTPCodeError:
             return no_store_response(

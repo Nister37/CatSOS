@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
+from django.utils.html import strip_tags
 from rest_framework import serializers
 
 from .models import Sighting, SightingPhoto, VolunteerSearch
@@ -186,3 +187,41 @@ class SightingCreateSerializer(serializers.ModelSerializer):
         if value > timezone.now() + timedelta(minutes=5):
             raise serializers.ValidationError('Sighting time cannot be in the future.')
         return value
+
+    def validate(self, attrs):
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
+        return attrs
+
+
+class TrendingNearbyQuerySerializer(serializers.Serializer):
+    lat = serializers.FloatField(required=False, min_value=-90.0, max_value=90.0)
+    lng = serializers.FloatField(required=False, min_value=-180.0, max_value=180.0)
+    radius_km = serializers.FloatField(required=False, min_value=1.0, max_value=100.0, default=100.0)
+    ip = serializers.CharField(required=False, allow_blank=True)
+
+
+class TrendingItemSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    label = serializers.CharField()
+    query = serializers.CharField()
+    count = serializers.IntegerField()
+    distance_km = serializers.FloatField()
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+
+
+class UserLocationSerializer(serializers.Serializer):
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+    source = serializers.CharField()
+    city = serializers.CharField(required=False, allow_blank=True)
+
+
+class TrendingNearbyResponseSerializer(serializers.Serializer):
+    trends = TrendingItemSerializer(many=True)
+    count = serializers.IntegerField()
+    user_location = UserLocationSerializer(allow_null=True)
+    radius_km = serializers.FloatField()
+

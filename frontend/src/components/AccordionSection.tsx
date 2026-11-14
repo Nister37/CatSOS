@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+﻿import { useId, useState, type ReactNode } from 'react';
 
 type AccordionSectionProps = {
   title: string;

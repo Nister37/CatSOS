@@ -1,6 +1,8 @@
 import { apiRequest } from './client';
 
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+import { runtimeEnv } from '../config/runtimeEnv';
+
+const BASE_URL = runtimeEnv.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export type AuthResponse = {
   access: string;
@@ -58,6 +60,38 @@ export function refreshToken(refresh: string) {
 
 export function getMe() {
   return apiRequest<CurrentUser>('/api/me/');
+}
+
+export function updateProfile(data: { firstName?: string; lastName?: string }) {
+  return apiRequest<CurrentUser>('/api/me/', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      first_name: data.firstName,
+      last_name: data.lastName,
+    }),
+  });
+}
+
+export function uploadProfilePicture(file: File): Promise<CurrentUser> {
+  const formData = new FormData();
+  formData.append('profile_picture', file);
+  return apiRequest<CurrentUser>('/api/me/profile-picture/', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function deleteProfilePicture(): Promise<CurrentUser> {
+  return apiRequest<CurrentUser>('/api/me/profile-picture/', {
+    method: 'DELETE',
+  });
+}
+
+export function deleteAccount(): Promise<void> {
+  return apiRequest<void>('/api/me/', {
+    method: 'DELETE',
+  });
 }
 
 export function resendVerification(email: string) {

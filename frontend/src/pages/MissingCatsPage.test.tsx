@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+﻿import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '../test/renderWithProviders';
@@ -80,9 +80,10 @@ describe('MissingCatsPage', () => {
   });
 
   it('shows an empty state when no reports are returned', async () => {
-    const { fetchMissingCatsPage, fetchPublicReports } = jest.requireMock('../services/reportsApi');
-    fetchMissingCatsPage.mockResolvedValueOnce({ results: [], count: 0, hasNext: false });
-    fetchPublicReports.mockResolvedValueOnce([]);
+    const { fetchMissingCatsPage } = jest.requireMock('../services/reportsApi');
+    fetchMissingCatsPage
+      .mockResolvedValueOnce({ results: [], count: 0, hasNext: false })
+      .mockResolvedValueOnce({ results: [], count: 0, hasNext: false });
 
     renderWithProviders(<MissingCatsPage />);
 
@@ -94,6 +95,7 @@ describe('MissingCatsPage', () => {
     const CAT_SHADOW = { ...CAT_WHISKERS, public_id: 'abc-2', cat_name: 'Shadow' };
     const { fetchMissingCatsPage } = jest.requireMock('../services/reportsApi');
     fetchMissingCatsPage
+      .mockResolvedValueOnce({ results: [CAT_WHISKERS], count: 1, hasNext: false })
       .mockResolvedValueOnce({ results: [CAT_WHISKERS], count: 2, hasNext: true })
       .mockResolvedValueOnce({ results: [CAT_SHADOW], count: 2, hasNext: false });
 
@@ -104,6 +106,6 @@ describe('MissingCatsPage', () => {
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument());
     expect(screen.getByText('Shadow')).toBeInTheDocument();
-    expect(fetchMissingCatsPage).toHaveBeenCalledTimes(2);
+    expect(fetchMissingCatsPage).toHaveBeenCalledTimes(3);
   });
 });

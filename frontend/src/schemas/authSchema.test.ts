@@ -1,4 +1,4 @@
-import { loginSchema, signupSchema } from './authSchema';
+﻿import { loginSchema, signupSchema } from './authSchema';
 
 describe('loginSchema', () => {
   it('rejects empty email', () => {

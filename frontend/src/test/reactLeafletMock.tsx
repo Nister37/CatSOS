@@ -12,6 +12,15 @@ export const Popup = MockLeafletElement;
 
 export const useMap = () => ({
   flyTo: () => {},
+  setView: () => {},
+  getZoom: () => 12,
+  getBounds: () => ({
+    getNorth: () => 52,
+    getSouth: () => 50,
+    getEast: () => 5,
+    getWest: () => 3,
+  }),
+  fitBounds: () => {},
   zoomIn: () => {},
   zoomOut: () => {},
   on: () => {},

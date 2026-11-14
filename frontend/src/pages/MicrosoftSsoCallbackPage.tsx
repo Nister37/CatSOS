@@ -1,77 +1,83 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { runtimeEnv } from '../config/runtimeEnv';
 
 const SSO_RESULT_KEY = 'catsos-sso-result';
+const redeemedCodes = new Set<string>();
 
 function sendResult(data: { type: string; token?: string; error?: string }) {
-  // Primary: postMessage to opener
   if (window.opener) {
     window.opener.postMessage(data, window.location.origin);
   }
-  // Fallback: localStorage for COOP case
+  // Don't overwrite an already successful token with a late error
+  const existing = localStorage.getItem(SSO_RESULT_KEY);
+  if (existing && data.type === 'microsoft-sso-error') {
+    try {
+      const parsed = JSON.parse(existing);
+      if (parsed.type === 'microsoft-sso-token' && parsed.token) {
+        return;
+      }
+    } catch {
+      // ignore
+    }
+  }
   localStorage.setItem(SSO_RESULT_KEY, JSON.stringify(data));
 }
 
 export function MicrosoftSsoCallbackPage() {
-  const [status, setStatus] = useState('Processing Microsoft sign-in...');
-  const [error, setError] = useState<string | null>(null);
+  const callback = useMemo(() => {
+    const query = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.substring(1));
+    const get = (name: string) => query.get(name) ?? fragment.get(name);
+    const oauthError = get('error');
 
-  useEffect(() => {
-    const fragment = window.location.hash.substring(1);
-    const params = new URLSearchParams(fragment);
-
-    // Check for errors first
-    const oauthError = params.get('error');
-    const errorDesc = params.get('error_description');
-    if (oauthError) {
-      const msg = errorDesc || oauthError;
-      setError(msg);
-      sendResult({ type: 'microsoft-error', error: msg });
-      return;
-    }
-
-    // Authorization Code flow: exchange code for tokens
-    const code = params.get('code');
-    if (code) {
-      exchangeCodeForToken(code);
-      return;
-    }
-
-    // Legacy: implicit flow id_token
-    const idToken = params.get('id_token');
-    if (idToken) {
-      sendResult({ type: 'microsoft-token', token: idToken });
-      setStatus('Sign-in successful! This window will close.');
-      setTimeout(() => window.close(), 500);
-      return;
-    }
-
-    setError('No authorization code or token received from Microsoft.');
-    sendResult({ type: 'microsoft-error', error: 'No code or token received.' });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return {
+      code: get('code'),
+      idToken: get('id_token'),
+      error: oauthError ? get('error_description') || oauthError : null,
+    };
   }, []);
+  const [status, setStatus] = useState(
+    callback.idToken
+      ? 'Sign-in successful! This window will close.'
+      : callback.code
+        ? 'Exchanging authorization code...'
+        : 'Processing Microsoft sign-in...',
+  );
+  const [error, setError] = useState<string | null>(
+    callback.error ??
+      (!callback.code && !callback.idToken
+        ? 'No authorization code or token received from Microsoft.'
+        : null),
+  );
 
-  async function exchangeCodeForToken(code: string) {
-    const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
-    const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
-    const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
-    const codeVerifier = sessionStorage.getItem('catsos-ms-code-verifier') || '';
+  const exchangeStartedRef = useRef(false);
+
+  const exchangeCodeForToken = useCallback(async (code: string) => {
+    await Promise.resolve();
+    const clientId = runtimeEnv.VITE_MICROSOFT_CLIENT_ID;
+    const tenantId = runtimeEnv.VITE_MICROSOFT_TENANT_ID || 'common';
+    const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    const codeVerifier =
+      sessionStorage.getItem('catsos-ms-code-verifier') ||
+      localStorage.getItem('catsos-ms-code-verifier') ||
+      '';
 
     if (!clientId) {
-      const msg = 'Microsoft sign-in is not configured. Missing client id.';
-      setError(msg);
-      sendResult({ type: 'microsoft-error', error: msg });
+      const message = 'Microsoft sign-in is not configured. Missing client id.';
+      setError(message);
+      sendResult({ type: 'microsoft-sso-error', error: message });
       return;
     }
 
     if (!codeVerifier) {
-      const msg = 'Missing PKCE code verifier. Please try signing in again.';
-      setError(msg);
-      sendResult({ type: 'microsoft-error', error: msg });
+      const message = 'Missing PKCE code verifier. Please try signing in again.';
+      setError(message);
+      sendResult({ type: 'microsoft-sso-error', error: message });
       return;
     }
 
     try {
-      setStatus('Exchanging authorization code...');
       const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
       const body = new URLSearchParams({
         client_id: clientId,
@@ -82,38 +88,75 @@ export function MicrosoftSsoCallbackPage() {
         scope: 'openid email profile',
       });
 
-      const res = await fetch(tokenUrl, {
+      const response = await fetch(tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': window.location.origin },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const msg = errData.error_description || errData.error || 'Token exchange failed.';
-        setError(msg);
-        sendResult({ type: 'microsoft-error', error: msg });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        let message =
+          errorData.error_description || errorData.error || 'Token exchange failed.';
+        if (
+          message.includes('AADSTS70000') ||
+          message.includes('expired') ||
+          message.includes('not valid')
+        ) {
+          message =
+            'Your Microsoft sign-in code has expired or was already used. Please close this window and try signing in again.';
+        }
+        setError(message);
+        sendResult({ type: 'microsoft-sso-error', error: message });
         return;
       }
 
-      const data = await res.json();
+      const data = await response.json();
       const idToken = data.id_token;
       if (!idToken) {
+        const message = 'No id_token received.';
         setError('No id_token in token response.');
-        sendResult({ type: 'microsoft-error', error: 'No id_token received.' });
+        sendResult({ type: 'microsoft-sso-error', error: message });
         return;
       }
 
       sessionStorage.removeItem('catsos-ms-code-verifier');
-      sendResult({ type: 'microsoft-token', token: idToken });
+      try {
+        localStorage.removeItem('catsos-ms-code-verifier');
+      } catch {
+        // ignore
+      }
+      sendResult({ type: 'microsoft-sso-token', token: idToken });
       setStatus('Sign-in successful! This window will close.');
-      setTimeout(() => window.close(), 500);
-    } catch (err) {
-      const msg = `Token exchange error: ${err instanceof Error ? err.message : 'Unknown error'}`;
-      setError(msg);
-      sendResult({ type: 'microsoft-error', error: msg });
+      window.setTimeout(() => window.close(), 500);
+    } catch (caughtError) {
+      const message = `Token exchange error: ${caughtError instanceof Error ? caughtError.message : 'Unknown error'}`;
+      setError(message);
+      sendResult({ type: 'microsoft-sso-error', error: message });
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (callback.error) {
+      sendResult({ type: 'microsoft-sso-error', error: callback.error });
+      return;
+    }
+    if (callback.code) {
+      if (exchangeStartedRef.current || redeemedCodes.has(callback.code)) {
+        return;
+      }
+      exchangeStartedRef.current = true;
+      redeemedCodes.add(callback.code);
+      void exchangeCodeForToken(callback.code);
+      return;
+    }
+    if (callback.idToken) {
+      sendResult({ type: 'microsoft-sso-token', token: callback.idToken });
+      const closeTimer = window.setTimeout(() => window.close(), 500);
+      return () => window.clearTimeout(closeTimer);
+    }
+    sendResult({ type: 'microsoft-sso-error', error: 'No code or token received.' });
+  }, [callback, exchangeCodeForToken]);
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center' }}>
@@ -121,7 +164,10 @@ export function MicrosoftSsoCallbackPage() {
         <div>
           <h2 style={{ color: '#b52330' }}>Microsoft SSO Error</h2>
           <p style={{ maxWidth: 500, margin: '1rem auto', color: '#333' }}>{error}</p>
-          <button onClick={() => window.close()} style={{ marginTop: '1rem', padding: '0.5rem 1.5rem', cursor: 'pointer' }}>
+          <button
+            onClick={() => window.close()}
+            style={{ marginTop: '1rem', padding: '0.5rem 1.5rem', cursor: 'pointer' }}
+          >
             Close this window
           </button>
         </div>
@@ -129,7 +175,17 @@ export function MicrosoftSsoCallbackPage() {
         <div>
           <p>{status}</p>
           <div style={{ marginTop: '1rem' }}>
-            <div style={{ width: 24, height: 24, border: '3px solid #0078d4', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                border: '3px solid #0078d4',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto',
+              }}
+            />
           </div>
         </div>
       )}

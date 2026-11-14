@@ -2,6 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.html import strip_tags
 from rest_framework import serializers
 
 from points.models import UserBadge
@@ -161,6 +162,9 @@ class CurrentUserSerializer(serializers.Serializer):
 
 
 class CurrentUserUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    display_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     preferred_language = serializers.ChoiceField(
         choices=PreferredLanguage.choices,
         required=False,
@@ -178,6 +182,9 @@ class CurrentUserUpdateSerializer(serializers.Serializer):
                     for field in sorted(unknown_fields)
                 }
             )
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
     def update(self, instance, validated_data):
@@ -188,6 +195,13 @@ class CurrentUserUpdateSerializer(serializers.Serializer):
 
             setattr(instance, field, value)
             update_fields.append(field)
+
+        if ('first_name' in validated_data or 'last_name' in validated_data) and 'display_name' not in validated_data:
+            full_name = f'{instance.first_name} {instance.last_name}'.strip()
+            if full_name and instance.display_name != full_name:
+                instance.display_name = full_name
+                if 'display_name' not in update_fields:
+                    update_fields.append('display_name')
 
         if update_fields:
             instance.save(update_fields=update_fields)
@@ -312,6 +326,9 @@ class RegisterSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
 
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
     def create(self, validated_data):
@@ -366,6 +383,9 @@ class LoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError({'totp_code': ['Enter a valid TOTP code.']})
 
         attrs['user'] = user
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
 
@@ -384,6 +404,9 @@ class VerifyEmailSerializer(serializers.Serializer):
             )
 
         attrs['user'] = user
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
 
@@ -446,6 +469,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {'new_password_confirm': ['Password confirmation does not match.']}
             )
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
 
@@ -463,6 +489,9 @@ class PasswordResetTOTPSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {'new_password_confirm': ['Password confirmation does not match.']}
             )
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
 
@@ -507,6 +536,9 @@ class PasswordChangeSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
 
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
     def save(self, **kwargs):
@@ -583,6 +615,9 @@ class TOTPDisableSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
 
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
     def save(self, **kwargs):
@@ -627,6 +662,9 @@ class SSOLinkSerializer(serializers.Serializer):
             if not verify_user_totp_code(user=user, code=totp_code):
                 raise serializers.ValidationError({'totp_code': ['Enter a valid TOTP code.']})
 
+        for key, val in list(attrs.items()):
+            if isinstance(val, str):
+                attrs[key] = strip_tags(val).strip()
         return attrs
 
     def save(self, **kwargs):

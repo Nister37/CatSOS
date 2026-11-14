@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { ShelterLocation } from '../data/shelters';
 import { ContactPopup, DetailsPopup } from './ShelterPopup';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface ShelterCardProps {
   location: ShelterLocation;
@@ -10,6 +11,7 @@ interface ShelterCardProps {
 type PopupType = 'contact' | 'details' | null;
 
 export function ShelterCard({ location }: ShelterCardProps) {
+  const { t } = useTranslation();
   const [popup, setPopup] = useState<PopupType>(null);
 
   return (
@@ -28,17 +30,17 @@ export function ShelterCard({ location }: ShelterCardProps) {
             {/* Badge + status row */}
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="inline-block px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
-                {location.type === 'vet' ? 'Veterinary' : 'Shelter'}
+                {location.type === 'vet' ? t('shelters.veterinary') : location.type === 'cat_cafe' ? t('shelters.catCafe') : t('shelters.shelter')}
               </span>
               {location.isOpen ? (
                 <span className="inline-flex items-center gap-1 text-[#2D8C3C] font-label-sm text-label-sm whitespace-nowrap">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#2D8C3C] animate-pulse" />
-                  Open Now
+                  {t('shelters.openNow')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-error font-label-sm text-label-sm whitespace-nowrap">
                   <span className="w-1.5 h-1.5 rounded-full bg-error" />
-                  Closed
+                  {t('shelters.closed')}
                 </span>
               )}
             </div>
@@ -64,14 +66,14 @@ export function ShelterCard({ location }: ShelterCardProps) {
                 className="bg-primary-container text-on-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all font-label-md text-label-md"
               >
                 <span className="material-symbols-outlined text-[20px]">call</span>
-                Call Now
+                {t('shelters.callNow')}
               </button>
               <button
                 type="button"
                 onClick={() => setPopup('details')}
                 className="px-5 py-2.5 rounded-full font-bold border-2 border-on-background text-on-background hover:bg-on-background hover:text-white transition-all font-label-md text-label-md"
               >
-                Details
+                {t('shelters.details')}
               </button>
             </div>
           </div>

@@ -3,25 +3,108 @@ import { useNavigate } from 'react-router-dom';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { useTranslation } from '../i18n/useTranslation';
+import {
+  fetchPublicStats,
+  fetchTrendingNearby,
+  type TrendingLocation,
+} from '../services/reportsApi';
 
-const TRENDING = [
-  { label: 'Brooklyn, NY', query: 'Brooklyn, NY' },
-  { label: 'Portland, OR', query: 'Portland, OR' },
-  { label: 'Austin, TX', query: 'Austin, TX' },
-  { label: 'London, UK', query: 'London, UK' },
-];
-
-const STATS = [
-  { value: '1,240', label: 'Active Sightings', highlight: true },
-  { value: '850', label: 'Cats Reunited', highlight: false },
-  { value: '15k+', label: 'Community Members', highlight: false },
-];
+export function formatRoundedStat(val: number | null | undefined): string {
+  if (val == null || isNaN(val) || val <= 0) return '0';
+  if (val >= 1000) {
+    const k = Math.round(val / 100) / 10;
+    return `${k}k+`;
+  }
+  if (val >= 50) {
+    return `${Math.floor(val / 10) * 10}+`;
+  }
+  return `${val}`;
+}
 
 export function SightingsMapSearchPage() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [stats, setStats] = useState([
+    { value: '0', labelKey: 'sightings.statActiveSightings' as const, highlight: true },
+    { value: '0', labelKey: 'sightings.statCatsReunited' as const, highlight: false },
+    { value: '0', labelKey: 'sightings.statCommunityMembers' as const, highlight: false },
+  ]);
+  const [trendingNearby, setTrendingNearby] = useState<TrendingLocation[]>([]);
+  const [trendingLoaded, setTrendingLoaded] = useState(false);
   const watermarkRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPublicStats()
+      .then((data) => {
+        if (cancelled) return;
+        setStats([
+          {
+            value: formatRoundedStat(data.active_sightings),
+            labelKey: 'sightings.statActiveSightings',
+            highlight: true,
+          },
+          {
+            value: formatRoundedStat(data.cats_reunited),
+            labelKey: 'sightings.statCatsReunited',
+            highlight: false,
+          },
+          {
+            value: formatRoundedStat(data.community_members),
+            labelKey: 'sightings.statCommunityMembers',
+            highlight: false,
+          },
+        ]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function loadTrends(coords?: { lat: number; lng: number }) {
+      const promise = coords ? fetchTrendingNearby(coords) : fetchTrendingNearby();
+      promise
+        .then((items) => {
+          if (cancelled) return;
+          setTrendingNearby(items);
+          setTrendingLoaded(true);
+        })
+
+        .catch(() => {
+          if (cancelled) return;
+          setTrendingNearby([]);
+          setTrendingLoaded(true);
+        });
+    }
+
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return;
+          loadTrends({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          if (cancelled) return;
+          loadTrends();
+        },
+        { timeout: 5000 },
+      );
+    } else {
+      loadTrends();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
@@ -73,10 +156,10 @@ export function SightingsMapSearchPage() {
         <section className="relative z-10 w-full max-w-[800px] px-margin-mobile text-center py-xl">
           <div className="mb-lg">
             <h1 className="font-display-lg text-display-lg text-on-background mb-base">
-              Find sightings in your area
+              {t('sightings.searchTitle')}
             </h1>
             <p className="font-body-lg text-body-lg text-secondary max-w-[600px] mx-auto">
-              Enter your city or zip code to view active reports and help bring cats home.
+              {t('sightings.searchSubtitle')}
             </p>
           </div>
 
@@ -97,8 +180,8 @@ export function SightingsMapSearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                placeholder="San Francisco, CA or 94103"
-                aria-label="Search sightings by city, postcode, or area"
+                placeholder={t('sightings.searchPlaceholder')}
+                aria-label={t('sightings.searchAriaLabel')}
                 className="w-full py-md bg-transparent border-none focus:ring-0 text-body-lg font-body-lg text-on-background"
               />
             </div>
@@ -112,35 +195,46 @@ export function SightingsMapSearchPage() {
               >
                 map
               </span>
-              Search Map
+              {t('sightings.searchButton')}
             </button>
           </form>
 
           {/* Trending nearby */}
           <div className="mt-lg flex flex-wrap justify-center items-center gap-lg">
             <span className="font-label-sm text-label-sm text-secondary uppercase tracking-widest">
-              Trending Nearby:
+              {t('sightings.trendingNearby')}
             </span>
-            <div className="flex flex-wrap justify-center gap-md">
-              {TRENDING.map((item) => (
-                <button
-                  key={item.query}
-                  type="button"
-                  onClick={() => handleSearch(item.query)}
-                  className="font-label-md text-label-md text-on-surface-variant hover:text-primary-container transition-colors border-b border-transparent hover:border-primary-container"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            {trendingNearby.length > 0 ? (
+              <div className="flex flex-wrap justify-center gap-md">
+                {trendingNearby.map((item) => (
+                  <button
+                    key={item.id || item.query}
+                    type="button"
+                    onClick={() => handleSearch(item.query)}
+                    className="font-label-md text-label-md text-on-surface-variant hover:text-primary-container transition-colors border-b border-transparent hover:border-primary-container flex items-center gap-xs"
+                  >
+                    <span>{item.label}</span>
+                    {item.count > 0 && (
+                      <span className="text-label-xs bg-surface-container-high text-secondary px-1.5 py-0.5 rounded-full font-medium">
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : trendingLoaded ? (
+              <span className="font-label-sm text-label-sm text-secondary italic">
+                {t('sightings.noTrendingNearby')}
+              </span>
+            ) : null}
           </div>
         </section>
 
         {/* Stats */}
         <div className="relative z-10 w-full max-w-container-max mx-auto px-margin-mobile grid grid-cols-1 md:grid-cols-3 gap-md pb-xl">
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <div
-              key={stat.label}
+              key={stat.labelKey}
               className="bg-surface-container-low p-lg rounded-xl border border-surface-container-high flex flex-col items-center text-center"
             >
               <span
@@ -150,10 +244,13 @@ export function SightingsMapSearchPage() {
               >
                 {stat.value}
               </span>
-              <span className="font-label-md text-label-md text-secondary">{stat.label}</span>
+              <span className="font-label-md text-label-md text-secondary">
+                {t(stat.labelKey)}
+              </span>
             </div>
           ))}
         </div>
+
       </main>
 
       <Footer />

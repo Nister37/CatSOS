@@ -12,6 +12,36 @@
   to   { opacity: 1; transform: scale(1)    translateY(0);   }
 }
 
+@keyframes alertPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes alertPopOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+}
+
+.animate-alert-in {
+  animation: alertPopIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-alert-out {
+  animation: alertPopOut 250ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 @keyframes pageFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -22,28 +52,70 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pageSwitchTransition {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.page-transition-wrapper > div > main,
+.page-transition-wrapper > main,
+.page-transition-content {
+  animation: pageSwitchTransition 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: 50% 10%;
+  will-change: opacity, transform;
+}
+
 .page-motion {
-  animation: pageFadeIn 180ms ease-out both;
   min-height: 100%;
 }
 
-.page-motion > *,
 .motion-reveal {
-  animation: pageContentRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  opacity: 1;
+}
+
+/* Map filter drawer slide in/out animations */
+@keyframes filterSlideInRight {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes filterSlideOutRight {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-filter-slide-in {
+  animation: filterSlideInRight 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-filter-slide-out {
+  animation: filterSlideOutRight 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .motion-stagger > * {
-  animation: pageContentRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  opacity: 1;
 }
 
-.motion-stagger > *:nth-child(2) { animation-delay: 60ms; }
-.motion-stagger > *:nth-child(3) { animation-delay: 120ms; }
-.motion-stagger > *:nth-child(4) { animation-delay: 180ms; }
-.motion-stagger > *:nth-child(5) { animation-delay: 240ms; }
-.motion-stagger > *:nth-child(6) { animation-delay: 300ms; }
-
 .accordion-panel {
-  animation: pageContentRise 220ms ease-out both;
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

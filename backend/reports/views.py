@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -28,6 +29,7 @@ from .serializers import (
     LostCatReportStatusUpdateSerializer,
     LostCatReportTimelineEventSerializer,
     LostCatReportUpdateSerializer,
+    get_relevant_sightings_queryset,
 )
 from .services import (
     change_report_status,
@@ -443,7 +445,14 @@ class LostCatReportPublicListView(APIView):
     def get_queryset(self):
         queryset = LostCatReport.objects.exclude(
             moderation_status=LostCatReport.ModerationStatus.HIDDEN,
-        ).prefetch_related('photos')
+        ).prefetch_related(
+            'photos',
+            Prefetch(
+                'sightings',
+                queryset=get_relevant_sightings_queryset(),
+                to_attr='public_relevant_sightings',
+            ),
+        )
         status_filter = self.request.query_params.get('status')
         active = self.request.query_params.get('active')
 
@@ -591,3 +600,45 @@ class LostCatReportPublicListView(APIView):
             context={'request': request},
         )
         return set_no_store_headers(paginator.get_paginated_response(serializer.data))
+
+
+class PublicStatsView(APIView):
+    """Return public statistics for the sightings map: active sightings, reunited cats, and community members."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'lost_report_read'
+
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                description='Public statistics for active sightings, reunited cats, and community members',
+            ),
+        },
+    )
+    def get(self, request):
+        from django.contrib.auth import get_user_model
+        from sightings.models import Sighting
+
+        active_sightings_count = Sighting.objects.exclude(
+            report__moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        ).count()
+        if active_sightings_count == 0:
+            active_sightings_count = LostCatReport.objects.filter(
+                status__in=ACTIVE_SEARCH_STATUSES,
+            ).exclude(
+                moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+            ).count()
+
+        cats_reunited_count = LostCatReport.objects.filter(
+            status=LostCatReport.Status.FOUND,
+        ).count()
+
+        User = get_user_model()
+        community_members_count = User.objects.count()
+
+        return Response({
+            'active_sightings': active_sightings_count,
+            'cats_reunited': cats_reunited_count,
+            'community_members': community_members_count,
+        }, status=status.HTTP_200_OK)

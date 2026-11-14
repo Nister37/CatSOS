@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+﻿import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '../test/renderWithProviders';
@@ -102,6 +102,31 @@ describe('LoginPage — API interaction', () => {
 
     await waitFor(() => {
       expect(login).toHaveBeenCalledWith('user@example.com', 'StrongPass123!');
+    });
+  });
+
+  it('returns to the requested route after login', async () => {
+    const user = userEvent.setup();
+    login.mockResolvedValue({ access: 'token-123', refresh: 'refresh-456' });
+    getMe.mockResolvedValue({
+      id: 1,
+      email: 'user@example.com',
+      first_name: 'Test',
+      last_name: 'User',
+      avatar_fallback: 'TU',
+    });
+
+    renderWithProviders(<LoginPage />, {
+      route: '/login',
+      locationState: { from: '/my-reports' },
+    });
+
+    await user.type(screen.getByLabelText(/email address/i), 'user@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'StrongPass123!');
+    await user.click(screen.getByRole('button', { name: /log in/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/my-reports', { replace: true });
     });
   });
 

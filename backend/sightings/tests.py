@@ -868,3 +868,258 @@ class SightingPrivacyTests(APITestCase):
         sighting_data = response.data['results'][0]
         self.assertIn('submitted_by', sighting_data)
         self.assertEqual(sighting_data['submitted_by']['display_name'], 'Helpful Anna')
+
+
+class TrendingNearbyApiTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.owner = get_user_model().objects.create_user(
+            email='trending_owner@example.com',
+            password=TEST_USER_PASSWORD,
+            is_email_verified=True,
+        )
+
+    def _create_report(self, *, name='Misiu', address='Centrum, Warsaw', lat=52.2297, lng=21.0122, status=LostCatReport.Status.MISSING, moderation_status=LostCatReport.ModerationStatus.APPROVED):
+        return LostCatReport.objects.create(
+            owner=self.owner,
+            cat_name=name,
+            breed='Domestic',
+            coat_color='Black',
+            description='Lost cat',
+            last_seen_address=address,
+            last_seen_lat=lat,
+            last_seen_lng=lng,
+            contact_name='Owner',
+            contact_phone='+48123456789',
+            contact_email='owner@example.com',
+            status=status,
+            moderation_status=moderation_status,
+        )
+
+    def _create_sighting(self, report, *, lat=52.2300, lng=21.0100, desc='Centrum, Warsaw', status=Sighting.VerificationStatus.PENDING):
+        return Sighting.objects.create(
+            report=report,
+            submitted_by=self.owner,
+            seen_at=timezone.now(),
+            latitude=lat,
+            longitude=lng,
+            location_description=desc,
+            confidence=Sighting.Confidence.HIGH,
+            verification_status=status,
+        )
+
+    def test_trending_nearby_with_coordinates_returns_clusters_within_100km(self):
+        # 1. Active report in Warsaw Centrum (~0.2km)
+        rep_warsaw = self._create_report(address='Marszalkowska 10, Centrum, Warsaw', lat=52.2300, lng=21.0100)
+        # Sighting for it in Warsaw Centrum
+        self._create_sighting(rep_warsaw, lat=52.2310, lng=21.0110, desc='Centrum, Warsaw')
+        # Sighting in Mokotow, Warsaw (~4km away)
+        self._create_sighting(rep_warsaw, lat=52.1939, lng=21.0315, desc='Mokotow, Warsaw')
+
+        # 2. Distant report in Krakow (~250km away - beyond 100km!)
+        rep_krakow = self._create_report(name='Krakus', address='Rynek, Krakow', lat=50.0647, lng=19.9450)
+        self._create_sighting(rep_krakow, lat=50.0650, lng=19.9460, desc='Rynek, Krakow')
+
+        # 3. Very distant report in London (~1400km away)
+        self._create_report(name='Londoner', address='Camden, London, UK', lat=51.5074, lng=-0.1278)
+
+        # User is in Warsaw
+        response = self.client.get(
+            '/api/sightings/trending-nearby/',
+            {'lat': 52.2297, 'lng': 21.0122},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertIn('trends', data)
+        labels = [t['label'] for t in data['trends']]
+
+        # Genuine nearby areas must be present
+        self.assertTrue(any('Centrum' in l or 'Warsaw' in l for l in labels))
+        # Distant locations (> 100km) MUST NOT be present
+        self.assertFalse(any('Krakow' in l for l in labels))
+        self.assertFalse(any('London' in l for l in labels))
+        self.assertFalse(any('Brooklyn' in l for l in labels))
+
+        # Check counts and distance
+        for t in data['trends']:
+            self.assertGreater(t['count'], 0)
+            self.assertLessEqual(t['distance_km'], 100.0)
+
+    def test_trending_nearby_excludes_hidden_reports_and_false_sightings(self):
+        hidden_rep = self._create_report(
+            name='Ghost',
+            address='Hidden Street, Warsaw',
+            lat=52.2300,
+            lng=21.0100,
+            moderation_status=LostCatReport.ModerationStatus.HIDDEN,
+        )
+        self._create_sighting(
+            hidden_rep,
+            lat=52.2305,
+            lng=21.0105,
+            desc='Hidden Street, Warsaw',
+            status=Sighting.VerificationStatus.USEFUL,
+        )
+
+        visible_rep = self._create_report(
+            name='Visible',
+            address='Public Avenue, Warsaw',
+            lat=52.2350,
+            lng=21.0150,
+        )
+        # False sighting
+        self._create_sighting(
+            visible_rep,
+            lat=52.2355,
+            lng=21.0155,
+            desc='Public Avenue, Warsaw',
+            status=Sighting.VerificationStatus.FALSE,
+        )
+
+        response = self.client.get(
+            '/api/sightings/trending-nearby/',
+            {'lat': 52.2297, 'lng': 21.0122},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        labels = [t['label'] for t in response.data['trends']]
+        self.assertFalse(any('Hidden' in l for l in labels))
+
+        # Only the 1 visible report should be counted
+        count_total = sum(t['count'] for t in response.data['trends'])
+        self.assertEqual(count_total, 1)
+
+    def test_trending_nearby_resolves_ip_when_lat_lng_omitted(self):
+        rep = self._create_report(address='Centrum, Warsaw', lat=52.2300, lng=21.0100)
+        self._create_sighting(rep, lat=52.2305, lng=21.0105, desc='Centrum, Warsaw')
+
+        from unittest.mock import patch
+
+        with patch('sightings.services.resolve_ip_location', return_value=(52.2297, 21.0122, 'Warsaw')):
+            response = self.client.get(
+                '/api/sightings/trending-nearby/',
+                HTTP_X_FORWARDED_FOR='198.51.100.1',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user_location']['source'], 'ip')
+        self.assertEqual(response.data['user_location']['city'], 'Warsaw')
+        self.assertGreater(len(response.data['trends']), 0)
+
+    def test_trending_nearby_returns_empty_when_no_sightings_within_100km(self):
+        # All reports in Warsaw
+        self._create_report(address='Centrum, Warsaw', lat=52.2300, lng=21.0100)
+
+        # User in Paris (~1360km away)
+        response = self.client.get(
+            '/api/sightings/trending-nearby/',
+            {'lat': 48.8566, 'lng': 2.3522},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['trends'], [])
+        self.assertEqual(response.data['count'], 0)
+
+    def test_trending_nearby_returns_empty_when_location_cannot_be_determined(self):
+        response = self.client.get('/api/sightings/trending-nearby/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['trends'], [])
+        self.assertIsNone(response.data['user_location'])
+
+    def test_trending_nearby_alias_endpoints_work(self):
+        self._create_report(address='Centrum, Warsaw', lat=52.2300, lng=21.0100)
+
+        res1 = self.client.get('/api/reports/trending-nearby/?lat=52.2297&lng=21.0122')
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+
+        res2 = self.client.get('/api/public/reports/trending/?lat=52.2297&lng=21.0122')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+
+        res3 = self.client.get('/api/v1/sightings/trending-nearby/?lat=52.2297&lng=21.0122')
+        self.assertEqual(res3.status_code, status.HTTP_200_OK)
+
+    def test_trending_nearby_excludes_sightings_for_found_or_closed_reports(self):
+        found_rep = self._create_report(
+            name='FoundCat',
+            address='Mokotow, Warsaw',
+            lat=52.2000,
+            lng=21.0200,
+            status=LostCatReport.Status.FOUND,
+        )
+        self._create_sighting(
+            found_rep,
+            lat=52.2010,
+            lng=21.0210,
+            desc='Mokotow, Warsaw',
+        )
+
+        response = self.client.get(
+            '/api/sightings/trending-nearby/',
+            {'lat': 52.2297, 'lng': 21.0122},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        labels = [t['label'] for t in response.data['trends']]
+        self.assertFalse(any('Mokotow' in l for l in labels))
+        self.assertEqual(response.data['count'], 0)
+
+    def test_haversine_numerical_stability_edge_cases(self):
+        from sightings.services import haversine_km
+
+        # Identical points
+        self.assertAlmostEqual(haversine_km(52.2297, 21.0122, 52.2297, 21.0122), 0.0, places=4)
+        # Antipodal points
+        dist = haversine_km(0.0, 0.0, 0.0, 180.0)
+        self.assertGreater(dist, 20000.0)
+        self.assertLess(dist, 20100.0)
+
+    def test_extract_area_label_privacy_and_postal_code_stripping(self):
+        from sightings.services import extract_area_label
+
+        # Multi-part with trailing country and postal code
+        label1 = extract_area_label('ul. Florianska 12, Stare Miasto, Krakow, 31-019, Polska')
+        self.assertEqual(label1, 'Stare Miasto, Krakow')
+
+        # Single street with house number and landmark: landmark preferred for privacy
+        label2 = extract_area_label('12 Secret Home Street', landmark='Mokotow')
+        self.assertEqual(label2, 'Mokotow')
+
+        # Single street with house number without landmark: house number stripped
+        label3 = extract_area_label('12 Secret Home Street')
+        self.assertEqual(label3, 'Secret Home Street')
+
+        # Multi-part US address
+        label4 = extract_area_label('12 Maple Street, Brooklyn, NY, USA')
+        self.assertEqual(label4, 'Brooklyn, NY')
+
+    def test_trending_nearby_does_not_merge_distant_clusters_with_same_name(self):
+        # Warsaw Centrum (~0.2km from user)
+        self._create_report(name='CatWarsaw', address='Marszalkowska, Centrum, Warsaw', lat=52.2300, lng=21.0100)
+        # Radom Centrum (~95km away from user)
+        self._create_report(name='CatRadom', address='Zeromskiego, Centrum, Radom', lat=51.4027, lng=21.1471)
+
+        response = self.client.get(
+            '/api/sightings/trending-nearby/',
+            {'lat': 52.2297, 'lng': 21.0122},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 2)
+        # Check that both clusters are separate and have their distinct coordinates
+        lats = [t['lat'] for t in response.data['trends']]
+        self.assertTrue(any(abs(lat - 52.2300) < 0.1 for lat in lats))
+        self.assertTrue(any(abs(lat - 51.4027) < 0.1 for lat in lats))
+
+    def test_trending_nearby_extracts_public_ip_from_multi_ip_forwarded_chain(self):
+        from unittest.mock import patch
+        self._create_report(address='Centrum, Warsaw', lat=52.2300, lng=21.0100)
+
+        with patch('sightings.services.resolve_ip_location', return_value=(52.2297, 21.0122, 'Warsaw')) as mock_resolve:
+            response = self.client.get(
+                '/api/sightings/trending-nearby/',
+                HTTP_X_FORWARDED_FOR='10.0.0.1, 142.250.180.206',
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            # Must resolve the public IP, not the private 10.0.0.1
+            mock_resolve.assert_called_with('142.250.180.206')
+
+

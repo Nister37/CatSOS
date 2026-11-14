@@ -1,6 +1,6 @@
-import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+﻿import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-export const SUPPORTED_LANGUAGES = ['en', 'pl', 'nl'] as const;
+export const SUPPORTED_LANGUAGES = ['en', 'pl', 'nl', 'fr'] as const;
 export const DEFAULT_LANGUAGE = 'en';
 export const LANGUAGE_STORAGE_KEY = 'catsos.language';
 

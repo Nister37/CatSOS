@@ -1,4 +1,4 @@
-import { axe } from 'jest-axe';
+﻿import { axe } from 'jest-axe';
 
 import { App } from './App';
 import { renderWithProviders } from './test/renderWithProviders';

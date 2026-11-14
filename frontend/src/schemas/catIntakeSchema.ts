@@ -1,4 +1,4 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 
 export const catIntakeSchema = z.object({
   catName: z.string().trim().min(2, 'Enter at least 2 characters.'),

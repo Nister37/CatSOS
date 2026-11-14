@@ -22,3 +22,8 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 FROM base AS test
 USER appuser
 CMD ["sh", "-c", "python manage.py check && python manage.py test"]
+
+FROM base AS production
+USER appuser
+EXPOSE 8000
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "config.wsgi:application"]

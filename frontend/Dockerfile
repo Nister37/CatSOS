@@ -26,10 +26,7 @@ CMD ["yarn", "e2e"]
 FROM development AS builder
 RUN yarn build
 
-FROM nginx:1.27-alpine AS runtime
-RUN adduser -D appuser
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
-RUN chown -R appuser:appuser /usr/share/nginx/html
-USER appuser
-EXPOSE 80
+COPY --chown=nginx:nginx --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 8080

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from django.utils.csp import CSP
 
 
 def env_bool(name, default=False):
@@ -57,13 +58,14 @@ def load_local_env(env_path):
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
 
-        os.environ[name] = value
+        os.environ.setdefault(name, value)
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_local_env(BASE_DIR / '.env')
+load_local_env(BASE_DIR.parent / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -107,6 +109,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'config.middleware.RequestIdMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -225,7 +229,8 @@ GEMMA_TEMPERATURE = env_float('DJANGO_GEMMA_TEMPERATURE', 0.2)
 GEMMA_MAX_OUTPUT_TOKENS = env_int('DJANGO_GEMMA_MAX_OUTPUT_TOKENS', 512)
 
 # --- Maps / Nearby Help (Overpass API) ---
-OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
+OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass.private.coffee/api/interpreter')
+OVERPASS_TIMEOUT_SECONDS = env_int('OVERPASS_TIMEOUT_SECONDS', 2)
 NEARBY_HELP_CACHE_TTL_SECONDS = env_int('NEARBY_HELP_CACHE_TTL_SECONDS', 86400)
 NEARBY_HELP_DEFAULT_RADIUS_KM = env_int('NEARBY_HELP_DEFAULT_RADIUS_KM', 10)
 NEARBY_HELP_MAX_RADIUS_KM = env_int('NEARBY_HELP_MAX_RADIUS_KM', 30)
@@ -286,8 +291,10 @@ REST_FRAMEWORK = {
         'auth_token_refresh': os.getenv('DJANGO_AUTH_TOKEN_REFRESH_RATE', '60/minute'),
         'auth_sso_login': os.getenv('DJANGO_AUTH_SSO_LOGIN_RATE', '20/minute'),
         'auth_sso_link': os.getenv('DJANGO_AUTH_SSO_LINK_RATE', '20/minute'),
+        'auth_password_reset_confirm': os.getenv('DJANGO_AUTH_PASSWORD_RESET_CONFIRM_RATE', '20/minute'),
         'ai_write': os.getenv('DJANGO_AI_WRITE_RATE', '30/minute'),
         'assistant_read': os.getenv('DJANGO_ASSISTANT_READ_RATE', '120/minute'),
+        'assistant_write': os.getenv('DJANGO_ASSISTANT_WRITE_RATE', '30/minute'),
         'public_profile': os.getenv('DJANGO_PUBLIC_PROFILE_RATE', '120/minute'),
         'notification_read': os.getenv('DJANGO_NOTIFICATION_READ_RATE', '120/minute'),
         'points_read': os.getenv('DJANGO_POINTS_READ_RATE', '120/minute'),
@@ -303,6 +310,54 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Backend API for the CatSOS application.',
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'LanguageCodeEnum': 'accounts.languages.PreferredLanguage',
+    },
+}
+
+SECURE_CSP = {
+    'default-src': [CSP.SELF],
+    'script-src': [CSP.SELF, CSP.UNSAFE_INLINE, 'https://cdn.jsdelivr.net'],
+    'style-src': [CSP.SELF, CSP.UNSAFE_INLINE, 'https://cdn.jsdelivr.net'],
+    'img-src': [CSP.SELF, 'data:'],
+    'font-src': [CSP.SELF, 'https://cdn.jsdelivr.net'],
+    'connect-src': [CSP.SELF],
+    'object-src': [CSP.NONE],
+    'base-uri': [CSP.SELF],
+    'form-action': [CSP.SELF],
+    'frame-ancestors': [CSP.NONE],
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'request_context': {
+            '()': 'config.request_context.RequestContextFilter',
+        },
+    },
+    'formatters': {
+        'plain': {
+            'format': '%(levelname)s %(name)s [%(request_id)s] %(message)s',
+        },
+        'json': {
+            '()': 'config.request_context.JsonFormatter',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'filters': ['request_context'],
+            'formatter': 'json' if not DEBUG else 'plain',
+        },
+    },
+    'loggers': {
+        'catsos': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+    },
 }
 
 # --- Production security hardening (active when DEBUG is False) ---
@@ -319,4 +374,5 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+    SECURE_REFERRER_POLICY = 'same-origin'
     REFERRER_POLICY = 'same-origin'

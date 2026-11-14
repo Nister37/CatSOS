@@ -13,6 +13,8 @@ module.exports = {
     '^.*/api/auth(\\.ts)?$': '<rootDir>/src/api/__mocks__/auth.ts',
     '^.*/api/client(\\.ts)?$': '<rootDir>/src/api/__mocks__/client.ts',
     '^.*/api/useSsoLogin(\\.ts)?$': '<rootDir>/src/api/__mocks__/useSsoLogin.ts',
+    '^.*/services/nearbyHelpApi(\\.ts)?$': '<rootDir>/src/services/__mocks__/nearbyHelpApi.ts',
+    '^.*/config/runtimeEnv(\\.ts)?$': '<rootDir>/src/config/__mocks__/runtimeEnv.ts',
   },
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/main.tsx', '!src/test/**'],
 };

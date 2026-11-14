@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import { CircleMarker, MapContainer, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
@@ -16,6 +16,7 @@ import {
 } from '../services/reportsApi';
 import {
   fetchNearbyHelp,
+  isSafeHttpUrl,
   type NearbyHelpPlace,
   type NearbyHelpType,
 } from '../services/nearbyHelpApi';
@@ -38,17 +39,9 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 const NEARBY_HELP_COLORS: Record<NearbyHelpType, { color: string; fillColor: string; label: string; icon: string }> = {
   vet: { color: '#15803d', fillColor: '#22c55e', label: 'Vet', icon: 'vaccines' },
   shelter: { color: '#1d4ed8', fillColor: '#3b82f6', label: 'Shelter', icon: 'home' },
+  cat_cafe: { color: '#854d0e', fillColor: '#eab308', label: 'Cat Cafe', icon: 'local_cafe' },
   pet_help: { color: '#c2410c', fillColor: '#f97316', label: 'Pet-related', icon: 'pets' },
 };
-
-function timeAgo(isoString: string): string {
-  const diff = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 // ─── Unified inner map component (lives inside a single MapContainer) ─────────
 
@@ -61,9 +54,10 @@ interface MapContentProps {
   onMarkerClick: (info: ActiveMarkerInfo | null) => void;
   nearbyPlaces: NearbyHelpPlace[];
   showNearby: boolean;
+  hasQuery: boolean;
 }
 
-function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCenter, onMarkerClick, nearbyPlaces, showNearby }: MapContentProps) {
+function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCenter, onMarkerClick, nearbyPlaces, showNearby, hasQuery }: MapContentProps) {
   const map = useMap();
 
   // Close panel on bare map click
@@ -92,10 +86,14 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
   );
 
   useEffect(() => {
-    if (mode === 'all') {
+    if (hasQuery && geocodedCenter) {
+      map.flyTo(geocodedCenter, 13, { duration: 1 });
+    } else if (mode === 'all') {
       const first = publicReports.find((c) => c.approximate_location !== null);
       if (first?.approximate_location) {
         map.flyTo([first.approximate_location.latitude, first.approximate_location.longitude], 12, { duration: 1 });
+      } else if (geocodedCenter) {
+        map.flyTo(geocodedCenter, 12, { duration: 1 });
       }
     } else if (mode === 'track' && selectedCat?.approximate_location) {
       map.flyTo(
@@ -105,7 +103,7 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedCat, geocodedCenter]);
+  }, [mode, selectedCat, geocodedCenter, hasQuery]);
 
   // ── All Missing Cats mode ───────────────────────────────────────────────────
   if (mode === 'all') {
@@ -126,17 +124,18 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
               }}
             />
           ))}
-        {showNearby && nearbyPlaces.map((place) => {
+        {showNearby && nearbyPlaces.map((place, idx) => {
           const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          const distLabel = place.distance_km != null ? ` (${place.distance_km.toFixed(1)} km)` : '';
           return (
             <CircleMarker
-              key={`nearby-${place.id}`}
+              key={`nearby-${place.id ?? idx}`}
               center={[place.lat, place.lng]}
               radius={8}
               pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
             >
               <Tooltip direction="top" offset={[0, -8]}>
-                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+                <span className="font-label-sm">{place.name ?? conf.label}{distLabel}</span>
               </Tooltip>
             </CircleMarker>
           );
@@ -175,17 +174,18 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
             }}
           />
         ))}
-        {showNearby && nearbyPlaces.map((place) => {
+        {showNearby && nearbyPlaces.map((place, idx) => {
           const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          const distLabel = place.distance_km != null ? ` (${place.distance_km.toFixed(1)} km)` : '';
           return (
             <CircleMarker
-              key={`nearby-${place.id}`}
+              key={`nearby-${place.id ?? idx}`}
               center={[place.lat, place.lng]}
               radius={8}
               pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
             >
               <Tooltip direction="top" offset={[0, -8]}>
-                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+                <span className="font-label-sm">{place.name ?? conf.label}{distLabel}</span>
               </Tooltip>
             </CircleMarker>
           );
@@ -198,17 +198,18 @@ function MapContent({ mode, publicReports, selectedCat, sightings, geocodedCente
   if (showNearby && nearbyPlaces.length > 0) {
     return (
       <>
-        {nearbyPlaces.map((place) => {
+        {nearbyPlaces.map((place, idx) => {
           const conf = NEARBY_HELP_COLORS[place.type] ?? NEARBY_HELP_COLORS.pet_help;
+          const distLabel = place.distance_km != null ? ` (${place.distance_km.toFixed(1)} km)` : '';
           return (
             <CircleMarker
-              key={`nearby-${place.id}`}
+              key={`nearby-${place.id ?? idx}`}
               center={[place.lat, place.lng]}
               radius={8}
               pathOptions={{ color: conf.color, fillColor: conf.fillColor, fillOpacity: 0.8, weight: 2 }}
             >
               <Tooltip direction="top" offset={[0, -8]}>
-                <span className="font-label-sm">{place.name ?? conf.label} ({place.distance_km.toFixed(1)} km)</span>
+                <span className="font-label-sm">{place.name ?? conf.label}{distLabel}</span>
               </Tooltip>
             </CircleMarker>
           );
@@ -283,9 +284,9 @@ function MarkerPanel({
           type="button"
           aria-label="Close panel"
           onClick={onClose}
-          className="p-2 rounded-full bg-white text-on-background shadow-sm shrink-0 hover:scale-110 transition-transform"
+          className="w-9 h-9 aspect-square flex items-center justify-center rounded-full bg-white text-on-background shadow-sm shrink-0 hover:scale-110 transition-transform p-0"
         >
-          <span className="material-symbols-outlined text-[20px]">close</span>
+          <span className="material-symbols-outlined text-[20px] select-none leading-none">close</span>
         </button>
       </div>
     </div>
@@ -300,6 +301,31 @@ export function SightingsMapResultsPage() {
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(query ? null : DEFAULT_CENTER);
 
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterRendered, setFilterRendered] = useState(false);
+  const [filterSlidIn, setFilterSlidIn] = useState(false);
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (filterOpen) {
+      if (filterTimerRef.current) {
+        clearTimeout(filterTimerRef.current);
+        filterTimerRef.current = null;
+      }
+      setFilterRendered(true);
+      const raf = requestAnimationFrame(() => {
+        setFilterSlidIn(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setFilterSlidIn(false);
+      filterTimerRef.current = setTimeout(() => {
+        setFilterRendered(false);
+      }, 300);
+      return () => {
+        if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+      };
+    }
+  }, [filterOpen]);
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [publicReports, setPublicReports] = useState<PublicReport[]>([]);
   const [trackPublicId, setTrackPublicId] = useState('');
@@ -309,6 +335,7 @@ export function SightingsMapResultsPage() {
   const [activeMarker, setActiveMarker] = useState<ActiveMarkerInfo | null>(null);
 
   // Nearby help state
+  const [radiusKm, setRadiusKm] = useState(15);
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyHelpPlace[]>([]);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [showNearby, setShowNearby] = useState(true);
@@ -341,7 +368,7 @@ export function SightingsMapResultsPage() {
     if (!mapCenter) return;
     // setState calls are inside promise callbacks, not the synchronous effect body
     Promise.resolve()
-      .then(() => { setNearbyLoading(true); return fetchNearbyHelp(mapCenter[0], mapCenter[1], 10); })
+      .then(() => { setNearbyLoading(true); return fetchNearbyHelp(mapCenter[0], mapCenter[1], radiusKm); })
       .then((response) => {
         setNearbyPlaces(response.places);
       })
@@ -352,7 +379,7 @@ export function SightingsMapResultsPage() {
       .finally(() => {
         setNearbyLoading(false);
       });
-  }, [mapCenter]);
+  }, [mapCenter, radiusKm]);
 
   useEffect(() => {
     const shouldFetch = mapMode === 'track' && !!trackPublicId && !!accessToken && !!user;
@@ -466,7 +493,7 @@ export function SightingsMapResultsPage() {
                 <MapContainer
                   center={resolvedCenter}
                   zoom={13}
-                  scrollWheelZoom={false}
+                  scrollWheelZoom={true}
                   className="w-full h-full"
                   aria-label="Sightings map"
                 >
@@ -480,6 +507,7 @@ export function SightingsMapResultsPage() {
                     onMarkerClick={setActiveMarker}
                     nearbyPlaces={nearbyPlaces}
                     showNearby={showNearby}
+                    hasQuery={Boolean(query)}
                   />
                 </MapContainer>
               )}
@@ -573,9 +601,9 @@ export function SightingsMapResultsPage() {
                           {place.phone}
                         </a>
                       )}
-                      {place.website && (
+                      {isSafeHttpUrl(place.website) && (
                         <a
-                          href={place.website}
+                          href={place.website!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-primary hover:underline flex items-center gap-xs"
@@ -639,17 +667,19 @@ export function SightingsMapResultsPage() {
 
       <Footer />
 
-      {/* Filter Map panel — responsive: bottom sheet on mobile, popover on desktop */}
-      {filterOpen && (
+      {/* Filter Map panel — responsive: bottom sheet on mobile, popover on desktop, slides from right to left */}
+      {filterRendered && (
         <div
           role="presentation"
-          className="fixed inset-0 z-[500] flex items-end md:items-start md:justify-end"
+          className={`fixed inset-0 z-[500] flex items-end md:items-start md:justify-end bg-black/10 transition-opacity duration-300 ${
+            filterSlidIn ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
           onClick={() => setFilterOpen(false)}
           onKeyDown={(e) => { if (e.key === 'Escape') setFilterOpen(false); }}
         >
           <div
             role="presentation"
-            className="w-full md:w-96 mx-0 mb-0 md:mt-36 md:mr-8 p-5 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl border border-surface-container"
+            className={`w-full md:w-96 mx-0 mb-0 md:mt-36 md:mr-8 p-5 bg-white rounded-t-2xl md:rounded-2xl shadow-2xl border border-surface-container ${filterSlidIn ? "animate-filter-slide-in" : "animate-filter-slide-out"}`}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
@@ -659,9 +689,9 @@ export function SightingsMapResultsPage() {
                 type="button"
                 aria-label="Close filter"
                 onClick={() => setFilterOpen(false)}
-                className="p-2 rounded-full hover:bg-surface-container text-on-background transition-colors"
+                className="w-9 h-9 aspect-square flex items-center justify-center rounded-full hover:bg-surface-container text-on-background transition-colors shrink-0 p-0"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <span className="material-symbols-outlined text-[20px] select-none leading-none">close</span>
               </button>
             </div>
 
@@ -698,6 +728,28 @@ export function SightingsMapResultsPage() {
                   )}
                 </button>
               ))}
+
+              
+              {/* Search radius slider (CAT-047) */}
+              <div className="pt-sm border-t border-surface-container mt-sm px-md pb-xs">
+                <div className="flex justify-between items-center mb-1">
+                  <label htmlFor="radiusSlider" className="font-label-sm text-label-sm text-secondary uppercase tracking-widest">
+                    Search Radius
+                  </label>
+                  <span className="font-label-md text-label-md font-bold text-on-surface">{radiusKm} km</span>
+                </div>
+                <input
+                  id="radiusSlider"
+                  type="range"
+                  min="5"
+                  max="50"
+                  step="5"
+                  value={radiusKm}
+                  onChange={(e) => setRadiusKm(Number(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                  aria-label="Search radius in kilometers"
+                />
+              </div>
 
               {/* Cat selector — only visible when logged in AND in track mode */}
               {user && mapMode === 'track' && (

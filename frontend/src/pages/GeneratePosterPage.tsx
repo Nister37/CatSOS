@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
@@ -11,6 +12,11 @@ import {
   type OwnedReport,
   type QRCodePayload,
 } from '../services/reportsApi';
+import {
+  getPosterTextSuggestion,
+  getTranslationSuggestion,
+  type AISuggestionResponse,
+} from '../services/aiApi';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   MISSING: { label: 'Missing', color: '#b52330' },
@@ -76,6 +82,11 @@ function PreviewPanel({ report }: PreviewPanelProps) {
   const [qr, setQr] = useState<QRCodePayload | null>(null);
   const [loadingQr, setLoadingQr] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [loadingAiSuggestion, setLoadingAiSuggestion] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<AISuggestionResponse | null>(null);
+  const [targetLang, setTargetLang] = useState<'pl' | 'nl' | 'en' | 'fr'>('pl');
+  const [loadingAiTranslation, setLoadingAiTranslation] = useState(false);
+  const [aiTranslation, setAiTranslation] = useState<AISuggestionResponse | null>(null);
 
   useEffect(() => {
     generateQRCode(report.id)
@@ -83,6 +94,32 @@ function PreviewPanel({ report }: PreviewPanelProps) {
       .catch(() => dispatch(addNotification('Could not load QR code.', 'error')))
       .finally(() => setLoadingQr(false));
   }, [report.id, dispatch]);
+
+  async function handleSuggestWording() {
+    setLoadingAiSuggestion(true);
+    try {
+      const res = await getPosterTextSuggestion(report.id);
+      setAiSuggestion(res);
+      dispatch(addNotification('Gemma AI poster suggestion ready.', 'success'));
+    } catch {
+      dispatch(addNotification('Could not generate poster suggestion.', 'error'));
+    } finally {
+      setLoadingAiSuggestion(false);
+    }
+  }
+
+  async function handleTranslatePoster() {
+    setLoadingAiTranslation(true);
+    try {
+      const res = await getTranslationSuggestion(report.id, targetLang);
+      setAiTranslation(res);
+      dispatch(addNotification('Gemma AI translation ready.', 'success'));
+    } catch {
+      dispatch(addNotification('Could not generate translation.', 'error'));
+    } finally {
+      setLoadingAiTranslation(false);
+    }
+  }
 
   async function handleDownloadPoster() {
     setGeneratingPdf(true);
@@ -215,6 +252,117 @@ function PreviewPanel({ report }: PreviewPanelProps) {
         Download QR Code (PNG)
       </button>
 
+      {/* Gemma AI Assistant Card */}
+      <div className="bg-surface-container-low rounded-2xl border border-primary/20 p-md space-y-md">
+        <div className="flex items-center gap-xs text-primary font-bold font-label-md text-label-md">
+          <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+          <span>Gemma AI Poster Assistant</span>
+        </div>
+
+        {/* Suggest Poster Wording Button */}
+        <button
+          type="button"
+          onClick={handleSuggestWording}
+          disabled={loadingAiSuggestion}
+          className="w-full flex items-center justify-center gap-sm px-md py-sm rounded-xl bg-primary/10 text-primary hover:bg-primary/20 font-label-md text-label-md transition-colors font-bold disabled:opacity-50 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+            {loadingAiSuggestion ? 'progress_activity' : 'auto_awesome'}
+          </span>
+          {loadingAiSuggestion ? 'Generating suggestion...' : 'Gemma AI: Suggest Poster Wording'}
+        </button>
+
+        {/* AI Wording Suggestion Box */}
+        {aiSuggestion && (
+          <div className="bg-white rounded-xl p-md border border-surface-container space-y-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-sm text-xs font-bold text-secondary uppercase tracking-wider">
+                Suggested Wording
+              </span>
+              <button
+                type="button"
+                aria-label="Copy suggestion"
+                onClick={() => {
+                  navigator.clipboard.writeText(aiSuggestion.suggestion);
+                  dispatch(addNotification('Suggestion copied to clipboard.', 'success'));
+                }}
+                className="text-xs text-primary font-bold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">content_copy</span>
+                Copy
+              </button>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface bg-surface-container-lowest p-sm rounded-lg border border-surface-container">
+              {aiSuggestion.suggestion}
+            </p>
+            <p className="font-label-sm text-[11px] text-secondary/70 italic">
+              {aiSuggestion.privacy_notice ||
+                'Private contact details are removed before AI processing. Review the suggestion before saving.'}
+            </p>
+          </div>
+        )}
+
+        {/* Multilingual Translation Section */}
+        <div className="pt-xs border-t border-surface-container space-y-xs">
+          <label
+            htmlFor="poster-translate-lang"
+            className="block font-label-sm text-xs text-secondary font-medium"
+          >
+            Translate poster text with Gemma AI:
+          </label>
+          <div className="flex items-center gap-2">
+            <select
+              id="poster-translate-lang"
+              aria-label="Target translation language"
+              value={targetLang}
+              onChange={(e) => setTargetLang(e.target.value as 'pl' | 'nl' | 'en')}
+              className="bg-white border border-outline-variant rounded-lg px-2.5 py-1.5 text-label-sm text-on-surface"
+            >
+              <option value="pl">Polish (pl)</option>
+              <option value="nl">Dutch (nl)</option>
+              <option value="en">English (en)</option>
+              <option value="fr">French (fr)</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleTranslatePoster}
+              disabled={loadingAiTranslation}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary text-primary hover:bg-primary/5 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                {loadingAiTranslation ? 'progress_activity' : 'translate'}
+              </span>
+              {loadingAiTranslation ? 'Translating...' : 'Translate'}
+            </button>
+          </div>
+
+          {aiTranslation && (
+            <div className="bg-white rounded-xl p-md border border-surface-container space-y-sm mt-2">
+              <div className="flex items-center justify-between">
+                <span className="font-label-sm text-xs font-bold text-secondary uppercase tracking-wider">
+                  Translated text ({aiTranslation.target_language_label || aiTranslation.target_language})
+                </span>
+                <button
+                  type="button"
+                  aria-label="Copy translation"
+                  onClick={() => {
+                    navigator.clipboard.writeText(aiTranslation.suggestion);
+                    dispatch(addNotification('Translation copied to clipboard.', 'success'));
+                  }}
+                  className="text-xs text-primary font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                  Copy
+                </button>
+              </div>
+              <p className="font-body-sm text-body-sm text-on-surface bg-surface-container-lowest p-sm rounded-lg border border-surface-container">
+                {aiTranslation.suggestion}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {qr && (
         <div className="flex items-center gap-sm p-sm bg-surface-container-low rounded-xl">
           <span className="material-symbols-outlined text-[16px] text-secondary shrink-0">link</span>
@@ -287,12 +435,12 @@ export function GeneratePosterPage() {
               <p className="font-body-lg text-body-lg text-secondary max-w-md">
                 You need to report a missing cat before you can generate a poster.
               </p>
-              <a
-                href="/report-missing"
+              <Link
+                to="/report-missing"
                 className="mt-sm px-xl py-md rounded-xl bg-primary-container text-on-primary font-label-md hover:brightness-110 transition-all"
               >
                 Report a Missing Cat
-              </a>
+              </Link>
             </div>
           )}
 

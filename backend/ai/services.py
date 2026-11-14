@@ -18,6 +18,35 @@ STREET_ADDRESS_PATTERN = re.compile(
     r'(?:\s+[\w\s.\'-]{0,40})?',
     re.IGNORECASE,
 )
+EUROPEAN_ADDRESS_PATTERNS = [
+    re.compile(
+        r'\b(?:ul\.?|ulica|al\.?|aleja|aleje|pl\.?|plac)\s+'
+        r'[\w.\'-]+(?:\s+(?!(?:w|we|przy|koło|blisko|obok|za|pod|na)\b)[\w.\'-]+){0,3}'
+        r'(?:\s+\d{1,5}[a-zA-Z]?(?:/\d{1,5})?)?\b',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'\b(?:\d{1,5}\s+)?(?:rue|boulevard|bd\.?|avenue|ave\.?|chemin|allée|impasse)\s+'
+        r'(?:de\s+|du\s+|des\s+|d\'|l\')?[\w\'-]+(?:\s+(?!(?:à|au|aux|dans|près|vers|chez|en)\b)[\w\'-]+){0,3}'
+        r'(?:\s+\d{1,5}[a-zA-Z]?)?\b',
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r'\b[\w\'-]+(?:straat|weg|laan|gracht|singel|kade|plein|dijk|rak)\b(?:\s+\d{1,5}[a-zA-Z]?(?:-\d{1,5})?)?',
+        re.IGNORECASE,
+    ),
+    re.compile(r'\b(?:PL-)?\d{2}-\d{3}\b', re.IGNORECASE),
+    re.compile(r'\b(?:NL-)?\d{4}\s?[A-Za-z]{2}\b', re.IGNORECASE),
+    re.compile(r'\b(?:FR|DE|NL|BE|IT|ES)-\d{4,5}\b', re.IGNORECASE),
+    re.compile(r'\b(?:code postal|postcode|kod pocztowy|cp)\s*:?\s*\d{4,5}\b', re.IGNORECASE),
+    re.compile(r'\b\d{5}\s+[A-Z\u00C0-\u017F][a-zA-Z\u00C0-\u017F-]+\b'),
+]
+
+
+def escape_xml_facts(text):
+    pattern = re.compile(r'<\s*/?\s*facts(?:\s+[^>]*)?>', re.IGNORECASE)
+    return pattern.sub(lambda m: m.group(0).replace('<', '&lt;').replace('>', '&gt;'), str(text or ''))
+
 DESCRIPTION_CLEANUP_SYSTEM_INSTRUCTION = (
     'You improve lost-cat report descriptions. Use only facts present in the '
     'user text. Do not invent details, diagnoses, locations, contact details, '
@@ -41,6 +70,7 @@ TRANSLATION_LANGUAGE_LABELS = {
     'en': 'English',
     'pl': 'Polish',
     'nl': 'Dutch',
+    'fr': 'French',
 }
 REPORT_TRANSLATION_SYSTEM_INSTRUCTION = (
     'You translate public lost-cat report text. Translate only facts present in '
@@ -134,10 +164,11 @@ class GemmaClient:
 
     def _post_generate_content(self, payload):
         url = f'{self.api_base_url}/models/{self.model}:generateContent'
+        headers = {'x-goog-api-key': self.api_key}
         try:
             response = requests.post(
                 url,
-                params={'key': self.api_key},
+                headers=headers,
                 json=payload,
                 timeout=self.timeout_seconds,
             )
@@ -215,6 +246,8 @@ def sanitize_text_for_ai(text):
     sanitized = EMAIL_PATTERN.sub('[email removed]', text)
     sanitized = _replace_phone_like_values(sanitized)
     sanitized = STREET_ADDRESS_PATTERN.sub('[address removed]', sanitized)
+    for pattern in EUROPEAN_ADDRESS_PATTERNS:
+        sanitized = pattern.sub('[address removed]', sanitized)
     return sanitized.strip()
 
 
@@ -256,6 +289,7 @@ def clean_ai_suggestion_text(text, *, max_length):
 
 def _safe_prompt_line(label, value):
     sanitized = sanitize_text_for_ai(str(value or ''))
+    sanitized = ' '.join(sanitized.split())
     if not sanitized:
         return ''
     return f'{label}: {sanitized}'
@@ -263,10 +297,11 @@ def _safe_prompt_line(label, value):
 
 def improve_lost_cat_description(*, description, client=None):
     sanitized_description = sanitize_text_for_ai(description)
+    safe_facts = escape_xml_facts(sanitized_description)
     prompt = (
-        'Rewrite this lost-cat report description using only the facts below. '
+        'Rewrite this lost-cat report description using only the facts enclosed in <facts></facts> tags. '
         'Do not add facts. Do not include contact details.\n\n'
-        f'{sanitized_description}'
+        f'<facts>\n{safe_facts}\n</facts>'
     )
     result = generate_gemma_text(
         prompt=prompt,
@@ -300,15 +335,16 @@ def generate_public_report_summary(
         ('Public landmark', last_seen_landmark),
         ('Description', description),
     ):
-        sanitized_value = sanitize_text_for_ai(value)
-        if sanitized_value:
-            fact_lines.append(f'{label}: {sanitized_value}')
+        line = _safe_prompt_line(label, value)
+        if line:
+            fact_lines.append(line)
 
     fallback_summary = build_public_summary_fallback(description)
+    safe_facts = escape_xml_facts('\n'.join(fact_lines))
     prompt = (
         'Create one short public lost-cat summary from these facts. '
-        'Use only these facts. Do not include contact details or exact addresses.\n\n'
-        + '\n'.join(fact_lines)
+        'Use only the facts enclosed in <facts></facts> tags. Do not include contact details or exact addresses.\n\n'
+        f'<facts>\n{safe_facts}\n</facts>'
     )
     result = generate_gemma_text(
         prompt=prompt,
@@ -389,12 +425,13 @@ def suggest_lost_cat_poster_text(
         'Reward offered: yes' if has_reward else '',
     ]
     prompt_body = '\n'.join(line for line in prompt_lines if line)
+    safe_facts = escape_xml_facts(prompt_body)
     prompt = (
         'Create short printed-poster wording for a missing-cat report. '
-        'Use only the public-safe facts below. Do not include owner contact '
+        'Use only the public-safe facts enclosed in <facts></facts> tags. Do not include owner contact '
         'details or exact street addresses. Tell readers to scan the QR code '
         'with sightings.\n\n'
-        f'{prompt_body}'
+        f'<facts>\n{safe_facts}\n</facts>'
     )
     fallback_text = _build_poster_text_fallback(
         cat_name=cat_name,
@@ -454,12 +491,13 @@ def suggest_report_translation(
         _safe_prompt_line('Public landmark', last_seen_landmark),
     ]
     prompt_body = '\n'.join(line for line in prompt_lines if line)
+    safe_facts = escape_xml_facts(prompt_body)
     fallback_text = sanitize_text_for_ai(description)
     prompt = (
-        f'Translate the public-safe lost-cat report facts below into '
+        f'Translate the public-safe lost-cat report facts enclosed in <facts></facts> tags into '
         f'{target_language_label}. Use only the provided facts. Do not include '
         'owner contact details, exact street addresses, or private notes.\n\n'
-        f'{prompt_body}'
+        f'<facts>\n{safe_facts}\n</facts>'
     )
     result = generate_gemma_text(
         prompt=prompt,

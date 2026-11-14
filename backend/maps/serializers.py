@@ -24,10 +24,11 @@ class NearbyHelpQuerySerializer(serializers.Serializer):
 
 
 class NearbyHelpPlaceSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)
     osm_id = serializers.IntegerField()
     osm_type = serializers.CharField()
     name = serializers.CharField(allow_blank=True)
-    type = serializers.ChoiceField(choices=['vet', 'shelter', 'pet_help'])
+    type = serializers.ChoiceField(choices=['vet', 'shelter', 'cat_cafe', 'pet_help'])
     lat = serializers.FloatField()
     lng = serializers.FloatField()
     distance_km = serializers.FloatField()
@@ -36,6 +37,27 @@ class NearbyHelpPlaceSerializer(serializers.Serializer):
     opening_hours = serializers.CharField(allow_blank=True)
     address = serializers.CharField(allow_blank=True)
     quality_score = serializers.IntegerField()
+
+    def validate_website(self, value):
+        if not value:
+            return ''
+        cleaned = value.strip()
+        if not cleaned:
+            return ''
+        if not (cleaned.startswith('http://') or cleaned.startswith('https://')):
+            raise serializers.ValidationError('Website must start with http:// or https://')
+        return cleaned
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        website = data.get('website')
+        if website:
+            cleaned = website.strip()
+            if not (cleaned.startswith('http://') or cleaned.startswith('https://')):
+                data['website'] = ''
+            else:
+                data['website'] = cleaned
+        return data
 
 
 class NearbyHelpResponseSerializer(serializers.Serializer):

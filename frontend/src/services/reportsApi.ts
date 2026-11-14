@@ -3,6 +3,7 @@ import type { ReportStep2Data } from '../schemas/reportStep2Schema';
 import type { ReportStep3Data } from '../schemas/reportStep3Schema';
 import { apiRequest } from '../api/client';
 import { store } from '../app/store';
+import { runtimeEnv } from '../config/runtimeEnv';
 
 type CreateReportPayload = {
   step1: ReportStep1Data;
@@ -17,6 +18,7 @@ export type PublicReport = {
   breed: string;
   coat_color: string;
   description: string;
+  public_summary?: string;
   location_summary: string;
   last_seen_landmark: string;
   disappeared_at: string | null;
@@ -43,6 +45,7 @@ export type OwnedReport = {
   has_microchip: boolean;
   chip_number: string;
   personality: string;
+  public_summary?: string;
   description: string;
   disappeared_at: string | null;
   last_seen_address: string;
@@ -156,6 +159,7 @@ export function createReport({ step1, step2, step3, photo }: CreateReportPayload
     notify_push: step3.notifyPush,
     notify_sms: step3.notifySms,
     notify_email: step3.notifyEmail,
+    public_summary: step3.publicSummary ?? '',
   };
 
   if (photo) {
@@ -246,6 +250,7 @@ export type ReportDetail = {
   collar_description: string;
   has_microchip: boolean;
   personality: string;
+  public_summary?: string;
   description: string;
   disappeared_at: string | null;
   last_seen_landmark: string;
@@ -265,7 +270,7 @@ export type ReportDetail = {
   main_photo: { url: string } | null;
 };
 
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE_URL = runtimeEnv.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export async function fetchReportDetail(publicId: string): Promise<ReportDetail> {
   const res = await fetch(`${BASE_URL}/api/public/reports/${publicId}/`);
@@ -292,7 +297,7 @@ export function generateQRCode(reportId: string): Promise<QRCodePayload> {
 
 export async function downloadReportPoster(reportId: string, filename: string): Promise<void> {
   const token = store.getState().auth.accessToken;
-  const BASE = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000';
+  const BASE = runtimeEnv.VITE_API_BASE_URL ?? 'http://localhost:8000';
   const res = await fetch(`${BASE}/api/reports/${reportId}/poster/`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -353,3 +358,65 @@ export function submitSighting(
     body: JSON.stringify(clean),
   });
 }
+
+export type PublicStats = {
+  active_sightings: number;
+  cats_reunited: number;
+  community_members: number;
+};
+
+export async function fetchPublicStats(): Promise<PublicStats> {
+  return apiRequest<PublicStats>('/api/public/stats/', {
+    method: 'GET',
+  });
+}
+
+export type TrendingLocation = {
+  id: string;
+  label: string;
+  query: string;
+  count: number;
+  distance_km: number;
+  lat: number;
+  lng: number;
+};
+
+export type TrendingNearbyResponse = {
+  trends: TrendingLocation[];
+  count: number;
+  user_location: {
+    lat: number;
+    lng: number;
+    source: string;
+    city?: string;
+  } | null;
+  radius_km: number;
+};
+
+export async function fetchTrendingNearby(params?: {
+  lat?: number | null;
+  lng?: number | null;
+  radius_km?: number | null;
+}): Promise<TrendingLocation[]> {
+  const query = new URLSearchParams();
+  if (params?.lat != null && !isNaN(params.lat)) {
+    query.set('lat', String(params.lat));
+  }
+  if (params?.lng != null && !isNaN(params.lng)) {
+    query.set('lng', String(params.lng));
+  }
+  if (params?.radius_km != null && !isNaN(params.radius_km)) {
+    query.set('radius_km', String(params.radius_km));
+  }
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const data = await apiRequest<TrendingNearbyResponse | TrendingLocation[]>(
+    `/api/sightings/trending-nearby/${qs}`,
+    { method: 'GET' },
+  );
+  if (Array.isArray(data)) {
+    return data;
+  }
+  return data.trends ?? [];
+}
+
+

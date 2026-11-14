@@ -9,8 +9,10 @@ import { register as registerApi } from '../api/auth';
 import { useSsoLogin } from '../api/useSsoLogin';
 import { addNotification } from '../features/notifications/notificationsSlice';
 import { useAppDispatch } from '../app/hooks';
+import { useTranslation } from '../i18n/useTranslation';
 
 export function SignupPage() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { loginWithGoogle, loginWithMicrosoft, ssoLoading, ssoError } = useSsoLogin();
@@ -27,18 +29,39 @@ export function SignupPage() {
   const onSubmit = async (data: SignupFormData) => {
     try {
       await registerApi(data.email, data.password, data.passwordConfirm);
-      dispatch(addNotification('Account created! Please verify your email.', 'success'));
+      dispatch(addNotification(t('auth.accountCreated'), 'success'));
       navigate('/verify-email', { state: { email: data.email } });
     } catch (err: unknown) {
-      const apiError = err as Record<string, string[]>;
-      if (Array.isArray(apiError.email)) {
-        setError('email', { message: apiError.email[0] });
-      } else if (Array.isArray(apiError.password)) {
-        setError('password', { message: apiError.password[0] });
-      } else if (Array.isArray(apiError.password_confirm)) {
-        setError('passwordConfirm', { message: apiError.password_confirm[0] });
+      const apiError = err as Record<string, unknown>;
+      const getFirstError = (val: unknown): string | null => {
+        if (typeof val === 'string' && val.trim().length > 0) return val;
+        if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && val[0].trim().length > 0) {
+          return val[0];
+        }
+        return null;
+      };
+
+      const emailErr = getFirstError(apiError?.email);
+      const passwordErr = getFirstError(apiError?.password);
+      const passwordConfirmErr = getFirstError(apiError?.password_confirm);
+      const detailErr = getFirstError(apiError?.detail);
+      const nonFieldErr = getFirstError(apiError?.non_field_errors);
+      const errorMsg = getFirstError(apiError?.error) ?? getFirstError((err as { message?: unknown })?.message);
+
+      if (emailErr) {
+        setError('email', { message: emailErr });
+      } else if (passwordErr) {
+        setError('password', { message: passwordErr });
+      } else if (passwordConfirmErr) {
+        setError('passwordConfirm', { message: passwordConfirmErr });
+      } else if (detailErr) {
+        setError('root', { message: detailErr });
+      } else if (nonFieldErr) {
+        setError('root', { message: nonFieldErr });
+      } else if (errorMsg) {
+        setError('root', { message: errorMsg });
       } else {
-        setError('root', { message: 'Registration failed. Please try again.' });
+        setError('root', { message: t('auth.registrationFailed') });
       }
     }
   };
@@ -56,10 +79,10 @@ export function SignupPage() {
         <div className="w-full max-w-md bg-surface-container-lowest p-lg rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] z-10">
           <div className="text-center mb-lg">
             <h1 className="font-headline-lg text-headline-lg text-on-background mb-xs">
-              Join the Community
+              {t('auth.signupTitle')}
             </h1>
             <p className="font-body-md text-body-md text-secondary">
-              Be part of the safety net for our feline friends.
+              {t('auth.signupSubtitle')}
             </p>
           </div>
 
@@ -69,7 +92,7 @@ export function SignupPage() {
                 htmlFor="email"
                 className="font-label-md text-label-md text-on-surface-variant block"
               >
-                Email
+                {t('auth.email')}
               </label>
               <input
                 id="email"
@@ -92,7 +115,7 @@ export function SignupPage() {
                 htmlFor="password"
                 className="font-label-md text-label-md text-on-surface-variant block"
               >
-                Password
+                {t('auth.password')}
               </label>
               <input
                 id="password"
@@ -115,7 +138,7 @@ export function SignupPage() {
                 htmlFor="passwordConfirm"
                 className="font-label-md text-label-md text-on-surface-variant block"
               >
-                Confirm Password
+                {t('auth.passwordConfirm')}
               </label>
               <input
                 id="passwordConfirm"
@@ -144,7 +167,7 @@ export function SignupPage() {
               disabled={isSubmitting}
               className="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg shadow-md hover:brightness-110 active:scale-95 transition-all mt-sm disabled:opacity-60"
             >
-              {isSubmitting ? 'Creating Account…' : 'Create Account'}
+              {isSubmitting ? t('auth.creatingAccount') : t('auth.createAccount')}
             </button>
           </form>
 
@@ -154,8 +177,8 @@ export function SignupPage() {
               <div className="w-full border-t border-surface-container-high" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-surface-container-lowest px-md text-secondary font-label-sm text-label-sm">
-                OR CONTINUE WITH
+              <span className="bg-surface-container-lowest px-md text-secondary font-label-sm text-label-sm uppercase">
+                {t('auth.orContinueWith')}
               </span>
             </div>
           </div>
@@ -189,7 +212,7 @@ export function SignupPage() {
                 />
               </svg>
             )}
-            Sign up with Google
+            {t('auth.signUpWithGoogle')}
           </button>
 
           {/* Microsoft SSO */}
@@ -209,7 +232,7 @@ export function SignupPage() {
                 <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
               </svg>
             )}
-            Sign up with Microsoft
+            {t('auth.signUpWithMicrosoft')}
           </button>
 
           {/* SSO configuration error */}
@@ -222,9 +245,9 @@ export function SignupPage() {
           {/* Log in redirect */}
           <div className="mt-lg text-center">
             <p className="font-body-md text-body-md text-secondary">
-              Already have an account?{' '}
+              {t('auth.alreadyHaveAccount')}{' '}
               <Link className="text-primary font-bold hover:underline" to="/login">
-                Log In
+                {t('auth.logIn')}
               </Link>
             </p>
           </div>

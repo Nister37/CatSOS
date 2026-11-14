@@ -34,7 +34,7 @@ export function DashboardPage() {
         <MapContainer
           center={[51.9194, 19.1451]}
           zoom={6}
-          scrollWheelZoom={false}
+          scrollWheelZoom={true}
           className="map"
           aria-label="Map of active CatSOS rescue locations"
         >

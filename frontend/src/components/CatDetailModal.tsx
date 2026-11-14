@@ -36,6 +36,33 @@ function statusLabel(status: string) {
 export function CatDetailModal({ publicId, onClose }: Props) {
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const handleShare = async () => {
+    if (!report) return;
+    const shareUrl = `${window.location.origin}/missing`;
+    const shareData = {
+      title: `Help find ${report.cat_name}!`,
+      text: `Missing cat: ${report.cat_name}. Please help us reunite them with their family!`,
+      url: shareUrl,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // Fallback to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
   const isLoggedIn = useAppSelector((state) => Boolean(state.auth.accessToken));
   const navigate = useNavigate();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -111,7 +138,7 @@ export function CatDetailModal({ publicId, onClose }: Props) {
   );
 
   return (
-    <div className="fixed inset-0 z-[900] flex items-center justify-center p-md">
+    <div className="fixed inset-0 z-[900] flex items-center justify-center p-3 sm:p-6 overflow-y-auto overscroll-contain">
       <div
         className="absolute inset-0 bg-on-surface/60 backdrop-blur-sm"
         onClick={onClose}
@@ -123,14 +150,14 @@ export function CatDetailModal({ publicId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label={report ? `Details for ${report.cat_name}` : 'Cat details'}
-        className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] my-auto overflow-y-auto overflow-x-hidden min-w-0 overscroll-contain"
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-md right-md z-20 w-9 h-9 bg-white/90 hover:bg-surface-container rounded-full flex items-center justify-center shadow transition-colors"
+          className="absolute top-3 right-3 sm:top-md sm:right-md z-20 w-9 h-9 aspect-square bg-white/90 hover:bg-surface-container rounded-full flex items-center justify-center shadow transition-colors p-0"
         >
-          <span className="material-symbols-outlined text-on-surface" style={{ fontSize: 20 }}>close</span>
+          <span className="material-symbols-outlined text-on-surface select-none leading-none" style={{ fontSize: 20 }}>close</span>
         </button>
 
         {loading ? (
@@ -143,11 +170,12 @@ export function CatDetailModal({ publicId, onClose }: Props) {
         ) : report ? (
           <>
             <div className="relative h-56 bg-surface-container rounded-t-2xl overflow-hidden">
-              {report.main_photo ? (
+              {report.main_photo && !imgError ? (
                 <img
                   src={report.main_photo.url}
                   alt={`${report.cat_name}, a missing cat`}
                   className="w-full h-full object-cover"
+                  onError={() => setImgError(true)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -161,9 +189,9 @@ export function CatDetailModal({ publicId, onClose }: Props) {
               </div>
             </div>
 
-            <div className="p-lg space-y-lg">
+            <div className="p-4 sm:p-6 md:p-8 space-y-md sm:space-y-lg min-w-0">
               <div>
-                <h2 className="font-headline-lg text-headline-lg text-on-background">{report.cat_name}</h2>
+                <h2 className="font-headline-lg text-headline-lg text-on-background break-words">{report.cat_name}</h2>
                 {report.disappeared_at && (
                   <p className="font-body-md text-body-md text-secondary mt-xs">
                     Last seen {formatDate(report.disappeared_at)}
@@ -179,7 +207,7 @@ export function CatDetailModal({ publicId, onClose }: Props) {
                 report.collar_description && { label: 'Collar', value: report.collar_description },
                 report.has_microchip && { label: 'Microchip', value: 'Yes' },
               ].filter(Boolean).length > 0 && (
-                <div className="grid grid-cols-2 gap-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm min-w-0">
                   {[
                     report.breed && { label: 'Breed', value: report.breed },
                     report.coat_color && { label: 'Coat Color', value: report.coat_color },
@@ -188,29 +216,39 @@ export function CatDetailModal({ publicId, onClose }: Props) {
                     report.collar_description && { label: 'Collar', value: report.collar_description },
                     report.has_microchip && { label: 'Microchip', value: 'Yes' },
                   ].filter((x): x is { label: string; value: string } => Boolean(x)).map(({ label, value }) => (
-                    <div key={label} className="bg-surface-container-low rounded-xl p-sm">
+                    <div key={label} className="bg-surface-container-low rounded-xl p-sm min-w-0">
                       <p className="font-label-sm text-label-sm text-secondary">{label}</p>
-                      <p className="font-body-md text-body-md text-on-surface">{value}</p>
+                      <p className="font-body-md text-body-md text-on-surface break-words">{value}</p>
                     </div>
                   ))}
                 </div>
               )}
 
+              {report.public_summary && (
+                <div className="min-w-0 bg-primary-container/10 border border-primary-container/30 rounded-xl p-sm space-y-xs">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                    <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                    <span>Public Summary</span>
+                  </div>
+                  <p className="font-body-md text-body-md text-on-surface leading-relaxed break-words">{report.public_summary}</p>
+                </div>
+              )}
+
               {report.description && (
-                <div>
+                <div className="min-w-0">
                   <p className="font-label-md text-label-md text-secondary mb-xs">Description</p>
-                  <p className="font-body-md text-body-md text-on-surface leading-relaxed">{report.description}</p>
+                  <p className="font-body-md text-body-md text-on-surface leading-relaxed break-words">{report.description}</p>
                 </div>
               )}
 
               {(report.last_seen_landmark || report.approximate_location) && (
-                <div className="space-y-sm">
+                <div className="space-y-sm min-w-0">
                   <div className="flex items-center gap-xs text-primary-container">
                     <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1", fontSize: 20 }}>location_on</span>
                     <span className="font-label-md text-label-md">Last seen location</span>
                   </div>
                   {report.last_seen_landmark && (
-                    <p className="font-body-md text-body-md text-on-surface">{report.last_seen_landmark}</p>
+                    <p className="font-body-md text-body-md text-on-surface break-words">{report.last_seen_landmark}</p>
                   )}
                   {report.approximate_location && (
                     <>
@@ -222,7 +260,7 @@ export function CatDetailModal({ publicId, onClose }: Props) {
                           key={`${report.approximate_location.latitude},${report.approximate_location.longitude}`}
                           center={[report.approximate_location.latitude, report.approximate_location.longitude]}
                           zoom={14}
-                          scrollWheelZoom={false}
+                          scrollWheelZoom={true}
                           zoomControl={false}
                           attributionControl={false}
                           style={{ height: '100%' }}
@@ -245,66 +283,81 @@ export function CatDetailModal({ publicId, onClose }: Props) {
               )}
 
               {report.reward_amount && (
-                <div className="bg-secondary-container/30 rounded-xl p-md flex items-center gap-md">
+                <div className="bg-secondary-container/30 rounded-xl p-md flex items-center gap-md min-w-0">
                   <span
                     className="material-symbols-outlined text-secondary flex-shrink-0"
                     style={{ fontVariationSettings: "'FILL' 1" }}
                   >
                     payments
                   </span>
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-label-md text-label-md text-on-surface">Reward offered</p>
-                    <p className="font-body-md text-body-md text-secondary">
+                    <p className="font-body-md text-body-md text-secondary break-words">
                       ${report.reward_amount}{report.reward_note ? ` — ${report.reward_note}` : ''}
                     </p>
                   </div>
                 </div>
               )}
 
-              <div className="border-t border-surface-container pt-md space-y-sm">
+              <div className="border-t border-surface-container pt-md space-y-sm min-w-0">
                 <p className="font-label-md text-label-md text-secondary">Contact</p>
                 {report.contact.visibility === 'PUBLIC' ? (
-                  <div className="space-y-xs">
+                  <div className="space-y-xs min-w-0">
                     {report.contact.name && (
-                      <div className="flex items-center gap-xs">
-                        <span className="material-symbols-outlined text-secondary" style={{ fontSize: 18 }}>person</span>
-                        <span className="font-body-md text-body-md text-on-surface">{report.contact.name}</span>
+                      <div className="flex items-center gap-xs min-w-0">
+                        <span className="material-symbols-outlined text-secondary shrink-0" style={{ fontSize: 18 }}>person</span>
+                        <span className="font-body-md text-body-md text-on-surface truncate">{report.contact.name}</span>
                       </div>
                     )}
                     {report.contact.phone && (
-                      <div className="flex items-center gap-xs">
-                        <span className="material-symbols-outlined text-secondary" style={{ fontSize: 18 }}>call</span>
-                        <a href={`tel:${report.contact.phone}`} className="font-body-md text-body-md text-primary-container hover:underline">
+                      <div className="flex items-center gap-xs min-w-0">
+                        <span className="material-symbols-outlined text-secondary shrink-0" style={{ fontSize: 18 }}>call</span>
+                        <a href={`tel:${report.contact.phone}`} className="font-body-md text-body-md text-primary-container hover:underline break-all">
                           {report.contact.phone}
                         </a>
                       </div>
                     )}
                     {report.contact.email && (
-                      <div className="flex items-center gap-xs">
-                        <span className="material-symbols-outlined text-secondary" style={{ fontSize: 18 }}>mail</span>
-                        <a href={`mailto:${report.contact.email}`} className="font-body-md text-body-md text-primary-container hover:underline">
+                      <div className="flex items-center gap-xs min-w-0">
+                        <span className="material-symbols-outlined text-secondary shrink-0" style={{ fontSize: 18 }}>mail</span>
+                        <a href={`mailto:${report.contact.email}`} className="font-body-md text-body-md text-primary-container hover:underline break-all">
                           {report.contact.email}
                         </a>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="font-body-md text-body-md text-secondary">{report.contact.instructions}</p>
+                  <p className="font-body-md text-body-md text-secondary break-words">{report.contact.instructions}</p>
                 )}
               </div>
 
-              {isLoggedIn && report.is_active_search && (
+              <div className="flex flex-col sm:flex-row gap-sm pt-sm">
                 <button
-                  onClick={() => {
-                    onClose();
-                    navigate('/report-sighting', { state: { preSelectedId: report.public_id } });
-                  }}
-                  className="w-full bg-primary-container text-white py-md rounded-xl font-headline-md flex items-center justify-center gap-sm hover:brightness-110 active:scale-[0.98] transition-all"
+                  type="button"
+                  onClick={handleShare}
+                  aria-label="Share report"
+                  className="flex-1 border border-surface-container-high bg-surface-container-low hover:bg-surface-container text-on-surface py-3 px-4 sm:px-6 rounded-xl font-headline-md flex items-center justify-center gap-sm active:scale-[0.98] transition-all cursor-pointer min-w-0"
                 >
-                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>visibility</span>
-                  I Spotted This Cat
+                  <span className="material-symbols-outlined text-[20px] shrink-0">
+                    {copied ? "check" : "share"}
+                  </span>
+                  <span className="truncate">{copied ? "Link Copied!" : "Share Report"}</span>
                 </button>
-              )}
+
+                {isLoggedIn && report.is_active_search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate('/report-sighting', { state: { preSelectedId: report.public_id } });
+                    }}
+                    className="flex-1 bg-primary-container text-white py-3 px-4 sm:px-6 rounded-xl font-headline-md flex items-center justify-center gap-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer min-w-0"
+                  >
+                    <span className="material-symbols-outlined shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>visibility</span>
+                    <span className="truncate">I Spotted This Cat</span>
+                  </button>
+                )}
+              </div>
             </div>
           </>
         ) : (
